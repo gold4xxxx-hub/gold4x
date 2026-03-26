@@ -1,144 +1,91 @@
-import indexedUsersSeed from '@/data/indexedUsers.json';
 import { ethers } from 'ethers';
 
 const CONTRACT_ADDRESS = '0x54bc3ae174550098da0756ea2d7b8855bd3c65cf';
+const ROOT_ADDRESS = '0xf9d3a64e5c40129e5e2cc0c6693d574961b7b0fd';
 
 export type IndexedUsersResult = {
   count: number;
   users: string[];
-  source: 'seed' | 'seed+recent-history' | 'seed+recent-history+direct-graph' | 'seed+direct-graph';
+  source: 'root-graph' | 'root-only';
   updatedAt: string;
 };
 
 const RPC_URL = 'https://bsc-dataseed.binance.org/';
-const MAX_USERS_CRAWL = 500;
-const MAX_DIRECTS_PER_USER = 60;
-const MAX_CRAWL_MS = 20000;
+const MAX_USERS_CRAWL = 5000;
+const MAX_DIRECTS_PER_USER = 500;
+const MAX_CRAWL_MS = 25000;
+const BATCH_SIZE = 20;
 
 const INDEX_ABI = [
   'function users(address) view returns (bool registered, address referrer, uint32 directCount, uint128 totalInvested)',
   'function directs(address,uint256) view returns (address)',
 ] as const;
 
-type BscScanRow = {
-  Status?: string;
-  Method?: string;
-  Sender?: string;
-};
-
 function normalizeAddress(value: string): string | null {
   const address = String(value || '').trim().toLowerCase();
   return /^0x[a-f0-9]{40}$/.test(address) ? address : null;
 }
 
-function mergeUsers(...groups: string[][]): string[] {
-  const unique = new Set<string>();
-  for (const group of groups) {
-    for (const entry of group) {
-      const normalized = normalizeAddress(entry);
-      if (normalized) unique.add(normalized);
-    }
-  }
-  return [...unique].sort();
-}
-
-async function fetchRecentRegisteredUsers(): Promise<string[]> {
-  const response = await fetch(`https://bscscan.com/address/${CONTRACT_ADDRESS}`, {
-    headers: {
-      'user-agent': 'Mozilla/5.0',
-    },
-    next: { revalidate: 300 },
-  });
-
-  if (!response.ok) {
-    throw new Error(`BscScan request failed with status ${response.status}`);
-  }
-
-  const html = await response.text();
-  const match = html.match(/const quickExportCsvData = '([\s\S]*?)';/);
-  if (!match) {
-    throw new Error('BscScan quick export data was not found');
-  }
-
-  const rows = JSON.parse(match[1].replace(/\\'/g, "'")) as BscScanRow[];
-  const recentUsers = rows
-    .filter((row) => row.Status === 'Success' && (row.Method === 'Register' || row.Method === 'Register With Stable'))
-    .map((row) => normalizeAddress(row.Sender || ''))
-    .filter((value): value is string => Boolean(value));
-
-  return [...new Set(recentUsers)];
-}
-
 export async function getIndexedUsers(): Promise<IndexedUsersResult> {
-  const seedUsers = mergeUsers(indexedUsersSeed as string[]);
-  let baseUsers = seedUsers;
-  let source: IndexedUsersResult['source'] = 'seed';
-
-  try {
-    const recentUsers = await fetchRecentRegisteredUsers();
-    baseUsers = mergeUsers(seedUsers, recentUsers);
-    source = 'seed+recent-history';
-  } catch {
-    baseUsers = seedUsers;
-    source = 'seed';
-  }
-
   try {
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, INDEX_ABI, provider);
 
-    const discovered = new Set<string>(baseUsers);
-    const queue = [...baseUsers];
+    const discovered = new Set<string>([ROOT_ADDRESS]);
+    const queue = [ROOT_ADDRESS];
     const startedAt = Date.now();
 
     while (queue.length > 0 && discovered.size < MAX_USERS_CRAWL) {
       if (Date.now() - startedAt > MAX_CRAWL_MS) break;
 
-      const user = queue.shift();
-      if (!user) break;
+      // Process a batch of users concurrently
+      const batch = queue.splice(0, Math.min(BATCH_SIZE, queue.length));
 
-      let directCount = 0;
-      try {
-        const userInfo = await contract.users(user);
-        directCount = Number(userInfo?.directCount ?? 0);
-      } catch {
-        directCount = 0;
-      }
+      await Promise.allSettled(
+        batch.map(async (user) => {
+          let directCount = 0;
+          try {
+            const userInfo = await contract.users(user);
+            directCount = Number(userInfo?.directCount ?? 0);
+          } catch {
+            return;
+          }
 
-      if (directCount <= 0) continue;
+          if (directCount <= 0) return;
 
-      const maxIndex = Math.min(directCount, MAX_DIRECTS_PER_USER);
-
-      for (let i = 0; i < maxIndex && discovered.size < MAX_USERS_CRAWL; i++) {
-        try {
-          const childRaw = await contract.directs(user, i);
-          const child = normalizeAddress(String(childRaw));
-          if (!child || discovered.has(child)) continue;
-
-          const childInfo = await contract.users(child);
-          if (!Boolean(childInfo?.registered)) continue;
-
-          discovered.add(child);
-          queue.push(child);
-        } catch {
-          continue;
-        }
-      }
+          // Fetch all directs of this user in parallel
+          await Promise.allSettled(
+            Array.from({ length: Math.min(directCount, MAX_DIRECTS_PER_USER) }, async (_, i) => {
+              try {
+                const childRaw = await contract.directs(user, i);
+                const child = normalizeAddress(String(childRaw));
+                // Atomic check-and-add: no await between has() and add()
+                if (!child || discovered.has(child)) return;
+                discovered.add(child);
+                queue.push(child);
+              } catch {
+                // ignore individual failures
+              }
+            }),
+          );
+        }),
+      );
     }
 
     const users = [...discovered].sort();
     return {
       count: users.length,
       users,
-      source: source === 'seed+recent-history' ? 'seed+recent-history+direct-graph' : 'seed+direct-graph',
+      source: 'root-graph',
       updatedAt: new Date().toISOString(),
     };
   } catch {
     return {
-      count: baseUsers.length,
-      users: baseUsers,
-      source,
+      count: 1,
+      users: [ROOT_ADDRESS],
+      source: 'root-only',
       updatedAt: new Date().toISOString(),
     };
   }
 }
+
