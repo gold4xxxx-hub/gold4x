@@ -13,7 +13,8 @@ export type IndexedUsersResult = {
 const RPC_URL = 'https://bsc-dataseed.binance.org/';
 const MAX_USERS_CRAWL = 5000;
 const MAX_DIRECTS_PER_USER = 500;
-const MAX_CRAWL_MS = 20000;
+const MAX_CRAWL_MS = 25000;
+const BATCH_SIZE = 20;
 
 const INDEX_ABI = [
   'function users(address) view returns (bool registered, address referrer, uint32 directCount, uint128 totalInvested)',
@@ -37,36 +38,38 @@ export async function getIndexedUsers(): Promise<IndexedUsersResult> {
     while (queue.length > 0 && discovered.size < MAX_USERS_CRAWL) {
       if (Date.now() - startedAt > MAX_CRAWL_MS) break;
 
-      const user = queue.shift();
-      if (!user) break;
+      // Process a batch of users concurrently
+      const batch = queue.splice(0, Math.min(BATCH_SIZE, queue.length));
 
-      let directCount = 0;
-      try {
-        const userInfo = await contract.users(user);
-        directCount = Number(userInfo?.directCount ?? 0);
-      } catch {
-        directCount = 0;
-      }
+      await Promise.allSettled(
+        batch.map(async (user) => {
+          let directCount = 0;
+          try {
+            const userInfo = await contract.users(user);
+            directCount = Number(userInfo?.directCount ?? 0);
+          } catch {
+            return;
+          }
 
-      if (directCount <= 0) continue;
+          if (directCount <= 0) return;
 
-      const maxIndex = Math.min(directCount, MAX_DIRECTS_PER_USER);
-
-      for (let i = 0; i < maxIndex && discovered.size < MAX_USERS_CRAWL; i++) {
-        try {
-          const childRaw = await contract.directs(user, i);
-          const child = normalizeAddress(String(childRaw));
-          if (!child || discovered.has(child)) continue;
-
-          const childInfo = await contract.users(child);
-          if (!Boolean(childInfo?.registered)) continue;
-
-          discovered.add(child);
-          queue.push(child);
-        } catch {
-          continue;
-        }
-      }
+          // Fetch all directs of this user in parallel
+          await Promise.allSettled(
+            Array.from({ length: Math.min(directCount, MAX_DIRECTS_PER_USER) }, async (_, i) => {
+              try {
+                const childRaw = await contract.directs(user, i);
+                const child = normalizeAddress(String(childRaw));
+                // Atomic check-and-add: no await between has() and add()
+                if (!child || discovered.has(child)) return;
+                discovered.add(child);
+                queue.push(child);
+              } catch {
+                // ignore individual failures
+              }
+            }),
+          );
+        }),
+      );
     }
 
     const users = [...discovered].sort();
