@@ -91,12 +91,53 @@ export const Dashboard: React.FC = () => {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
 
-        const [dashboard, tokenDecimalsRaw] = await Promise.all([
+        const [dashboard, tokenDecimalsRaw, launchTime] = await Promise.all([
           contract.dashboardMegaView(address),
           contract.decimals(),
+          contract.launchTime(),
         ]);
 
         const tokenDecimals = Number(tokenDecimalsRaw);
+
+        // Calculate month IDs like the contract does: block.timestamp / 30 days
+        const now = Math.floor(Date.now() / 1000);
+        const launch = Number(launchTime);
+        const SECONDS_PER_MONTH = 30 * 24 * 60 * 60;
+        const currentMonthId = Math.floor(now / SECONDS_PER_MONTH);
+        const launchMonthId = Math.floor(launch / SECONDS_PER_MONTH);
+        console.log('Month calculation:', { now, launch, currentMonthId, launchMonthId });
+
+        // Fetch ALL monthly volumes and sum them up (BV is stored per month by timestamp)
+        let totalPersonalBV = 0;
+        let totalTeamBV = 0;
+        for (let m = launchMonthId; m <= currentMonthId; m++) {
+          try {
+            const vol = await contract.monthlyVolume(address, m);
+            const monthPersonal = fromUnits(vol.personalBV, tokenDecimals);
+            const monthTeam = fromUnits(vol.teamBV, tokenDecimals);
+            if (monthPersonal > 0 || monthTeam > 0) {
+              console.log(`monthlyVolume monthId ${m}:`, { personal: monthPersonal, team: monthTeam });
+            }
+            totalPersonalBV += monthPersonal;
+            totalTeamBV += monthTeam;
+          } catch (mvErr) {
+            // Continue to next month
+          }
+        }
+        console.log('Total BV across all months:', { totalPersonalBV, totalTeamBV, monthsChecked: currentMonthId - launchMonthId + 1 });
+
+        // Debug: log raw BV values from contract
+        console.log('Raw dashboard:', dashboard);
+        console.log('Dashboard type:', typeof dashboard, Array.isArray(dashboard) ? 'isArray' : 'notArray');
+        console.log('Keys:', Object.keys(dashboard));
+        console.log('Index 15-17:', dashboard[15]?.toString?.(), dashboard[16]?.toString?.(), dashboard[17]?.toString?.());
+        console.log('Named props:', {
+          personalBV: dashboard.personalBV?.toString?.(),
+          teamBV: dashboard.teamBV?.toString?.(),
+          totalBV: dashboard.totalBV?.toString?.(),
+        });
+        console.log('Full dashboard array:', Array.from(dashboard).map((v, i) => `${i}: ${v?.toString?.()}`).join(', '));
+
         setInvested(fromUnits(dashboard.totalInvested, tokenDecimals));
         setCap(fromUnits(dashboard.totalCap, tokenDecimals));
         setClaimable(fromUnits(dashboard.claimable, tokenDecimals));
@@ -114,16 +155,28 @@ export const Dashboard: React.FC = () => {
         setCapType(Number(dashboard.capType));
         setRegistered(Boolean(dashboard.registered));
         setCapPercent(Number(dashboard.capPercent) / 100);
-        setPersonalBV(fromUnits(dashboard.personalBV, tokenDecimals));
-        setTeamBV(fromUnits(dashboard.teamBV, tokenDecimals));
-        setTotalBV(fromUnits(dashboard.totalBV, tokenDecimals));
+        // Use monthlyVolume data if dashboard returns 0
+        const dashPersonalBV = fromUnits(dashboard.personalBV, tokenDecimals);
+        const dashTeamBV = fromUnits(dashboard.teamBV, tokenDecimals);
+        const dashTotalBV = fromUnits(dashboard.totalBV, tokenDecimals);
+
+        // Use total BV from all months (the contract only returns current month in dashboard)
+        const finalPersonalBV = totalPersonalBV > 0 ? totalPersonalBV : dashPersonalBV;
+        const finalTeamBV = totalTeamBV > 0 ? totalTeamBV : dashTeamBV;
+        const finalTotalBV = finalPersonalBV + finalTeamBV;
+        console.log('Final BV values:', { finalPersonalBV, finalTeamBV, finalTotalBV });
+
+        setPersonalBV(finalPersonalBV);
+        setTeamBV(finalTeamBV);
+        setTotalBV(finalTotalBV);
         setLegsWithBV(Number(dashboard.legsWithBV));
         setLegsWithStar(Number(dashboard.legsWithStar));
         setLegsWithGold(Number(dashboard.legsWithGold));
         setContractJSAV(fromUnits(dashboard.contractJSAV, tokenDecimals));
         setContractUSDT(fromUnits(dashboard.contractUSDT, 18));
         setContractUSDC(fromUnits(dashboard.contractUSDC, 18));
-      } catch {
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
         setInvested(null);
         setCap(null);
         setClaimable(null);
