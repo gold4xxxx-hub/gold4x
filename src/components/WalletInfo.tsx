@@ -14,7 +14,7 @@ export function WalletInfo() {
     );
   }
 
-  const balanceValue = balance ? parseFloat(formatEther(balance.value)) : 0;
+  const balanceValue = balance?.value ? parseFloat(formatEther(balance.value)) : 0;
   const formattedBalance = useFormattedBalance(balanceValue);
 
   return (

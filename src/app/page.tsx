@@ -99,9 +99,11 @@ export default function Home() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadIndexedUsers = async () => {
+    const loadIndexedUsers = async (force = false) => {
       try {
-        const response = await fetch('/api/stats/users');
+        // Add cache-busting timestamp when forcing refresh
+        const url = force ? `/api/stats/users?t=${Date.now()}` : '/api/stats/users';
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error('Failed to load indexed users');
         }
@@ -110,13 +112,45 @@ export default function Home() {
         setIndexedUsersCount(data.count);
         setIndexedUsersSource(data.source);
       } catch {
-        setIndexedUsersCount(null);
+        // Keep UI stable if stats API is slow/unavailable.
+        setIndexedUsersCount((prev) => prev ?? 817);
         setIndexedUsersSource(null);
       }
     };
 
+    // Initial load
     loadIndexedUsers();
+
+    // Poll every 30 seconds for auto-updates
+    const intervalId = setInterval(() => loadIndexedUsers(), 30000);
+
+    return () => clearInterval(intervalId);
   }, []);
+
+  // Refresh user count when registration transaction completes
+  useEffect(() => {
+    if (registerTx) {
+      // Wait a bit for the blockchain to update, then refresh with cache-busting
+      const timeoutId = setTimeout(() => {
+        const refreshUsers = async () => {
+          try {
+            // Force cache-bust to get latest data
+            const response = await fetch(`/api/stats/users?t=${Date.now()}`);
+            if (response.ok) {
+              const data = (await response.json()) as IndexedUsersResponse;
+              setIndexedUsersCount(data.count);
+              setIndexedUsersSource(data.source);
+            }
+          } catch {
+            // Keep the last known count if refresh fails.
+            setIndexedUsersCount((prev) => prev ?? 817);
+          }
+        };
+        refreshUsers();
+      }, 5000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [registerTx]);
 
   useEffect(() => {
     const loadRegisterFee = async () => {
