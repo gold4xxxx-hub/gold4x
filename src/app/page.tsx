@@ -12,7 +12,7 @@ type RegisterToken = 'JSAV' | 'USDT' | 'USDC';
 type WithdrawToken = 'JSAV' | 'USDT' | 'USDC';
 type IndexedUsersResponse = {
   count: number;
-  source: 'seed' | 'seed+recent-history';
+  source: 'contract' | 'bscscan';
 };
 
 const REGISTER_AMOUNT = {

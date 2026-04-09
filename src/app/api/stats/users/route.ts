@@ -6,19 +6,18 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // Simple in-memory cache to reduce BSCScan API calls
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 1 * 60 * 1000; // 1 minute - faster updates
 let cachedData: Awaited<ReturnType<typeof getIndexedUsers>> | null = null;
 let cacheTimestamp = 0;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const forceRefresh = url.searchParams.get('refresh') === 'true';
+  const forceRefresh = url.searchParams.get('refresh') === 'true' || url.searchParams.has('t');
   const now = Date.now();
   
   // Debug: Check environment variables
   console.log('[API /stats/users] BSCSCAN_API_KEY present:', !!process.env.BSCSCAN_API_KEY);
   console.log('[API /stats/users] BSCSCAN_API_KEY length:', process.env.BSCSCAN_API_KEY?.length);
-  console.log('[API /stats/users] MANUAL_USER_COUNT:', process.env.MANUAL_USER_COUNT);
   console.log('[API /stats/users] Force refresh:', forceRefresh);
   
   try {
@@ -27,39 +26,26 @@ export async function GET(request: Request) {
       console.log('[API /stats/users] Using cached data (age:', (now - cacheTimestamp) / 1000, 'seconds)');
       return NextResponse.json(cachedData, {
         headers: {
-          'Cache-Control': 'public, max-age=300', // 5 minutes
+          'Cache-Control': 'public, max-age=60', // 1 minute
         },
       });
     }
-    
+
     console.log('[API /stats/users] Fetching fresh data from blockchain');
-    const data = await Promise.race([
-      getIndexedUsers(),
-      new Promise<Awaited<ReturnType<typeof getIndexedUsers>>>((resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              count: parseInt(process.env.MANUAL_USER_COUNT || '821', 10) || 821,
-              users: [],
-              source: 'seed',
-              updatedAt: new Date().toISOString(),
-            }),
-          10000
-        )
-      ),
-    ]);
-    
+    const data = await getIndexedUsers();
+
     // Update cache
     cachedData = data;
     cacheTimestamp = now;
-    console.log('[API /stats/users] Cache updated');
-    
+    console.log('[API /stats/users] Cache updated, count:', data.count, 'source:', data.source);
+
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 'public, max-age=300', // 5 minutes
+        'Cache-Control': 'public, max-age=60', // 1 minute
       },
     });
   } catch (error) {
+    console.error('[API /stats/users] Error:', error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Unable to load indexed users',
