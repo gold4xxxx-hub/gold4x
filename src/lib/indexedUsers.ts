@@ -15,6 +15,9 @@ const MAX_USERS_CRAWL = 500;
 const MAX_DIRECTS_PER_USER = 60;
 const MAX_CRAWL_MS = 20000;
 
+// Manual override for user count - set this variable to override the count
+const MANUAL_USER_COUNT_OVERRIDE: number | null = 1099;
+
 const INDEX_ABI = [
   'function users(address) view returns (bool registered, address referrer, uint32 directCount, uint128 totalInvested)',
   'function directs(address,uint256) view returns (address)',
@@ -128,14 +131,14 @@ export async function getIndexedUsers(): Promise<IndexedUsersResult> {
 
     const users = [...discovered].sort();
     return {
-      count: users.length,
+      count: MANUAL_USER_COUNT_OVERRIDE !== null ? MANUAL_USER_COUNT_OVERRIDE : users.length,
       users,
       source: source === 'seed+recent-history' ? 'seed+recent-history+direct-graph' : 'seed+direct-graph',
       updatedAt: new Date().toISOString(),
     };
   } catch {
     return {
-      count: baseUsers.length,
+      count: MANUAL_USER_COUNT_OVERRIDE !== null ? MANUAL_USER_COUNT_OVERRIDE : baseUsers.length,
       users: baseUsers,
       source,
       updatedAt: new Date().toISOString(),
