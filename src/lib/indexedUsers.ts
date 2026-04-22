@@ -19,7 +19,7 @@ const RPC_URLS = [
 ];
 
 // Manual override for user count - set this variable to override the count
-const MANUAL_USER_COUNT_OVERRIDE: number | null = 1099;
+const MANUAL_USER_COUNT_OVERRIDE: number | null = process.env.MANUAL_USER_COUNT ? parseInt(process.env.MANUAL_USER_COUNT, 10) : null;
 
 function normalizeAddress(value: string): string | null {
   const address = String(value || '').trim().toLowerCase();
