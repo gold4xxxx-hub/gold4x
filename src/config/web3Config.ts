@@ -18,7 +18,7 @@ export const JMFEscrow_CONTRACT_ABI: any[] = [];
 
 export const SAMPLE_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 
-// RainbowKit + Wagmi config
+// RainbowKit config
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc } from 'viem/chains';
 
@@ -29,7 +29,6 @@ export const web3Config = getDefaultConfig({
     'YOUR_WALLETCONNECT_PROJECT_ID',
   chains: [bsc],
   ssr: true,
-  autoConnect: true, // ✅ FORCE AUTO RECONNECT
 });
 
 export const BSC_CONFIG = {
