@@ -1,13 +1,31 @@
 'use client';
 
-import { ReactNode } from 'react';
-import { WagmiProvider } from 'wagmi';
+import { ReactNode, useEffect } from 'react';
+import { WagmiProvider, useConnect } from 'wagmi';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { web3Config } from '@/config/web3Config';
 import '@rainbow-me/rainbowkit/styles.css';
 
 const queryClient = new QueryClient();
+
+function SafePalAutoReconnect() {
+  const { connect, connectors } = useConnect();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      const injectedConnector = connectors.find(
+        (connector) => connector.id === 'injected'
+      );
+
+      if (injectedConnector) {
+        connect({ connector: injectedConnector });
+      }
+    }
+  }, [connect, connectors]);
+
+  return null;
+}
 
 export function Web3Providers({ children }: { children: ReactNode }) {
   return (
@@ -22,6 +40,7 @@ export function Web3Providers({ children }: { children: ReactNode }) {
             overlayBlur: 'small',
           })}
         >
+          <SafePalAutoReconnect />
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>

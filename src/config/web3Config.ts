@@ -1,12 +1,16 @@
 // Contract constants - safe for server and client
 import jsaviorAbi from './jsaviorAbi.json';
 
-export const JSAVIOR_CONTRACT_ADDRESS = '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
+export const JSAVIOR_CONTRACT_ADDRESS =
+  '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
 export const JSAVIOR_CONTRACT_ABI = jsaviorAbi;
 
-export const GOLD4X_CONTRACT_ADDRESS = '0x54bc3ae174550098da0756ea2d7b8855bd3c65cf';
+export const GOLD4X_CONTRACT_ADDRESS =
+  '0x54bc3ae174550098da0756ea2d7b8855bd3c65cf';
 export const GOLD4X_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
-export const USDT_CONTRACT_ADDRESS = '0x55d398326f99059ff775485246999027b3197955';
+
+export const USDT_CONTRACT_ADDRESS =
+  '0x55d398326f99059ff775485246999027b3197955';
 export const USDT_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 
 export const JMFEscrow_CONTRACT_ADDRESS = '';
@@ -14,15 +18,18 @@ export const JMFEscrow_CONTRACT_ABI: any[] = [];
 
 export const SAMPLE_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 
-// Client-only rainbowkit config - must be imported separately on client
+// RainbowKit + Wagmi config
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc } from 'viem/chains';
 
 export const web3Config = getDefaultConfig({
   appName: 'JSAVIOR',
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_WALLETCONNECT_PROJECT_ID',
+  projectId:
+    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
+    'YOUR_WALLETCONNECT_PROJECT_ID',
   chains: [bsc],
   ssr: true,
+  autoConnect: true, // ✅ FORCE AUTO RECONNECT
 });
 
 export const BSC_CONFIG = {
