@@ -267,6 +267,7 @@ a:hover {
 .fx-ribbon__dot--on {
   background: var(--fx-emerald);
   box-shadow: 0 0 8px rgba(0, 201, 173, 0.65);
+  animation: fxDotPulse 2s ease-in-out infinite;
 }
 
 .fx-ribbon__dot--off {
@@ -620,6 +621,18 @@ select.fx-input option {
 }
 
 /* ============ ANIMATIONS ============ */
+
+@keyframes fxDotPulse {
+  0%, 100% { 
+    box-shadow: 0 0 8px rgba(0, 201, 173, 0.65);
+    opacity: 1;
+  }
+  50% { 
+    box-shadow: 0 0 16px rgba(0, 201, 173, 0.95), 
+                0 0 28px rgba(0, 201, 173, 0.4);
+    opacity: 0.85;
+  }
+}
 
 @keyframes fxReveal {
   from {

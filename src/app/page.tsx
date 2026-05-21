@@ -465,12 +465,12 @@ export default function Home() {
             <div className="flex justify-center">
               <WalletConnect />
             </div>
-            <p className="text-xs mt-5" style={{ color: 'var(--fx-ink-subtle)' }}>Binance Smart Chain · Mainnet</p>
+            <p className="text-center text-xs mt-5" style={{ color: 'var(--fx-ink-subtle)' }}>Binance Smart Chain · Mainnet</p>
           </div>
         ) : (
           <>
-            <header className="fx-card fx-card--gold p-6 sm:p-8 fx-reveal">
-              <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <header className="fx-card fx-card--gold p-5 sm:p-8 fx-reveal" style={{ borderRadius: '24px' }}>
+              <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="fx-pill">JSAVIOR Network</span>
@@ -497,7 +497,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <div className="fx-card p-5 sm:p-6 w-full lg:w-[320px] space-y-4">
+                <div className="fx-card fx-card--lift p-5 sm:p-6 w-full lg:w-[320px] space-y-5" style={{ borderRadius: '20px' }}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs uppercase tracking-[0.3em] text-[#b9b0a3]">Command</span>
                     <span className="gold-badge">Verified</span>
@@ -508,10 +508,11 @@ export default function Home() {
                   <div className="fx-alert fx-alert--success text-sm">
                     Connection verified on BSC.
                   </div>
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-3">
                     {!showRegister ? (
                       <button
                         className="fx-button"
+                        style={{ minHeight: '44px' }}
                         onClick={() => {
                           setShowRegister(true);
                           setRegisterToken('JSAV');
@@ -580,6 +581,7 @@ export default function Home() {
                         <div className="flex gap-2">
                           <button
                             className="fx-button flex-1"
+                            style={{ minHeight: '44px' }}
                             onClick={handleRegister}
                             disabled={registerLoading || registerFeeLoading || !referrer.trim()}
                           >
@@ -587,6 +589,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
+                            style={{ minHeight: '44px' }}
                             onClick={() => {
                               setShowRegister(false);
                               setReferrer('');
@@ -603,6 +606,7 @@ export default function Home() {
                     {!showInvest ? (
                       <button
                         className="fx-button fx-button--dark"
+                        style={{ minHeight: '44px' }}
                         onClick={() => {
                           setShowInvest(true);
                           setInvestToken('JSAV');
@@ -662,6 +666,7 @@ export default function Home() {
                         <div className="flex gap-2">
                           <button
                             className="fx-button flex-1"
+                            style={{ minHeight: '44px' }}
                             onClick={handleInvest}
                             disabled={investLoading || investMetaLoading}
                           >
@@ -669,6 +674,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
+                            style={{ minHeight: '44px' }}
                             onClick={() => {
                               setShowInvest(false);
                               setInvestAmount('');
@@ -685,6 +691,7 @@ export default function Home() {
 
                     <button
                       className="fx-button fx-button--dark"
+                      style={{ minHeight: '44px' }}
                       onClick={handleClaim}
                       disabled={claimLoading}
                     >
@@ -714,6 +721,7 @@ export default function Home() {
                     {!showWithdraw ? (
                       <button
                         className="fx-button fx-button--dark"
+                        style={{ minHeight: '44px' }}
                         onClick={() => {
                           setShowWithdraw(true);
                           setWithdrawToken('USDT');
@@ -759,6 +767,7 @@ export default function Home() {
                         <div className="flex gap-2">
                           <button
                             className="fx-button flex-1"
+                            style={{ minHeight: '44px' }}
                             onClick={handleWithdraw}
                             disabled={withdrawLoading}
                           >
@@ -766,6 +775,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
+                            style={{ minHeight: '44px' }}
                             onClick={() => {
                               setShowWithdraw(false);
                               setWithdrawError(null);
@@ -789,21 +799,21 @@ export default function Home() {
               </div>
             </header>
 
-            <section className="fx-card p-4 sm:p-5 fx-reveal fx-reveal--delay-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 text-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-1 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <section className="fx-card p-4 sm:p-5 fx-reveal fx-reveal--delay-2" style={{ borderColor: 'rgba(255,255,255,0.06)', borderRadius: '20px' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-0 text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">JSAV Price</span>
                   <span className="font-bold text-base" style={{ color: 'var(--fx-gold-strong)' }}>$1.04</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-1 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">BSC Gas</span>
                   <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>3.2 Gwei</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-1 sm:px-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3">
                   <span className="fx-kicker">ROI Cap</span>
                   <span className="font-bold text-base" style={{ color: 'var(--fx-ink)' }}>3.0×</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-1 sm:px-3 sm:border-l" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-l" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">Total Users</span>
                   <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>
                     {indexedUsersCount === null ? '...' : indexedUsersCount}
@@ -812,10 +822,10 @@ export default function Home() {
               </div>
             </section>
 
-            <div className="space-y-8 fx-reveal fx-reveal--delay-3">
+            <div className="space-y-10 fx-reveal fx-reveal--delay-3">
             <Dashboard />
 
-            <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8">
               <aside className="space-y-6">
                 <WalletInfo />
               </aside>
@@ -841,7 +851,7 @@ export default function Home() {
           </>
         )}
 
-        <footer className="text-center text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>
+        <footer className="text-center text-xs mt-12 pt-6 fx-divider" style={{ color: 'var(--fx-ink-subtle)' }}>
           <p>
             <span className="gold-text">JSAVIOR</span>
             <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>

@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { useWalletConnection } from '@/hooks/useWalletConnection';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useWalletConnection, useBSCNetwork } from '@/hooks/useWalletConnection';
 import ProgressBar from './ProgressBar';
 import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
 import { ethers } from 'ethers';
+
+/** Explicit latest head for eth_call; avoids stale snapshots from some RPC/wallet defaults. */
+const READ_CALL_OPTS = { blockTag: 'latest' as const };
 
 function truncateAddress(addr: string) {
   return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '';
@@ -54,6 +57,7 @@ function fromUnits(value: unknown, decimals: number): number {
 
 export const Dashboard: React.FC = () => {
   const { address, isConnected } = useWalletConnection();
+  const { isBSC } = useBSCNetwork();
   const [invested, setInvested] = useState<number | null>(null);
   const [cap, setCap] = useState<number | null>(null);
   const [claimable, setClaimable] = useState<number | null>(null);
@@ -83,18 +87,19 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!isConnected || !address || !(window as any).ethereum) return;
-      setLoading(true);
+  const loadDashboard = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!isConnected || !address || !(window as any).ethereum || !isBSC) return;
+      const silent = Boolean(opts?.silent);
+      if (!silent) setLoading(true);
       try {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
 
         const [dashboard, tokenDecimalsRaw, launchTime] = await Promise.all([
-          contract.dashboardMegaView(address),
-          contract.decimals(),
-          contract.launchTime(),
+          contract.dashboardMegaView(address, READ_CALL_OPTS),
+          contract.decimals(READ_CALL_OPTS),
+          contract.launchTime(READ_CALL_OPTS),
         ]);
 
         const tokenDecimals = Number(tokenDecimalsRaw);
@@ -112,7 +117,7 @@ export const Dashboard: React.FC = () => {
         let totalTeamBV = 0;
         for (let m = launchMonthId; m <= currentMonthId; m++) {
           try {
-            const vol = await contract.monthlyVolume(address, m);
+            const vol = await contract.monthlyVolume(address, m, READ_CALL_OPTS);
             const monthPersonal = fromUnits(vol.personalBV, tokenDecimals);
             const monthTeam = fromUnits(vol.teamBV, tokenDecimals);
             if (monthPersonal > 0 || monthTeam > 0) {
@@ -151,7 +156,21 @@ export const Dashboard: React.FC = () => {
         setRankIncome(fromUnits(dashboard.rankIncome, tokenDecimals));
         setDirectCount(Number(dashboard.directCount));
         setDirectsNeeded(Number(dashboard.directsNeeded));
-        setRank(Number(dashboard.rank));
+
+        let onChainRank: number | null = null;
+        if (dashboard?.rank !== undefined && dashboard?.rank !== null) {
+          onChainRank = Number(dashboard.rank);
+        } else {
+          try {
+            const currentRank = await contract.currentRank(address, READ_CALL_OPTS);
+            onChainRank = Number(currentRank);
+            console.log('Fallback currentRank:', onChainRank);
+          } catch (rankErr) {
+            console.warn('currentRank fallback failed:', rankErr);
+          }
+        }
+
+        setRank(onChainRank);
         setCapType(Number(dashboard.capType));
         setRegistered(Boolean(dashboard.registered));
         setCapPercent(Number(dashboard.capPercent) / 100);
@@ -204,11 +223,31 @@ export const Dashboard: React.FC = () => {
         setContractUSDT(null);
         setContractUSDC(null);
       }
-      setLoading(false);
-    };
+      if (!silent) setLoading(false);
+    },
+    [isConnected, address],
+  );
 
-    fetchData();
-  }, [isConnected, address]);
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    const id = window.setInterval(() => {
+      void loadDashboard({ silent: true });
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [isConnected, address, loadDashboard]);
+
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void loadDashboard({ silent: true });
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [isConnected, address, loadDashboard]);
 
   if (!isConnected) return null;
 
@@ -281,6 +320,32 @@ export const Dashboard: React.FC = () => {
         <div className="fx-alert text-xs">Rank: <span className="gold-text">{fmtRank(effectiveRank)}</span></div>
         <div className="fx-alert text-xs">Cap Used: <span className="gold-text">{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
       </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <div className="fx-alert text-xs">
+          On-chain rank: <span className="gold-text">{rank === null ? '-' : fmtRank(rank)}</span>
+        </div>
+        <div className="fx-alert text-xs">
+          Legs w/ BV: <span className="gold-text">{fmtInt(legsWithBV)}</span>
+        </div>
+        <div className="fx-alert text-xs">
+          Legs w/ Star: <span className="gold-text">{fmtInt(legsWithStar)}</span>
+        </div>
+        <div className="fx-alert text-xs">
+          Legs w/ Gold: <span className="gold-text">{fmtInt(legsWithGold)}</span>
+        </div>
+      </div>
+
+      {!loading &&
+        rank === 0 &&
+        directCount !== null &&
+        directCount >= 4 &&
+        effectiveRank === 0 && (
+          <div className="fx-alert text-xs mb-6" style={{ color: 'var(--fx-ink-subtle)' }}>
+            Rank label stays Not Ranked until the contract stores a rank or reports ≥4 qualifying legs (BV / Star / Gold).
+            Large team BV alone does not override those counters.
+          </div>
+        )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="fx-stat">
