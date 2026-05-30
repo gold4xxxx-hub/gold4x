@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "deploy:ftp": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"
+    "deploy:ftp": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1",
+    "ranks:check": "node updateRanksAuto.js",
+    "ranks:update": "node updateRanksAuto.js --auto"
   },
   "dependencies": {
     "@metamask/sdk": "^0.34.0",
