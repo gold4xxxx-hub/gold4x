@@ -9,12 +9,15 @@
     "lint": "eslint",
     "deploy:ftp": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1",
     "ranks:check": "node updateRanksAuto.js",
-    "ranks:update": "node updateRanksAuto.js --auto"
+    "ranks:update": "node updateRanksAuto.js --auto",
+    "ranks:by-bv": "node updateRanksByBV.js",
+    "ranks:by-bv:auto": "node updateRanksByBV.js --auto"
   },
   "dependencies": {
     "@metamask/sdk": "^0.34.0",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.90.20",
+    "dotenv": "^17.4.2",
     "ethers": "^6.16.0",
     "next": "^16.2.6",
     "react": "19.2.3",
