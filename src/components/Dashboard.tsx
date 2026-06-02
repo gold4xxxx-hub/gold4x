@@ -323,16 +323,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Removed unused on-chain rank / legs buttons per request */}
 
-      {!loading &&
-        rank === 0 &&
-        directCount !== null &&
-        directCount >= 4 &&
-        effectiveRank === 0 && (
-          <div className="fx-alert text-xs mb-6" style={{ color: 'var(--fx-ink-subtle)' }}>
-            Rank label stays Not Ranked until the contract stores a rank or reports ≥4 qualifying legs (BV / Star / Gold).
-            Large team BV alone does not override those counters.
-          </div>
-        )}
+      {/* Removed rank explanatory alert per request */}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="fx-stat">
