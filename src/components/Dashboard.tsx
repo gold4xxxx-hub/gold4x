@@ -324,7 +324,13 @@ export const Dashboard: React.FC = () => {
           >
             P2P Desk
           </button>
-          
+          <button
+            className="fx-button fx-button--dark fx-button--sm"
+            onClick={() => void loadDashboard()}
+            disabled={loading}
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
