@@ -321,20 +321,7 @@ export const Dashboard: React.FC = () => {
         <div className="fx-alert text-xs">Cap Used: <span className="gold-text">{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-        <div className="fx-alert text-xs">
-          On-chain rank: <span className="gold-text">{rank === null ? '-' : fmtRank(rank)}</span>
-        </div>
-        <div className="fx-alert text-xs">
-          Legs w/ BV: <span className="gold-text">{fmtInt(legsWithBV)}</span>
-        </div>
-        <div className="fx-alert text-xs">
-          Legs w/ Star: <span className="gold-text">{fmtInt(legsWithStar)}</span>
-        </div>
-        <div className="fx-alert text-xs">
-          Legs w/ Gold: <span className="gold-text">{fmtInt(legsWithGold)}</span>
-        </div>
-      </div>
+      {/* Removed unused on-chain rank / legs buttons per request */}
 
       {!loading &&
         rank === 0 &&
