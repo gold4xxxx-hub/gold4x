@@ -40,6 +40,7 @@ function inferEffectiveRank(
   legsWithGold: number | null,
   totalBV: number | null,
   teamBV: number | null,
+  personalBV: number | null = null,
 ): number | null {
   if (onChainRank === null) return null;
   if (onChainRank > 0) return onChainRank;
@@ -53,11 +54,9 @@ function inferEffectiveRank(
   // Gold: 4+ legs with Star rank
   if (legsWithStar !== null && legsWithStar >= 4) return 2;
   
-  // Star: 4+ legs with BV OR sufficient personal BV
+  // Star: 4+ legs with BV OR sufficient BV (personal or team)
   if (legsWithBV !== null && legsWithBV >= 4) return 1;
-  
-  // Alternative Star qualification: totalBV >= STAR_BV_REQUIRED (typically 10,000+)
-  // This catches cases where leg counters aren't set but actual BV qualifies
+  if (personalBV !== null && personalBV >= 10000) return 1;
   if (totalBV !== null && totalBV >= 10000) return 1;
 
   return onChainRank;
@@ -270,7 +269,7 @@ export const Dashboard: React.FC = () => {
     percent = Math.min(100, (invested / cap) * 100);
   }
 
-  const effectiveRank = inferEffectiveRank(rank, directCount, legsWithBV, legsWithStar, legsWithGold, totalBV, teamBV);
+  const effectiveRank = inferEffectiveRank(rank, directCount, legsWithBV, legsWithStar, legsWithGold, totalBV, teamBV, personalBV);
   const rankNeedsUpdate =
     rank !== null &&
     effectiveRank !== null &&
