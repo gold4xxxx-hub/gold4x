@@ -273,34 +273,6 @@ export const Dashboard: React.FC = () => {
 
   const [updatingRank, setUpdatingRank] = useState(false);
   const [lastAutoUpdateAt, setLastAutoUpdateAt] = useState<number | null>(null);
-  const [debugLogs, setDebugLogs] = useState<Array<{ time: string; msg: string }>>([]);
-  const [showDebug, setShowDebug] = useState(false);
-
-  // Capture console logs for debug panel
-  useEffect(() => {
-    const originalLog = console.log;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-
-    const captureLog = (level: string) => (...args: any[]) => {
-      const msg = args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-      const time = new Date().toLocaleTimeString();
-      setDebugLogs((prev) => {
-        const updated = [...prev, { time, msg: `[${level}] ${msg}` }];
-        return updated.slice(-50); // Keep last 50 logs
-      });
-    };
-
-    console.log = captureLog('LOG');
-    console.warn = captureLog('WARN');
-    console.error = captureLog('ERROR');
-
-    return () => {
-      console.log = originalLog;
-      console.warn = originalWarn;
-      console.error = originalError;
-    };
-  }, []);
 
   useEffect(() => {
     if (!isConnected || !address || !isBSC) return;
@@ -484,45 +456,14 @@ export const Dashboard: React.FC = () => {
           <div className="w-2 h-2 rounded-full" style={{ background: 'var(--fx-emerald)', boxShadow: '0 0 8px rgba(0,201,173,0.65)' }} />
           <span className="text-xs font-mono" style={{ color: 'var(--fx-ink-muted)' }}>{truncateAddress(address || '')}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopy}
-            className="text-xs transition-colors"
-            style={{ color: copied ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-subtle)' }}
-          >
-            {copied ? 'Copied' : 'Copy address'}
-          </button>
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="text-xs transition-colors"
-            style={{ color: 'var(--fx-ink-subtle)' }}
-          >
-            {showDebug ? 'Hide Debug' : 'Show Debug'}
-          </button>
-        </div>
+        <button
+          onClick={handleCopy}
+          className="text-xs transition-colors"
+          style={{ color: copied ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-subtle)' }}
+        >
+          {copied ? 'Copied' : 'Copy address'}
+        </button>
       </div>
-
-      {showDebug && (
-        <div className="mt-6 p-3 bg-black rounded" style={{ border: '1px solid rgba(255,255,255,0.1)', maxHeight: '300px', overflowY: 'auto' }}>
-          <div className="text-xs mb-2" style={{ color: 'var(--fx-ink-muted)' }}>
-            <div className="font-bold mb-2">Debug Info</div>
-            <div style={{ color: 'var(--fx-emerald-bright)', fontFamily: 'monospace', fontSize: '10px', lineHeight: '1.4' }}>
-              <div>Rank: {fmtRank(rank)} (on-chain)</div>
-              <div>Effective Rank: {fmtRank(effectiveRank)}</div>
-              <div>Direct Count: {directCount}</div>
-              <div>Legs BV: {legsWithBV}, Star: {legsWithStar}, Gold: {legsWithGold}</div>
-              <div>Rank Needs Update: {rankNeedsUpdate ? 'YES' : 'NO'}</div>
-              <div>Auto-updating: {updatingRank ? 'YES' : 'NO'}</div>
-              <div className="mt-2 border-t border-gray-700 pt-2">Logs:</div>
-              {debugLogs.map((log, idx) => (
-                <div key={idx} style={{ fontSize: '9px', color: log.msg.includes('WARN') ? '#fbbf24' : log.msg.includes('ERROR') ? '#ef4444' : '#a3e635' }}>
-                  {log.time} {log.msg}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
