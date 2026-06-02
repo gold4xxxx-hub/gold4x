@@ -196,8 +196,8 @@ export const Dashboard: React.FC = () => {
         // Use total BV from all months (the contract only returns current month in dashboard)
         const finalPersonalBV = totalPersonalBV > 0 ? totalPersonalBV : dashPersonalBV;
         const finalTeamBV = totalTeamBV > 0 ? totalTeamBV : dashTeamBV;
-        const finalTotalBV = finalPersonalBV + finalTeamBV;
-        console.log('Final BV values:', { finalPersonalBV, finalTeamBV, finalTotalBV });
+        const finalTotalBV = totalPersonalBV > 0 || totalTeamBV > 0 ? finalPersonalBV + finalTeamBV : dashTotalBV;
+        console.log('Final BV values:', { finalPersonalBV, finalTeamBV, finalTotalBV, dashTotalBV });
 
         setPersonalBV(finalPersonalBV);
         setTeamBV(finalTeamBV);
