@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import jsaviorAbi from '@/config/jsaviorAbi.json';
 
 const CONTRACT_ADDRESS = '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
 const BSC_RPC = 'https://bsc-dataseed.binance.org/';
-
-// Minimal ABI for dashboardMegaView and currentRank
-const ABI = [
-  'function dashboardMegaView(address userAddr) public view returns (tuple(bool registered, uint256 directCount, uint8 rank, uint256 roi, uint256 direct, uint256 level, uint256 rankIncome, uint256 claimable, uint256 withdrawn, uint256 totalInvested, uint256 totalEarned, uint256 totalCap, uint256 capPercent, uint8 capType, uint256 directsNeeded, uint256 personalBV, uint256 teamBV, uint256 totalBV, uint256 contractJSAV, uint256 contractUSDT, uint256 contractUSDC, uint256 reserved, uint256 available, uint256 legsWithBV, uint256 legsWithStar, uint256 legsWithGold))',
-  'function currentRank(address user) public view returns (uint8)',
-  'function decimals() public view returns (uint8)',
-];
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     const provider = new ethers.JsonRpcProvider(BSC_RPC);
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, jsaviorAbi, provider);
 
     const [dashboard, currentRankOnChain, decimals] = await Promise.all([
       contract.dashboardMegaView(userAddress),
