@@ -270,6 +270,43 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const [updatingRank, setUpdatingRank] = useState(false);
+  const [lastAutoUpdateAt, setLastAutoUpdateAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isConnected || !address || !isBSC) return;
+    if (!rankNeedsUpdate) return;
+    // Throttle automatic attempts: don't try more than once per 5 minutes
+    const now = Date.now();
+    if (lastAutoUpdateAt && now - lastAutoUpdateAt < 5 * 60_000) return;
+    if (updatingRank) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setUpdatingRank(true);
+        setLastAutoUpdateAt(now);
+        const provider = new ethers.BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        const contractWithSigner = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
+        const tx = await contractWithSigner.updateRank(address);
+        console.log('Auto updateRank tx sent:', tx);
+        await tx.wait();
+        if (cancelled) return;
+        // Refresh dashboard after successful update
+        await loadDashboard();
+      } catch (err) {
+        console.warn('Auto updateRank failed:', err);
+      } finally {
+        if (!cancelled) setUpdatingRank(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rankNeedsUpdate, isConnected, address, isBSC, lastAutoUpdateAt, updatingRank, loadDashboard]);
+
 
   return (
     <div className="fx-card p-6 mb-6">
