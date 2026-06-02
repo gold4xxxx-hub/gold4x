@@ -270,6 +270,35 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleFetchAndUpdateRank = useCallback(async () => {
+    if (!isConnected || !address || !(window as any).ethereum || !isBSC) return;
+    try {
+      setLoading(true);
+      // Refresh read-only dashboard data first
+      await loadDashboard({ silent: true });
+
+      const eff = inferEffectiveRank(rank, directCount, legsWithBV, legsWithStar, legsWithGold);
+      if (eff !== null && rank !== null && eff > rank) {
+        // Send transaction to update on-chain rank
+        const provider = new ethers.BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        const contractWithSigner = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
+        const tx = await contractWithSigner.updateRank(address);
+        console.log('updateRank tx:', tx);
+        await tx.wait();
+        // Reload dashboard after tx
+        await loadDashboard();
+      } else {
+        // Nothing to update; ensure UI reflects latest read
+        await loadDashboard();
+      }
+    } catch (err) {
+      console.error('Fetch/update rank failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [isConnected, address, isBSC, loadDashboard, rank, directCount, legsWithBV, legsWithStar, legsWithGold]);
+
   return (
     <div className="fx-card p-6 mb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
@@ -284,6 +313,14 @@ export const Dashboard: React.FC = () => {
             onClick={() => window.location.href = '/p2p'}
           >
             P2P Desk
+          </button>
+          <button
+            className="fx-button fx-button--outline fx-button--sm"
+            onClick={() => void handleFetchAndUpdateRank()}
+            disabled={loading}
+            style={{ marginLeft: 6 }}
+          >
+            Fetch & Update Rank
           </button>
         </div>
       </div>
