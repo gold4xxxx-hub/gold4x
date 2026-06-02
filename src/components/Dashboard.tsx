@@ -317,6 +317,14 @@ export const Dashboard: React.FC = () => {
           <span className="fx-pill fx-pill--ghost">{fmtRank(effectiveRank)}</span>
           <button
             className="fx-button fx-button--dark fx-button--sm"
+            onClick={() => void loadDashboard({ silent: true })}
+            title="Refresh dashboard data"
+            disabled={loading}
+          >
+            {loading ? '⟳ Syncing...' : '⟳ Refresh'}
+          </button>
+          <button
+            className="fx-button fx-button--dark fx-button--sm"
             onClick={() => window.location.href = '/p2p'}
           >
             P2P Desk
