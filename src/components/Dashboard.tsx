@@ -157,16 +157,17 @@ export const Dashboard: React.FC = () => {
         setDirectCount(Number(dashboard.directCount));
         setDirectsNeeded(Number(dashboard.directsNeeded));
 
+        // Prefer the on-chain `currentRank` call as authoritative — fall back to dashboard.rank only if the call fails.
         let onChainRank: number | null = null;
-        if (dashboard?.rank !== undefined && dashboard?.rank !== null) {
-          onChainRank = Number(dashboard.rank);
-        } else {
-          try {
-            const currentRank = await contract.currentRank(address, READ_CALL_OPTS);
-            onChainRank = Number(currentRank);
-            console.log('Fallback currentRank:', onChainRank);
-          } catch (rankErr) {
-            console.warn('currentRank fallback failed:', rankErr);
+        try {
+          const currentRank = await contract.currentRank(address, READ_CALL_OPTS);
+          onChainRank = Number(currentRank);
+          console.log('currentRank:', onChainRank);
+        } catch (rankErr) {
+          console.warn('currentRank read failed, falling back to dashboard.rank:', rankErr);
+          if (dashboard?.rank !== undefined && dashboard?.rank !== null) {
+            onChainRank = Number(dashboard.rank);
+            console.log('dashboard.rank used as fallback:', onChainRank);
           }
         }
 
