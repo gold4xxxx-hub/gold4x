@@ -41,6 +41,8 @@ function inferEffectiveRank(
   totalBV: number | null,
 ): number | null {
   if (onChainRank === null) return null;
+  // Only return on-chain rank if it's already a valid rank (1, 2, or 3)
+  // If it's 0, we should check if user qualifies for a higher rank
   if (onChainRank > 0) return onChainRank;
 
   // Must have at least 4 direct referrals to qualify for any rank
