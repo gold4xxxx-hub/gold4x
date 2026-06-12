@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :root {
   /* Background */
   --fx-bg: #06090f;
@@ -114,6 +123,13 @@ a:hover {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255,255,255,0.04) inset;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+@media (max-width: 639px) {
+  .fx-topnav__inner {
+    flex-wrap: wrap;
+  }
 }
 
 .fx-topnav__left {
@@ -126,12 +142,14 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
 }
 
 .fx-topnav__actionbox {
   display: flex;
   align-items: center;
   gap: 12px;
+  overflow: hidden;
 }
 
 .fx-brand {
@@ -223,6 +241,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
 
 .fx-mobile-nav .fx-navlink {
@@ -240,6 +259,12 @@ a:hover {
   font-size: 0.74rem;
   color: var(--fx-ink-muted);
   white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .fx-ribbon {
+    display: none;
+  }
 }
 
 .fx-ribbon__item {
@@ -830,4 +855,50 @@ select.fx-input option {
   background: rgba(255, 255, 255, 0.07);
   color: rgba(255, 255, 255, 0.3) !important;
   box-shadow: none;
+}
+
+/* ============ MOBILE RESPONSIVE (320px-480px) ============ */
+
+@media (max-width: 480px) {
+  .fx-stat__value {
+    font-size: 1.25rem;
+  }
+  .fx-stat {
+    padding: 0.85rem 0.75rem 0.75rem;
+  }
+  .fx-section-title.text-2xl {
+    font-size: 1.2rem;
+  }
+  .fx-title.text-4xl {
+    font-size: 1.75rem;
+  }
+  .fx-button {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.9rem;
+  }
+  .fx-stat__icon {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 0.5rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .fx-shell {
+    padding: 16px 10px 60px;
+  }
+  .fx-topnav {
+    padding: 10px 10px 0;
+  }
+  .fx-topnav__inner {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+  .fx-button {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.7rem;
+  }
+  .fx-card {
+    border-radius: 14px;
+  }
 }

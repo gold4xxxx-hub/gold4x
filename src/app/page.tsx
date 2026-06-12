@@ -452,7 +452,7 @@ export default function Home() {
     <div className="fx-shell">
       <main className="max-w-6xl mx-auto space-y-10">
         {!isConnected ? (
-          <div className="fx-card fx-card--gold p-12 text-center fx-reveal" style={{ maxWidth: 520, margin: '60px auto' }}>
+          <div className="fx-card fx-card--gold p-6 sm:p-12 text-center fx-reveal" style={{ maxWidth: 520, margin: '60px auto' }}>
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6" style={{ background: 'rgba(245,214,110,0.1)', border: '1px solid rgba(245,214,110,0.22)' }}>
               <svg width="28" height="28" fill="none" stroke="var(--fx-gold-strong)" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
