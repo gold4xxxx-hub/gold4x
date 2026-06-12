@@ -40,8 +40,8 @@ export const BSC_CONFIG = {
     decimals: 18,
   },
   rpcUrls: {
-    public: 'https://bsc-dataseed.binance.org/',
-    default: 'https://bsc-dataseed.binance.org/',
+    public: 'https://rpc.ankr.com/bsc',
+    default: 'https://rpc.ankr.com/bsc',
   },
   blockExplorers: {
     default: {

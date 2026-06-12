@@ -51,6 +51,7 @@ body.fx-body {
   font-family: var(--font-body);
   min-height: 100vh;
   position: relative;
+  overflow-x: hidden;
 }
 
 body.fx-body::before {
@@ -107,6 +108,7 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
   background: rgba(8, 11, 18, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
@@ -181,6 +183,25 @@ a:hover {
   background: rgba(245, 214, 110, 0.08);
 }
 
+/* Placeholder connect button (shown before hydration) */
+.fx-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fx-gold-strong);
+  background: rgba(245, 214, 110, 0.1);
+  border: 1px solid rgba(245, 214, 110, 0.25);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  cursor: not-allowed;
+  opacity: 0.6;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
 /* Hamburger button */
 .fx-hamburger {
   display: flex;
@@ -231,6 +252,50 @@ a:hover {
   padding: 0.5rem 0.85rem;
 }
 
+.fx-mobile-status {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin-top: 6px;
+  padding: 10px 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fx-mobile-status__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--fx-ink-muted);
+}
+
+.fx-mobile-status__label {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.6rem;
+  color: var(--fx-ink-subtle);
+  font-weight: 600;
+  min-width: 52px;
+}
+
+.fx-mobile-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.fx-mobile-status__dot.on {
+  background: var(--fx-emerald);
+  box-shadow: 0 0 8px rgba(0, 201, 173, 0.65);
+  animation: fxDotPulse 2s ease-in-out infinite;
+}
+
+.fx-mobile-status__dot.off {
+  background: rgba(240, 80, 80, 0.75);
+  box-shadow: 0 0 8px rgba(240, 80, 80, 0.4);
+}
+
 /* ============ STATUS RIBBON ============ */
 
 .fx-ribbon {
@@ -273,6 +338,12 @@ a:hover {
 .fx-ribbon__dot--off {
   background: rgba(240, 80, 80, 0.75);
   box-shadow: 0 0 8px rgba(240, 80, 80, 0.4);
+}
+
+@media (max-width: 767px) {
+  .fx-ribbon {
+    display: none;
+  }
 }
 
 /* ============ TYPOGRAPHY ============ */

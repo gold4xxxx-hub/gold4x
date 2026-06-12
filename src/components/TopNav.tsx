@@ -2,9 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WalletConnect } from '@/components/WalletConnect';
 import { StatusRibbon } from '@/components/StatusRibbon';
+import { useWalletConnection, useBSCNetwork } from '@/hooks/useWalletConnection';
+
+const shortenAddress = (address?: string) => {
+  if (!address) return 'Not connected';
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
@@ -15,6 +21,26 @@ const navItems = [
 export function TopNav() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const { address, isConnected, isConnecting } = useWalletConnection();
+  const { isBSC, currentChainId } = useBSCNetwork();
+
+  const statusLabel = isConnecting
+    ? 'Connecting'
+    : isConnected
+      ? 'Connected'
+      : 'Disconnected';
+
+  const networkLabel = isBSC
+    ? 'BSC Mainnet'
+    : currentChainId
+      ? `Chain ${currentChainId}`
+      : 'No network';
 
   return (
     <nav className="fx-topnav">
@@ -40,7 +66,13 @@ export function TopNav() {
         </div>
         <div className="fx-topnav__actions">
           <div className="fx-topnav__actionbox">
-            <WalletConnect />
+            {mounted ? (
+              <WalletConnect />
+            ) : (
+              <button className="fx-connect-btn" disabled>
+                Connect Wallet
+              </button>
+            )}
             <StatusRibbon />
           </div>
           <button
@@ -75,6 +107,40 @@ export function TopNav() {
               </Link>
             );
           })}
+          <div className="fx-mobile-status">
+            <div className="fx-mobile-status__item">
+              <span className={`fx-mobile-status__dot ${isConnected ? 'on' : 'off'}`} />
+              <span style={{
+                fontWeight: 600,
+                color: isConnecting
+                  ? 'var(--fx-gold-strong)'
+                  : isConnected
+                    ? 'var(--fx-emerald)'
+                    : 'rgba(240,80,80,0.85)'
+              }}>
+                {statusLabel}
+              </span>
+            </div>
+            <div className="fx-mobile-status__item">
+              <span className="fx-mobile-status__label">Network</span>
+              <span style={{
+                color: isBSC ? 'var(--fx-emerald)' : 'rgba(240,80,80,0.85)',
+                fontWeight: 500
+              }}>
+                {networkLabel}
+              </span>
+            </div>
+            <div className="fx-mobile-status__item">
+              <span className="fx-mobile-status__label">Wallet</span>
+              <span style={{
+                color: isConnected ? 'var(--fx-ink)' : 'var(--fx-ink-subtle)',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.02em'
+              }}>
+                {shortenAddress(address)}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </nav>

@@ -13,9 +13,9 @@ export type IndexedUsersResult = {
 };
 
 const RPC_URLS = [
-  'https://bsc-dataseed.binance.org/',
-  'https://bsc-dataseed1.defibit.io/',
-  'https://bsc-dataseed1.ninicoin.io/',
+  'https://rpc.ankr.com/bsc',
+  'https://bsc.publicnode.com',
+  'https://bsc-rpc.publicnode.com',
 ];
 
 // Manual override for user count - set this variable to override the count

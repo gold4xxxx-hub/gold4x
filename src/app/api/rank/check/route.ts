@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import jsaviorAbi from '@/config/jsaviorAbi.json';
 
 const CONTRACT_ADDRESS = '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
-const BSC_RPC = 'https://bsc-dataseed.binance.org/';
+const BSC_RPC = 'https://rpc.ankr.com/bsc';
 
 export async function GET(request: NextRequest) {
   try {
