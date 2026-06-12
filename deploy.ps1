@@ -40,7 +40,7 @@ function Get-FtpItems {
 
   $auth = Get-FtpAuth $Credential
   $url = New-FtpUri -Server $Server -Path $Path
-  $raw = & curl.exe --silent --show-error $url --user $auth 2>&1
+  $raw = & curl.exe --silent --show-error $url --user $auth 2>$null
   if ($LASTEXITCODE -ne 0) { return @() }
 
   $items = @()

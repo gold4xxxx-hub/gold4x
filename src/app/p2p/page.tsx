@@ -184,7 +184,7 @@ const P2PPage: React.FC = () => {
   return (
     <div className="fx-shell">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="fx-card p-6 sm:p-8 fx-reveal">
+        <div className="fx-card p-4 sm:p-8 fx-reveal">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-3 mb-3">
@@ -204,7 +204,7 @@ const P2PPage: React.FC = () => {
         </div>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 fx-reveal fx-reveal--delay-1">
-          <div className="fx-card fx-card--lift p-5">
+          <div className="fx-card fx-card--lift p-4 sm:p-5">
             <div className="fx-kicker mb-3">Liquidity</div>
             <h3 className="fx-section-title text-lg mb-2">Active Orders</h3>
             <p className="text-sm text-[#b9b0a3]">Monitor current buy/sell demand with instant matches.</p>
@@ -221,7 +221,7 @@ const P2PPage: React.FC = () => {
           </div>
         </section>
 
-        <div className="fx-card p-6 fx-reveal fx-reveal--delay-2">
+        <div className="fx-card p-4 sm:p-6 fx-reveal fx-reveal--delay-2">
             <p className="font-semibold text-[#f3d68a] mb-2">P2P trading for JSAV/INR, G4X/INR and USDT/INR</p>
           <p className="text-sm text-[#b9b0a3]">
             Users can buy or sell JSAV in INR at a fixed rate, and users can sell G4X or USDT in INR at fixed rates. Chat and share documents with your counterparty after matching.
@@ -231,7 +231,7 @@ const P2PPage: React.FC = () => {
           <p className="text-sm text-[#f3d68a]">Fixed rate: 1 USDT = {FIXED_INR_PRICES.USDT} INR</p>
         </div>
 
-        <form onSubmit={handleCreateOrder} className="fx-card p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2">
+        <form onSubmit={handleCreateOrder} className="fx-card p-4 sm:p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2">
           <div>
             <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Token</label>
             <select
@@ -275,7 +275,7 @@ const P2PPage: React.FC = () => {
           <button type="submit" className="fx-button">Post Order</button>
         </form>
 
-        <div className="fx-card p-6 fx-reveal fx-reveal--delay-3">
+        <div className="fx-card p-4 sm:p-6 fx-reveal fx-reveal--delay-3">
           <h2 className="fx-section-title text-xl mb-4">Order Book</h2>
           <div className="overflow-x-auto">
             <table className="fx-table text-sm">

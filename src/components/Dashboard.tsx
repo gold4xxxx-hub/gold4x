@@ -259,7 +259,7 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="fx-card p-6 mb-6">
+    <div className="fx-card p-4 sm:p-6 mb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <div className="fx-kicker mb-1">Portfolio Overview</div>
@@ -284,7 +284,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="fx-dashboard-grid-4 mb-6">
         <div className="fx-stat">
           <div className="fx-stat__label">ROI Cap</div>
           {loading ? <div className="fx-skeleton h-8 w-24 mt-1" /> : <div className="fx-stat__value" style={{ color: 'var(--fx-gold-strong)' }}>{fmt(cap)}</div>}
@@ -310,7 +310,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+      <div className="fx-dashboard-grid-alerts mb-6">
         <div className="fx-alert text-xs">Status: <span className="gold-text">{registered === null ? '-' : registered ? 'Registered' : 'Not Registered'}</span></div>
         <div className="fx-alert text-xs">Directs: <span className="gold-text">{fmtInt(directCount)}</span></div>
         <div className="fx-alert text-xs">Rank: <span className="gold-text">{fmtRank(effectiveRank)}</span></div>
@@ -346,7 +346,7 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="fx-dashboard-grid-4 mb-6">
         <div className="fx-stat">
           <div className="fx-stat__label">ROI Income</div>
           {loading ? <div className="fx-skeleton h-8 w-24 mt-1" /> : <div className="fx-stat__value">{fmt(roiIncome)}</div>}
@@ -372,14 +372,14 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="fx-dashboard-grid-4 mb-6">
         <div className="fx-alert text-xs">Directs Needed: <span className="gold-text">{fmtInt(directsNeeded)}</span></div>
         <div className="fx-alert text-xs">Cap Type: <span className="gold-text">{capType === null ? '-' : capType}</span></div>
         <div className="fx-alert text-xs">Available: <span className="gold-text">{fmt(available)}</span></div>
         <div className="fx-alert text-xs">Reserved: <span className="gold-text">{fmt(reserved)}</span></div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <div className="fx-dashboard-grid-3 mb-6">
         <div className="fx-stat">
           <div className="fx-stat__label">Personal BV</div>
           {loading ? <div className="fx-skeleton h-8 w-24 mt-1" /> : <div className="fx-stat__value">{fmt(personalBV)}</div>}

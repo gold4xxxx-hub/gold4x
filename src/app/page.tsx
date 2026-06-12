@@ -452,7 +452,7 @@ export default function Home() {
     <div className="fx-shell">
       <main className="max-w-6xl mx-auto space-y-10">
         {!isConnected ? (
-          <div className="fx-card fx-card--gold p-12 text-center fx-reveal" style={{ maxWidth: 520, margin: '60px auto' }}>
+          <div className="fx-card fx-card--gold p-4 sm:p-12 text-center fx-reveal" style={{ maxWidth: 520, margin: '60px auto' }}>
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6" style={{ background: 'rgba(245,214,110,0.1)', border: '1px solid rgba(245,214,110,0.22)' }}>
               <svg width="28" height="28" fill="none" stroke="var(--fx-gold-strong)" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
@@ -469,7 +469,7 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <header className="fx-card fx-card--gold p-5 sm:p-8 fx-reveal" style={{ borderRadius: '24px' }}>
+            <header className="fx-card fx-card--gold p-4 sm:p-8 fx-reveal" style={{ borderRadius: '24px' }}>
               <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -497,7 +497,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <div className="fx-card fx-card--lift p-5 sm:p-6 w-full lg:w-[320px] space-y-5" style={{ borderRadius: '20px' }}>
+                <div className="fx-card fx-card--lift p-4 sm:p-6 w-full lg:w-[320px] space-y-5" style={{ borderRadius: '20px' }}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs uppercase tracking-[0.3em] text-[#b9b0a3]">Command</span>
                     <span className="gold-badge">Verified</span>
@@ -799,23 +799,23 @@ export default function Home() {
               </div>
             </header>
 
-            <section className="fx-card p-4 sm:p-5 fx-reveal fx-reveal--delay-2" style={{ borderColor: 'rgba(255,255,255,0.06)', borderRadius: '20px' }}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-0 text-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <section className="fx-card p-3 sm:p-5 fx-reveal fx-reveal--delay-2" style={{ borderColor: 'rgba(255,255,255,0.06)', borderRadius: '20px' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-0 text-xs sm:text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 sm:border-r min-w-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">JSAV Price</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-gold-strong)' }}>$1.04</span>
+                  <span className="font-bold text-sm sm:text-base truncate" style={{ color: 'var(--fx-gold-strong)' }}>$1.04</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 sm:border-r min-w-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">BSC Gas</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>3.2 Gwei</span>
+                  <span className="font-bold text-sm sm:text-base truncate" style={{ color: 'var(--fx-emerald-bright)' }}>3.2 Gwei</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 min-w-0">
                   <span className="fx-kicker">ROI Cap</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-ink)' }}>3.0×</span>
+                  <span className="font-bold text-sm sm:text-base truncate" style={{ color: 'var(--fx-ink)' }}>3.0×</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-l" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 sm:border-l min-w-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <span className="fx-kicker">Total Users</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>
+                  <span className="font-bold text-sm sm:text-base truncate" style={{ color: 'var(--fx-emerald-bright)' }}>
                     {indexedUsersCount === null ? '...' : indexedUsersCount}
                   </span>
                 </div>
@@ -830,14 +830,14 @@ export default function Home() {
                 <WalletInfo />
               </aside>
 
-              <div className="fx-card p-6">
+              <div className="fx-card p-4 sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                   <h2 className="fx-section-title text-2xl">Protocol Snapshot</h2>
                   <span className="fx-pill fx-pill--ghost">BSC Mainnet</span>
                 </div>
                 <ul className="text-sm text-[#b9b0a3] space-y-2">
-                  <li>
-                    Contract: <span className="gold-text">{JSAVIOR_CONTRACT_ADDRESS}</span>
+                  <li className="break-all">
+                    Contract: <span className="gold-text font-mono">{JSAVIOR_CONTRACT_ADDRESS}</span>
                   </li>
                   <li>Total users currently shown: {indexedUsersCount === null ? 'loading' : indexedUsersCount}.</li>
                   <li>Registration and investment flows are available in the Command panel.</li>

@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* ============ RESET / BASE GUARD ============ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 :root {
   /* Background */
   --fx-bg: #06090f;
@@ -84,12 +102,45 @@ a:hover {
 
 .fx-shell {
   padding: 24px 16px 80px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (min-width: 480px) {
+  .fx-shell {
+    padding: 24px 20px 80px;
+  }
 }
 
 @media (min-width: 768px) {
   .fx-shell {
     padding: 36px 28px 90px;
   }
+}
+
+/* Tighten shell padding on very small screens */
+@media (max-width: 380px) {
+  .fx-shell {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* ============ RESPONSIVE UTILITIES ============ */
+
+/* Force any element to stay within viewport */
+.fx-max-full {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Text truncation helper for mobile */
+.fx-truncate-mobile {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* ============ TOPNAV ============ */
@@ -901,4 +952,88 @@ select.fx-input option {
   background: rgba(255, 255, 255, 0.07);
   color: rgba(255, 255, 255, 0.3) !important;
   box-shadow: none;
+}
+
+/* ============ RESPONSIVE LAYOUT IMPROVEMENTS (320px - 480px) ============ */
+
+.fx-dashboard-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 380px) {
+  .fx-dashboard-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .fx-dashboard-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fx-dashboard-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 380px) {
+  .fx-dashboard-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .fx-dashboard-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fx-dashboard-grid-alerts {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 380px) {
+  .fx-dashboard-grid-alerts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 640px) {
+  .fx-dashboard-grid-alerts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Force layout safety and prevent horizontal overflow */
+.break-all {
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
+}
+
+@media (max-width: 480px) {
+  .fx-stat {
+    padding: 0.8rem 0.8rem 0.7rem;
+    border-radius: 12px;
+  }
+  .fx-stat__value {
+    font-size: 1.3rem;
+  }
+  /* Ensure TopNav is properly wrapped and doesn't exceed screen width */
+  .fx-topnav {
+    padding: 8px 8px 0;
+  }
+  .fx-topnav__inner {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .fx-brand {
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+  }
 }

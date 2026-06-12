@@ -164,7 +164,7 @@ export default function KycPage() {
   return (
     <div className="fx-shell">
       <main className="max-w-4xl mx-auto space-y-6">
-        <div className="fx-card p-6 fx-reveal">
+        <div className="fx-card p-4 sm:p-6 fx-reveal">
           <h1 className="fx-section-title text-3xl">KYC Verification</h1>
           <p className="text-sm text-[#b9b0a3] mt-2">
             Submit mobile number and required documents for verification.
@@ -172,7 +172,7 @@ export default function KycPage() {
         </div>
 
         {!isConnected && (
-          <div className="fx-card fx-card--lift p-6 space-y-4 text-sm text-[#b9b0a3]">
+          <div className="fx-card fx-card--lift p-4 sm:p-6 space-y-4 text-sm text-[#b9b0a3]">
             <div className="fx-kicker">Wallet Required</div>
             <p>Connect your wallet to submit and track KYC status.</p>
             <div className="flex justify-start">
@@ -183,9 +183,9 @@ export default function KycPage() {
 
         {isConnected && (
           <>
-            <div className="fx-card p-6 space-y-3 text-sm">
+            <div className="fx-card p-4 sm:p-6 space-y-3 text-sm">
               <div className="fx-kicker">Current Status</div>
-              <p className="text-[#b9b0a3]">Wallet: <span className="gold-text">{address}</span></p>
+              <p className="text-[#b9b0a3] break-all">Wallet: <span className="gold-text font-mono">{address}</span></p>
               <p className="text-[#b9b0a3]">
                 Status: <span className="gold-text">{loading ? 'Loading...' : currentStatus}</span>
               </p>
@@ -223,7 +223,7 @@ export default function KycPage() {
               )}
             </div>
 
-            <form className="fx-card p-6 space-y-4" onSubmit={onSubmit}>
+            <form className="fx-card p-4 sm:p-6 space-y-4" onSubmit={onSubmit}>
               <div className="fx-kicker">Personal Details</div>
 
               <input
