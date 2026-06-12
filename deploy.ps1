@@ -26,66 +26,9 @@ function New-FtpUri {
   return "ftp://$Server$normalized"
 }
 
-function New-FtpRequest {
-  param(
-    [string]$Server,
-    [string]$Path,
-    [string]$Method,
-    [System.Net.NetworkCredential]$Credential
-  )
-
-  $request = [System.Net.FtpWebRequest]::Create((New-FtpUri -Server $Server -Path $Path))
-  $request.Method = $Method
-  $request.Credentials = $Credential
-  $request.UseBinary = $true
-  $request.UsePassive = $false
-  $request.KeepAlive = $false
-  return $request
-}
-
-function Read-FtpTextResponse {
-  param(
-    [System.Net.FtpWebRequest]$Request
-  )
-
-  $response = $Request.GetResponse()
-  try {
-    $stream = $response.GetResponseStream()
-    $reader = New-Object System.IO.StreamReader($stream)
-    try {
-      return $reader.ReadToEnd()
-    } finally {
-      $reader.Dispose()
-    }
-  } finally {
-    $response.Dispose()
-  }
-}
-
-function Parse-FtpListLine {
-  param(
-    [string]$Line
-  )
-
-  if (-not $Line) {
-    return $null
-  }
-
-  if ($Line -match '^([d\-l])[rwx\-]{9}\s+\d+\s+\S+\s+\S+\s+\d+\s+\w+\s+\d+\s+[\d:]+\s+(.+)$') {
-    return [PSCustomObject]@{
-      Name = $Matches[2]
-      IsDirectory = $Matches[1] -eq 'd'
-    }
-  }
-
-  if ($Line -match '^\d{2}-\d{2}-\d{2}\s+\d{2}:\d{2}[AP]M\s+(<DIR>|\d+)\s+(.+)$') {
-    return [PSCustomObject]@{
-      Name = $Matches[2]
-      IsDirectory = $Matches[1] -eq '<DIR>'
-    }
-  }
-
-  return $null
+function Get-FtpAuth {
+  param([System.Net.NetworkCredential]$Credential)
+  return "$($Credential.UserName):$($Credential.Password)"
 }
 
 function Get-FtpItems {
@@ -95,47 +38,29 @@ function Get-FtpItems {
     [System.Net.NetworkCredential]$Credential
   )
 
-  $request = New-FtpRequest -Server $Server -Path $Path -Method ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails) -Credential $Credential
-  $raw = Read-FtpTextResponse -Request $request
-  $items = @()
+  $auth = Get-FtpAuth $Credential
+  $url = New-FtpUri -Server $Server -Path $Path
+  $raw = & curl.exe --silent --show-error $url --user $auth 2>&1
+  if ($LASTEXITCODE -ne 0) { return @() }
 
+  $items = @()
   foreach ($line in ($raw -split "`r?`n")) {
-    $parsed = Parse-FtpListLine -Line $line.Trim()
-    if ($null -eq $parsed) {
-      continue
+    $line = $line.Trim()
+    if (-not $line) { continue }
+
+    if ($line -match '^(d)[rwx\-]{9}\s+') {
+      $parts = $line -split '\s+'
+      $name = $parts[-1]
+      if ($name -eq '.' -or $name -eq '..') { continue }
+      $items += [PSCustomObject]@{ Name = $name; IsDirectory = $true }
+    } elseif ($line -match '^(-)[rwx\-]{9}\s+') {
+      $parts = $line -split '\s+'
+      $name = $parts[-1]
+      $items += [PSCustomObject]@{ Name = $name; IsDirectory = $false }
     }
-    if ($parsed.Name -eq "." -or $parsed.Name -eq "..") {
-      continue
-    }
-    $items += $parsed
   }
 
   return $items
-}
-
-function Ensure-FtpDirectory {
-  param(
-    [string]$Server,
-    [string]$Path,
-    [System.Net.NetworkCredential]$Credential
-  )
-
-  $segments = $Path.Trim('/').Split('/', [System.StringSplitOptions]::RemoveEmptyEntries)
-  $current = ""
-
-  foreach ($segment in $segments) {
-    $current = "$current/$segment"
-    $request = New-FtpRequest -Server $Server -Path $current -Method ([System.Net.WebRequestMethods+Ftp]::MakeDirectory) -Credential $Credential
-    try {
-      $response = $request.GetResponse()
-      $response.Dispose()
-    } catch {
-      $message = $_.Exception.Message
-      if ($message -notmatch '550|exists|exist') {
-        throw
-      }
-    }
-  }
 }
 
 function Remove-FtpTree {
@@ -145,38 +70,19 @@ function Remove-FtpTree {
     [System.Net.NetworkCredential]$Credential
   )
 
-  $items = @()
-  try {
-    $items = Get-FtpItems -Server $Server -Path $Path -Credential $Credential
-  } catch {
-    return
-  }
+  $auth = Get-FtpAuth $Credential
+  $items = Get-FtpItems -Server $Server -Path $Path -Credential $Credential
+  if (-not $items) { return }
+
+  $baseUrl = New-FtpUri -Server $Server -Path "/"
 
   foreach ($item in $items) {
     $childPath = "$($Path.TrimEnd('/'))/$($item.Name)"
     if ($item.IsDirectory) {
       Remove-FtpTree -Server $Server -Path $childPath -Credential $Credential
-      $rmd = New-FtpRequest -Server $Server -Path $childPath -Method ([System.Net.WebRequestMethods+Ftp]::RemoveDirectory) -Credential $Credential
-      try {
-        $resp = $rmd.GetResponse()
-        $resp.Dispose()
-      } catch {
-        $message = $_.Exception.Message
-        if ($message -notmatch '550|No such') {
-          throw
-        }
-      }
+      & curl.exe --silent --show-error --fail --quote "RMD $childPath" $baseUrl --user $auth 2>$null
     } else {
-      $del = New-FtpRequest -Server $Server -Path $childPath -Method ([System.Net.WebRequestMethods+Ftp]::DeleteFile) -Credential $Credential
-      try {
-        $resp = $del.GetResponse()
-        $resp.Dispose()
-      } catch {
-        $message = $_.Exception.Message
-        if ($message -notmatch '550|No such') {
-          throw
-        }
-      }
+      & curl.exe --silent --show-error --fail --quote "DELE $childPath" $baseUrl --user $auth 2>$null
     }
   }
 }
@@ -191,19 +97,13 @@ function Upload-FileToFtp {
 
   try {
     $ftpUrl = New-FtpUri -Server $Server -Path $RemoteFilePath
-    $auth = "$($Credential.UserName):$($Credential.Password)"
+    $auth = Get-FtpAuth $Credential
 
     $maxAttempts = 4
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
       & curl.exe --silent --show-error --fail --ftp-create-dirs -T $LocalFilePath $ftpUrl --user $auth
-      if ($LASTEXITCODE -eq 0) {
-        break
-      }
-
-      if ($attempt -eq $maxAttempts) {
-        throw "curl exited with code $LASTEXITCODE"
-      }
-
+      if ($LASTEXITCODE -eq 0) { break }
+      if ($attempt -eq $maxAttempts) { throw "curl exited with code $LASTEXITCODE" }
       Start-Sleep -Seconds ([Math]::Min(8, $attempt * 2))
     }
   } catch {
@@ -211,46 +111,19 @@ function Upload-FileToFtp {
   }
 }
 
-function Resolve-FtpHost {
-  param(
-    [string[]]$Candidates,
-    [System.Net.NetworkCredential]$Credential
-  )
-
-  $errors = @()
-
-  foreach ($candidate in $Candidates) {
-    if (-not $candidate) {
-      continue
-    }
-    try {
-      $req = New-FtpRequest -Server $candidate -Path "/" -Method ([System.Net.WebRequestMethods+Ftp]::ListDirectory) -Credential $Credential
-      $resp = $req.GetResponse()
-      $resp.Dispose()
-      return $candidate
-    } catch {
-      $errors += "${candidate}: $($_.Exception.Message)"
-      continue
-    }
-  }
-
-  throw "Could not connect to FTP using provided hosts. Details: $($errors -join ' | ')"
-}
-
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $projectRoot
 
 $credential = New-Object System.Net.NetworkCredential($Username, $Password)
-$server = Resolve-FtpHost -Candidates @($FtpHost, $FallbackHost) -Credential $credential
+$server = $FtpHost
+$auth = Get-FtpAuth $credential
 
 Write-Host "Using FTP host: $server" -ForegroundColor Green
 
 if (-not $SkipBuild) {
   Write-Host "`n==> Building static export" -ForegroundColor Cyan
   npm run build
-  if ($LASTEXITCODE -ne 0) {
-    throw "Build failed"
-  }
+  if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 }
 
 $outDir = Join-Path $projectRoot "out"
@@ -258,25 +131,17 @@ if (-not (Test-Path $outDir)) {
   throw "Static export folder not found at $outDir. Run npm run build first."
 }
 
-Ensure-FtpDirectory -Server $server -Path $RemotePath -Credential $credential
-
 if (-not $SkipCleanup) {
   Write-Host "`n==> Removing previous remote data" -ForegroundColor Cyan
   Remove-FtpTree -Server $server -Path $RemotePath -Credential $credential
 }
 
 Write-Host "`n==> Uploading static files" -ForegroundColor Cyan
-$files = Get-ChildItem -Path $outDir -Recurse -File
-
-foreach ($file in $files) {
-  $relative = $file.FullName.Substring($outDir.Length).TrimStart([char[]]@('\', '/'))
-  $relative = $relative.Replace('\', '/')
+$outUri = New-FtpUri -Server $server -Path $RemotePath
+Get-ChildItem -Path $outDir -Recurse -File | ForEach-Object {
+  $relative = $_.FullName.Substring($outDir.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
   $remoteFile = "$($RemotePath.TrimEnd('/'))/$relative"
-  $remoteDir = [System.IO.Path]::GetDirectoryName($remoteFile.Replace('/', '\'))
-  if ($remoteDir) {
-    Ensure-FtpDirectory -Server $server -Path ($remoteDir.Replace('\', '/')) -Credential $credential
-  }
-  Upload-FileToFtp -Server $server -RemoteFilePath $remoteFile -LocalFilePath $file.FullName -Credential $credential
+  Upload-FileToFtp -Server $server -RemoteFilePath $remoteFile -LocalFilePath $_.FullName -Credential $credential
 }
 
 Write-Host "`nFTP deploy completed successfully." -ForegroundColor Green
