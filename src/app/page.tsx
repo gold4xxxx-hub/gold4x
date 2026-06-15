@@ -44,15 +44,20 @@ function parseTxError(err: any, fallback: string): string {
 }
 
 async function getPayoutSnapshot(contract: ethers.Contract, userAddress: string) {
-  const d = await contract.dashboardMegaView(userAddress);
-  return {
-    registered: Boolean(d?.registered),
-    claimable: BigInt(d?.claimable ?? 0),
-    available: BigInt(d?.available ?? 0),
-    contractJSAV: BigInt(d?.contractJSAV ?? 0),
-    contractUSDT: BigInt(d?.contractUSDT ?? 0),
-    contractUSDC: BigInt(d?.contractUSDC ?? 0),
-  };
+  try {
+    const d = await contract.dashboardMegaView.staticCall(userAddress);
+    return {
+      registered: Boolean(d?.registered),
+      claimable: BigInt(d?.claimable ?? 0),
+      available: BigInt(d?.available ?? 0),
+      contractJSAV: BigInt(d?.contractJSAV ?? 0),
+      contractUSDT: BigInt(d?.contractUSDT ?? 0),
+      contractUSDC: BigInt(d?.contractUSDC ?? 0),
+    };
+  } catch (e) {
+    console.error('getPayoutSnapshot failed:', e);
+    return { registered: false, claimable: BigInt(0), available: BigInt(0), contractJSAV: BigInt(0), contractUSDT: BigInt(0), contractUSDC: BigInt(0) };
+  }
 }
 
 export default function Home() {
@@ -161,7 +166,7 @@ export default function Home() {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
 
-        const [usdt, usdc] = await Promise.all([contract.USDT(), contract.USDC()]);
+        const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
 
         if (registerToken === 'JSAV') {
@@ -181,9 +186,10 @@ export default function Home() {
         let decimals = 18;
         try {
           const stableContract = new ethers.Contract(stable, ERC20_ABI_MIN, provider);
-          const stableDecimals = await stableContract.decimals();
+          const stableDecimals = await stableContract.decimals.staticCall();
           decimals = Number(stableDecimals);
-        } catch {
+        } catch (e) {
+          console.warn('stable decimals() call failed, defaulting to 18:', e);
           decimals = 18;
         }
 
@@ -210,10 +216,10 @@ export default function Home() {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
         const [minDepositRaw, jsavDecimals, usdt, usdc] = await Promise.all([
-          contract.MIN_DEPOSIT(),
-          contract.decimals(),
-          contract.USDT(),
-          contract.USDC(),
+          contract.MIN_DEPOSIT.staticCall(),
+          contract.decimals.staticCall(),
+          contract.USDT.staticCall(),
+          contract.USDC.staticCall(),
         ]);
 
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
@@ -235,10 +241,11 @@ export default function Home() {
 
         try {
           const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, provider);
-          const sd = await stableToken.decimals();
+          const sd = await stableToken.decimals.staticCall();
           setInvestDecimals(Number(sd));
           setInvestMinRaw(ethers.parseUnits(INVEST_MIN_STABLE, Number(sd)));
-        } catch {
+        } catch (e) {
+          console.warn('stable decimals() call failed in invest, defaulting to 18:', e);
           setInvestDecimals(18);
           setInvestMinRaw(ethers.parseUnits(INVEST_MIN_STABLE, 18));
         }
@@ -262,7 +269,7 @@ export default function Home() {
       try {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [usdt, usdc] = await Promise.all([contract.USDT(), contract.USDC()]);
+        const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
       } catch {
         // Keep silent; claim can still work without stable addresses.
@@ -299,7 +306,7 @@ export default function Home() {
 
         const owner = await signer.getAddress();
         const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await stableToken.allowance(owner, JSAVIOR_CONTRACT_ADDRESS);
+        const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
         if ((allowance as bigint) < registerFeeRaw) {
           const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
           await approveTx.wait();
@@ -349,7 +356,7 @@ export default function Home() {
 
         const owner = await signer.getAddress();
         const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await stableToken.allowance(owner, JSAVIOR_CONTRACT_ADDRESS);
+        const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
         if ((allowance as bigint) < amountRaw) {
           const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, amountRaw);
           await approveTx.wait();
@@ -428,7 +435,7 @@ export default function Home() {
 
         let stable = withdrawToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
         if (!stable || stable === ethers.ZeroAddress) {
-          stable = withdrawToken === 'USDT' ? (await contract.USDT()) : (await contract.USDC());
+          stable = withdrawToken === 'USDT' ? (await contract.USDT.staticCall()) : (await contract.USDC.staticCall());
           setStableAddresses((prev) => ({ ...prev, [withdrawToken]: stable as string }));
         }
 
@@ -450,16 +457,16 @@ export default function Home() {
 
   return (
     <div className="fx-shell">
-      <main className="max-w-6xl mx-auto space-y-10">
+      <main className="fx-container space-y-10">
         {!isConnected ? (
-          <div className="fx-card fx-card--gold p-6 sm:p-12 text-center fx-reveal" style={{ maxWidth: 520, margin: '60px auto' }}>
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6" style={{ background: 'rgba(245,214,110,0.1)', border: '1px solid rgba(245,214,110,0.22)' }}>
-              <svg width="28" height="28" fill="none" stroke="var(--fx-gold-strong)" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <div className="gold-panel p-6 sm:p-12 text-center fx-reveal" style={{ maxWidth: 480, margin: '80px auto' }}>
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl mb-5" style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.15)' }}>
+              <svg width="24" height="24" fill="none" stroke="var(--fx-gold)" viewBox="0 0 24 24" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
               </svg>
             </div>
-            <h2 className="fx-section-title text-2xl mb-3">Connect Your Wallet</h2>
-            <p className="fx-lead text-sm mb-6" style={{ maxWidth: 320, margin: '0 auto 1.5rem' }}>
+            <h2 className="fx-section-title text-xl mb-3">Connect Your Wallet</h2>
+            <p className="fx-lead text-sm mb-6" style={{ maxWidth: 300, margin: '0 auto 1.5rem', color: 'var(--fx-ink-muted)' }}>
               Connect to BSC to unlock the JSAVIOR command console.
             </p>
             <div className="flex justify-center">
@@ -469,40 +476,40 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <header className="fx-card fx-card--gold p-5 sm:p-8 fx-reveal" style={{ borderRadius: '24px' }}>
+            <header className="gold-panel p-5 sm:p-8 fx-reveal">
               <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="fx-pill">JSAVIOR Network</span>
-                    <span className="fx-pill fx-pill--emerald">BSC Live</span>
+                    <span className="fx-status-badge fx-status-badge--live">BSC Live</span>
                     <span className="fx-pill fx-pill--ghost">JSAV Token</span>
                   </div>
                   <h1 className="fx-title text-4xl sm:text-5xl">JSAVIOR</h1>
-                  <p className="fx-lead max-w-lg">
+                  <p className="fx-lead max-w-lg" style={{ color: 'var(--fx-ink-muted)' }}>
                     Precision-grade DeFi operations on Binance Smart Chain. Track rewards,
                     invest, claim, and withdraw — all from one refined command hub.
                   </p>
                   <div className="flex flex-wrap gap-5 text-sm" style={{ color: 'var(--fx-ink-muted)' }}>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--fx-gold-strong)' }} />
-                      Token: <span className="gold-text">JSAV</span>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--fx-emerald)' }} />
+                      Token: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>JSAV</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--fx-emerald)' }} />
-                      Chain: <span className="gold-text">BSC Mainnet</span>
+                      Chain: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>BSC Mainnet</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--fx-emerald)', boxShadow: '0 0 6px rgba(0,201,173,0.7)' }} />
-                      Status: <span style={{ color: 'var(--fx-emerald-bright)', fontWeight: 600 }}>Live</span>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--fx-emerald)' }} />
+                      Status: <span style={{ color: 'var(--fx-emerald-bright)', fontWeight: 400 }}>Live</span>
                     </div>
                   </div>
                 </div>
-                <div className="fx-card fx-card--lift p-5 sm:p-6 w-full lg:w-[320px] space-y-5" style={{ borderRadius: '20px' }}>
+                <div className="gold-panel p-5 sm:p-6 w-full lg:w-[320px] space-y-5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.3em] text-[#b9b0a3]">Command</span>
-                    <span className="gold-badge">Verified</span>
+                    <span className="text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--fx-ink-subtle)' }}>Command</span>
+                    <span className="fx-status-badge fx-status-badge--verified">Verified</span>
                   </div>
-                  <p className="text-sm text-[#b9b0a3]">
+                  <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>
                     Launch critical actions from a single, secured control panel.
                   </p>
                   <div className="fx-alert fx-alert--success text-sm">
@@ -511,8 +518,8 @@ export default function Home() {
                   <div className="grid grid-cols-1 gap-3">
                     {!showRegister ? (
                       <button
-                        className="fx-button"
-                        style={{ minHeight: '44px' }}
+                        className="fx-button fx-button--gold"
+                        style={{ minHeight: '48px' }}
                         onClick={() => {
                           setShowRegister(true);
                           setRegisterToken('JSAV');
@@ -525,7 +532,7 @@ export default function Home() {
                     ) : (
                       <div className="space-y-2">
                         <div>
-                          <label className="block text-[10px] uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">
+                          <label className="block text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--fx-ink-subtle)' }}>
                             Token
                           </label>
                           <select
@@ -541,7 +548,7 @@ export default function Home() {
                         </div>
                         <div className="fx-alert text-xs">
                           Required amount:{' '}
-                          <span className="gold-text">
+                          <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>
                             {registerFeeLoading ? 'Loading…' : registerFeeText}
                           </span>
                         </div>
@@ -551,7 +558,7 @@ export default function Home() {
                             ? 'Configured fixed amount: 50 JSAV.'
                             : 'Configured fixed amount: 52.5 stable tokens; raw approval uses token decimals.'}
                         </p>
-                        <label className="block text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--fx-emerald-bright)' }}>
+                        <label className="block text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--fx-ink-subtle)' }}>
                           Referrer Address
                         </label>
                         <input
@@ -560,7 +567,6 @@ export default function Home() {
                           value={referrer}
                           onChange={e => setReferrer(e.target.value)}
                           disabled={registerLoading}
-                          style={{ color: 'var(--fx-emerald-bright)' }}
                         />
                         {registerError && (
                           <div className="fx-alert fx-alert--error text-xs">{registerError}</div>
@@ -580,8 +586,8 @@ export default function Home() {
                         )}
                         <div className="flex gap-2">
                           <button
-                            className="fx-button flex-1"
-                            style={{ minHeight: '44px' }}
+                            className="fx-button fx-button--gold flex-1"
+                            style={{ minHeight: '48px' }}
                             onClick={handleRegister}
                             disabled={registerLoading || registerFeeLoading || !referrer.trim()}
                           >
@@ -589,7 +595,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
-                            style={{ minHeight: '44px' }}
+                            style={{ minHeight: '48px' }}
                             onClick={() => {
                               setShowRegister(false);
                               setReferrer('');
@@ -606,7 +612,7 @@ export default function Home() {
                     {!showInvest ? (
                       <button
                         className="fx-button fx-button--dark"
-                        style={{ minHeight: '44px' }}
+                        style={{ minHeight: '48px' }}
                         onClick={() => {
                           setShowInvest(true);
                           setInvestToken('JSAV');
@@ -620,7 +626,7 @@ export default function Home() {
                     ) : (
                       <div className="space-y-2">
                         <div>
-                          <label className="block text-[10px] uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">
+                          <label className="block text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--fx-ink-subtle)' }}>
                             Token
                           </label>
                           <select
@@ -643,7 +649,7 @@ export default function Home() {
                         />
                         <div className="fx-alert text-xs">
                           Minimum:{' '}
-                          <span className="gold-text">
+                          <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>
                             {investMetaLoading ? 'Loading…' : investMinText}
                           </span>
                         </div>
@@ -666,7 +672,7 @@ export default function Home() {
                         <div className="flex gap-2">
                           <button
                             className="fx-button flex-1"
-                            style={{ minHeight: '44px' }}
+                            style={{ minHeight: '48px' }}
                             onClick={handleInvest}
                             disabled={investLoading || investMetaLoading}
                           >
@@ -674,7 +680,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
-                            style={{ minHeight: '44px' }}
+                            style={{ minHeight: '48px' }}
                             onClick={() => {
                               setShowInvest(false);
                               setInvestAmount('');
@@ -691,7 +697,7 @@ export default function Home() {
 
                     <button
                       className="fx-button fx-button--dark"
-                      style={{ minHeight: '44px' }}
+                      style={{ minHeight: '48px' }}
                       onClick={handleClaim}
                       disabled={claimLoading}
                     >
@@ -721,7 +727,7 @@ export default function Home() {
                     {!showWithdraw ? (
                       <button
                         className="fx-button fx-button--dark"
-                        style={{ minHeight: '44px' }}
+                        style={{ minHeight: '48px' }}
                         onClick={() => {
                           setShowWithdraw(true);
                           setWithdrawToken('USDT');
@@ -734,7 +740,7 @@ export default function Home() {
                     ) : (
                       <div className="space-y-2">
                         <div>
-                          <label className="block text-[10px] uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">
+                          <label className="block text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--fx-ink-subtle)' }}>
                             Withdraw Token
                           </label>
                           <select
@@ -767,7 +773,7 @@ export default function Home() {
                         <div className="flex gap-2">
                           <button
                             className="fx-button flex-1"
-                            style={{ minHeight: '44px' }}
+                            style={{ minHeight: '48px' }}
                             onClick={handleWithdraw}
                             disabled={withdrawLoading}
                           >
@@ -775,7 +781,7 @@ export default function Home() {
                           </button>
                           <button
                             className="fx-button fx-button--dark"
-                            style={{ minHeight: '44px' }}
+                            style={{ minHeight: '48px' }}
                             onClick={() => {
                               setShowWithdraw(false);
                               setWithdrawError(null);
@@ -799,23 +805,23 @@ export default function Home() {
               </div>
             </header>
 
-            <section className="fx-card p-4 sm:p-5 fx-reveal fx-reveal--delay-2" style={{ borderColor: 'rgba(255,255,255,0.06)', borderRadius: '20px' }}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-0 text-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <section className="gold-panel p-3 sm:p-4 my-8 fx-reveal fx-reveal--delay-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>
+                <div className="flex flex-col items-center justify-center py-2 px-3 gap-1" style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                   <span className="fx-kicker">JSAV Price</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-gold-strong)' }}>$1.04</span>
+                  <span className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>$1.04</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col items-center justify-center py-2 px-3 gap-1" style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                   <span className="fx-kicker">BSC Gas</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>3.2 Gwei</span>
+                  <span className="text-sm" style={{ color: 'var(--fx-emerald-bright)' }}>3.2 Gwei</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3">
+                <div className="flex flex-col items-center justify-center py-2 px-3 gap-1" style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                   <span className="fx-kicker">ROI Cap</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-ink)' }}>3.0×</span>
+                  <span className="text-sm" style={{ color: 'var(--fx-ink)' }}>3.0×</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-2 sm:px-3 sm:border-l" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col items-center justify-center py-2 px-3 gap-1">
                   <span className="fx-kicker">Total Users</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--fx-emerald-bright)' }}>
+                  <span className="text-sm" style={{ color: 'var(--fx-emerald-bright)' }}>
                     {indexedUsersCount === null ? '...' : indexedUsersCount}
                   </span>
                 </div>
@@ -830,30 +836,32 @@ export default function Home() {
                 <WalletInfo />
               </aside>
 
-              <div className="fx-card p-6">
+              <div className="gold-panel p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                  <h2 className="fx-section-title text-2xl">Protocol Snapshot</h2>
+                  <h2 className="fx-section-title text-base">Protocol</h2>
                   <span className="fx-pill fx-pill--ghost">BSC Mainnet</span>
                 </div>
-                <ul className="text-sm text-[#b9b0a3] space-y-2">
+                <ul className="text-sm space-y-2" style={{ color: 'var(--fx-ink-muted)' }}>
                   <li>
-                    Contract: <span className="gold-text">{JSAVIOR_CONTRACT_ADDRESS}</span>
+                    Contract: <span style={{ color: 'var(--fx-ink-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{JSAVIOR_CONTRACT_ADDRESS}</span>
                   </li>
-                  <li>Total users currently shown: {indexedUsersCount === null ? 'loading' : indexedUsersCount}.</li>
+                  <li>Total users: {indexedUsersCount === null ? 'loading' : indexedUsersCount}.</li>
                   <li>Registration and investment flows are available in the Command panel.</li>
-                  <li>Claim All accrues rewards to your internal claimable balance; Withdraw sends the selected asset to your wallet.</li>
-                  <li>Stable token support includes USDT and USDC.</li>
-                  <li>All transactions are executed directly from your connected wallet.</li>
+                  <li>Claim All accrues rewards; Withdraw sends the selected asset.</li>
+                  <li>Stable token support: USDT and USDC.</li>
+                  <li>All transactions execute directly from your wallet.</li>
                 </ul>
               </div>
             </div>
             </div>
+
+            <div className="fx-section-divider" />
           </>
         )}
 
-        <footer className="text-center text-xs mt-12 pt-6 fx-divider" style={{ color: 'var(--fx-ink-subtle)' }}>
+        <footer style={{ textAlign: 'center', fontSize: '0.72rem', marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', color: 'var(--fx-ink-subtle)' }}>
           <p>
-            <span className="gold-text">JSAVIOR</span>
+            <span style={{ color: 'var(--fx-ink-muted)' }}>JSAVIOR</span>
             <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>
             Next.js · ethers.js · wagmi
             <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>

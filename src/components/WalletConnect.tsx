@@ -9,10 +9,7 @@ export function WalletConnect() {
 
   return (
     <div className="flex items-center gap-4">
-      <div className="gold-connect-wrapper rounded-md" style={{
-        filter: 'drop-shadow(0 4px 12px rgba(245, 214, 110, 0.2))',
-        transition: 'filter 0.2s ease'
-      }}>
+      <div className="gold-connect-wrapper rounded-md">
         <ConnectButton />
       </div>
       {isConnected && !isBSC && (

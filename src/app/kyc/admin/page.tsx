@@ -87,7 +87,7 @@ export default function KycAdminPage() {
       <main className="max-w-6xl mx-auto space-y-6">
         <div className="fx-card p-6 fx-reveal">
           <h1 className="fx-section-title text-3xl">KYC Admin</h1>
-          <p className="text-sm text-[#b9b0a3] mt-2">View pending KYC submissions.</p>
+          <p className="text-sm text-[#8A8A8A] mt-2">View pending KYC submissions.</p>
         </div>
 
         <div className="fx-card p-6 space-y-4">
@@ -104,7 +104,7 @@ export default function KycAdminPage() {
             {loading ? 'Loading...' : 'Load Pending KYC'}
           </button>
           <p className="text-xs text-[#8a8896]">
-            Default key: <span className="gold-text">0xf7252055eA263770817Dd73363A3259DEDAe9050</span>. Set env <span className="gold-text">KYC_ADMIN_KEY</span> to override.
+            Default key: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>0xf7252055eA263770817Dd73363A3259DEDAe9050</span>. Set env <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>KYC_ADMIN_KEY</span> to override.
           </p>
           {error && <div className="fx-alert fx-alert--error text-sm">{error}</div>}
           {success && <div className="fx-alert fx-alert--success text-sm">{success}</div>}
@@ -112,28 +112,28 @@ export default function KycAdminPage() {
 
         {loaded && (
           <div className="space-y-4">
-            <div className="fx-card p-4 text-sm text-[#b9b0a3]">
-              Pending entries: <span className="gold-text">{entries.length}</span>
+            <div className="fx-card p-4 text-sm text-[#8A8A8A]">
+              Pending entries: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entries.length}</span>
             </div>
 
             {entries.length === 0 ? (
-              <div className="fx-card p-6 text-sm text-[#b9b0a3]">No pending KYC entries.</div>
+              <div className="fx-card p-6 text-sm text-[#8A8A8A]">No pending KYC entries.</div>
             ) : (
               entries.map((entry) => (
-                <div key={entry.reference} className="fx-card p-6 space-y-3 text-sm text-[#b9b0a3]">
+                <div key={entry.reference} className="fx-card p-6 space-y-3 text-sm text-[#8A8A8A]">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="fx-kicker">{entry.reference}</span>
                     <span className="fx-pill fx-pill--ghost">Pending</span>
                   </div>
-                  <p>Wallet: <span className="gold-text">{entry.wallet}</span></p>
-                  <p>Name: <span className="gold-text">{entry.fullName}</span></p>
-                  <p>Email: <span className="gold-text">{entry.email}</span></p>
-                  <p>Mobile No: <span className="gold-text">{entry.mobileNo}</span></p>
-                  <p>Account Holder: <span className="gold-text">{entry.bankAccountName}</span></p>
-                  <p>Bank: <span className="gold-text">{entry.bankName}</span></p>
-                  <p>Account No: <span className="gold-text">{entry.maskedAccountNumber}</span></p>
-                  <p>IFSC / SWIFT: <span className="gold-text">{entry.bankIfscSwift}</span></p>
-                  <p>Branch: <span className="gold-text">{entry.bankBranch}</span></p>
+                  <p>Wallet: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400, fontFamily: 'var(--font-mono)' }}>{entry.wallet}</span></p>
+                  <p>Name: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.fullName}</span></p>
+                  <p>Email: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.email}</span></p>
+                  <p>Mobile No: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.mobileNo}</span></p>
+                  <p>Account Holder: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.bankAccountName}</span></p>
+                  <p>Bank: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.bankName}</span></p>
+                  <p>Account No: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.maskedAccountNumber}</span></p>
+                  <p>IFSC / SWIFT: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.bankIfscSwift}</span></p>
+                  <p>Branch: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{entry.bankBranch}</span></p>
                   <p>
                     ID Front: <a href={`/api/kyc/document/${entry.reference}/?kind=idFront`} target="_blank" rel="noopener noreferrer">{entry.idFrontName || 'Open'}</a>
                   </p>

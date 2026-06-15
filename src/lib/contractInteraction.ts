@@ -32,7 +32,7 @@ export class ContractInteraction {
   async readContract(config: ContractConfig, methodName: string, args: any[] = []) {
     try {
       const contract = new ethers.Contract(config.address, config.abi, this.provider);
-      const result = await contract[methodName](...args);
+      const result = await contract[methodName].staticCall(...args);
       return { success: true, data: result };
     } catch (error) {
       console.error(`Error reading contract method ${methodName}:`, error);

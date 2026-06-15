@@ -29,9 +29,9 @@ export function StatusRibbon() {
         <span className={`fx-ribbon__dot ${isConnected ? 'fx-ribbon__dot--on' : 'fx-ribbon__dot--off'}`} />
         <span style={{
           fontSize: '0.72rem',
-          fontWeight: 600,
+          fontWeight: 400,
           color: isConnecting 
-            ? 'var(--fx-gold-strong)' 
+            ? 'var(--fx-ink-muted)' 
             : isConnected 
               ? 'var(--fx-emerald)' 
               : 'rgba(240,80,80,0.85)'
@@ -44,7 +44,7 @@ export function StatusRibbon() {
         <span style={{ 
           color: isBSC ? 'var(--fx-emerald)' : 'rgba(240,80,80,0.85)',
           fontSize: '0.72rem',
-          fontWeight: 500
+          fontWeight: 400
         }}>
           {networkLabel}
         </span>
@@ -52,7 +52,7 @@ export function StatusRibbon() {
       <div className="fx-ribbon__item">
         <span className="fx-ribbon__label">Wallet</span>
         <span style={{ 
-          color: isConnected ? 'var(--fx-ink)' : 'var(--fx-ink-subtle)',
+          color: isConnected ? 'var(--fx-ink-muted)' : 'var(--fx-ink-subtle)',
           fontSize: '0.72rem',
           fontFamily: 'var(--font-mono)',
           letterSpacing: '0.02em'

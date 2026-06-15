@@ -222,13 +222,13 @@ const P2PPage: React.FC = () => {
         </section>
 
         <div className="fx-card p-6 fx-reveal fx-reveal--delay-2">
-            <p className="font-semibold text-[#f3d68a] mb-2">P2P trading for JSAV/INR, G4X/INR and USDT/INR</p>
+            <p style={{ color: 'var(--fx-ink-muted)' }}>P2P trading for JSAV/INR, G4X/INR and USDT/INR</p>
           <p className="text-sm text-[#b9b0a3]">
             Users can buy or sell JSAV in INR at a fixed rate, and users can sell G4X or USDT in INR at fixed rates. Chat and share documents with your counterparty after matching.
           </p>
-          <p className="text-sm text-[#f3d68a] mt-2">Fixed rate: 1 JSAV = {FIXED_INR_PRICES.JSAV} INR</p>
-          <p className="text-sm text-[#f3d68a]">Fixed rate: 1 G4X = {FIXED_INR_PRICES.G4X} INR</p>
-          <p className="text-sm text-[#f3d68a]">Fixed rate: 1 USDT = {FIXED_INR_PRICES.USDT} INR</p>
+          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 JSAV = {FIXED_INR_PRICES.JSAV} INR</p>
+          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 G4X = {FIXED_INR_PRICES.G4X} INR</p>
+          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 USDT = {FIXED_INR_PRICES.USDT} INR</p>
         </div>
 
         <form onSubmit={handleCreateOrder} className="fx-card p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2">
@@ -300,17 +300,17 @@ const P2PPage: React.FC = () => {
                 )}
                 {orders.map(order => (
                   <tr key={order.id} className={order.type === 'buy' ? 'bg-[rgba(56,183,161,0.08)]' : 'bg-[rgba(216,76,76,0.08)]'}>
-                    <td className="font-semibold text-center">{order.token}</td>
-                    <td className="font-semibold text-center">{order.type.toUpperCase()}</td>
+                    <td className="text-center">{order.token}</td>
+                    <td className="text-center">{order.type.toUpperCase()}</td>
                     <td className="text-center">{order.amount}</td>
                     <td className="text-center">{order.price}</td>
                     <td className="text-center">{order.user}</td>
                     <td className="text-center">
                       <span className={
-                        order.status === 'completed' ? 'text-[#8fe3d4] font-bold' :
+                        order.status === 'completed' ? 'text-[#8fe3d4]' :
                         order.status === 'cancelled' ? 'text-[#b9b0a3] line-through' :
-                        order.status === 'payment sent' ? 'text-[#f3d68a] font-semibold' :
-                        order.status === 'in progress' ? 'text-[#f5dd9f] font-semibold' :
+                        order.status === 'payment sent' ? 'text-[#8fe3d4]' :
+                        order.status === 'in progress' ? 'text-[#b9b0a3]' :
                         ''
                       }>
                         {order.status}
@@ -346,13 +346,13 @@ const P2PPage: React.FC = () => {
             <button className="absolute top-3 right-3 text-[#b9b0a3] hover:text-[#f6f0e6]" onClick={() => setChatOpen(null)}>&times;</button>
             <h3 className="fx-section-title text-lg mb-2">Chat & Docs (Order #{chatOpen})</h3>
             <div className="mb-2 text-sm text-[#b9b0a3]">
-              <span className="font-semibold text-[#f6f0e6]">Order Status: </span>
+              <span style={{ color: 'var(--fx-ink)' }}>Order Status: </span>
               <span>{orders.find(o => o.id === chatOpen)?.status}</span>
             </div>
             <div className="border border-[rgba(255,255,255,0.08)] rounded p-3 h-40 mb-3 overflow-y-auto bg-[rgba(15,20,34,0.85)] text-sm">
               {(chatMessages[chatOpen] || []).map((msg, i) => (
                 <div key={i} className="mb-1">
-                  <span className="font-semibold text-[#f3d68a]">{msg.sender}:</span> <span>{msg.text}</span>
+                  <span style={{ color: 'var(--fx-ink)' }}>{msg.sender}:</span> <span>{msg.text}</span>
                   <span className="text-xs text-[#b9b0a3] ml-2">{msg.time}</span>
                 </div>
               ))}
@@ -375,7 +375,7 @@ const P2PPage: React.FC = () => {
                 {(fileList[chatOpen] || []).map((file: any, i) => (
                   <div key={i}>
                     {file.url ? (
-                      <a href={`${SOCKET_URL}${file.url}`} target="_blank" rel="noopener noreferrer" className="text-[#f3d68a] underline">{file.originalname || file.name}</a>
+                      <a href={`${SOCKET_URL}${file.url}`} target="_blank" rel="noopener noreferrer" className="underline">{file.originalname || file.name}</a>
                     ) : (
                       file.name
                     )}

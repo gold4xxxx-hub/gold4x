@@ -166,13 +166,13 @@ export default function KycPage() {
       <main className="max-w-4xl mx-auto space-y-6">
         <div className="fx-card p-6 fx-reveal">
           <h1 className="fx-section-title text-3xl">KYC Verification</h1>
-          <p className="text-sm text-[#b9b0a3] mt-2">
+          <p className="text-sm text-[#8A8A8A] mt-2">
             Submit mobile number and required documents for verification.
           </p>
         </div>
 
         {!isConnected && (
-          <div className="fx-card fx-card--lift p-6 space-y-4 text-sm text-[#b9b0a3]">
+          <div className="fx-card fx-card--lift p-6 space-y-4 text-sm text-[#8A8A8A]">
             <div className="fx-kicker">Wallet Required</div>
             <p>Connect your wallet to submit and track KYC status.</p>
             <div className="flex justify-start">
@@ -185,24 +185,24 @@ export default function KycPage() {
           <>
             <div className="fx-card p-6 space-y-3 text-sm">
               <div className="fx-kicker">Current Status</div>
-              <p className="text-[#b9b0a3]">Wallet: <span className="gold-text">{address}</span></p>
-              <p className="text-[#b9b0a3]">
-                Status: <span className="gold-text">{loading ? 'Loading...' : currentStatus}</span>
+              <p className="text-[#8A8A8A]">Wallet: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400, fontFamily: 'var(--font-mono)' }}>{address}</span></p>
+              <p className="text-[#8A8A8A]">
+                Status: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{loading ? 'Loading...' : currentStatus}</span>
               </p>
               {record?.reference && (
-                <p className="text-[#b9b0a3]">Reference: <span className="gold-text">{record.reference}</span></p>
+                <p className="text-[#8A8A8A]">Reference: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.reference}</span></p>
               )}
               {record && (
                 <>
-                  <p className="text-[#b9b0a3]">Name: <span className="gold-text">{record.fullName}</span></p>
-                  <p className="text-[#b9b0a3]">Email: <span className="gold-text">{record.email}</span></p>
-                  <p className="text-[#b9b0a3]">Mobile: <span className="gold-text">{record.mobileNo}</span></p>
-                  <p className="text-[#b9b0a3]">Bank: <span className="gold-text">{record.bankName}</span></p>
-                  <p className="text-[#b9b0a3]">Account No: <span className="gold-text">{record.maskedAccountNumber}</span></p>
+                  <p className="text-[#8A8A8A]">Name: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.fullName}</span></p>
+                  <p className="text-[#8A8A8A]">Email: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.email}</span></p>
+                  <p className="text-[#8A8A8A]">Mobile: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.mobileNo}</span></p>
+                  <p className="text-[#8A8A8A]">Bank: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.bankName}</span></p>
+                  <p className="text-[#8A8A8A]">Account No: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{record.maskedAccountNumber}</span></p>
                 </>
               )}
               {record?.reference && (
-                <div className="text-[#b9b0a3] space-y-1">
+                <div className="text-[#8A8A8A] space-y-1">
                   <p>
                     ID Front:{' '}
                     <a href={`/api/kyc/document/${record.reference}/?kind=idFront`} target="_blank" rel="noopener noreferrer">{record.idFrontName || 'View'}</a>

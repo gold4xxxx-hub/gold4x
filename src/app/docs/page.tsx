@@ -4,12 +4,12 @@ export default function DocsPage() {
       <main className="max-w-4xl mx-auto space-y-6">
         <div className="fx-card p-6 fx-reveal">
           <h1 className="fx-section-title text-3xl">Docs</h1>
-          <p className="text-sm text-[#b9b0a3] mt-2">
+          <p className="text-sm text-[#8A8A8A] mt-2">
             Getting started guides and integration notes for JSAVIOR.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 fx-reveal fx-reveal--delay-1">
-          <div className="fx-card fx-card--lift p-6 space-y-3 text-sm text-[#b9b0a3]">
+          <div className="fx-card fx-card--lift p-6 space-y-3 text-sm text-[#8A8A8A]">
             <div className="fx-kicker">Overview</div>
             <p>Review setup and deployment details for local and production environments.</p>
             <ul className="space-y-1">
@@ -18,7 +18,7 @@ export default function DocsPage() {
               <li>SETUP.md</li>
             </ul>
           </div>
-          <div className="fx-card fx-card--lift p-6 space-y-3 text-sm text-[#b9b0a3]">
+          <div className="fx-card fx-card--lift p-6 space-y-3 text-sm text-[#8A8A8A]">
             <div className="fx-kicker">Contracts</div>
             <p>Reference contract addresses and interaction patterns before deploying.</p>
             <ul className="space-y-1">

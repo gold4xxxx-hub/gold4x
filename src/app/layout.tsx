@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
-import { Cinzel, Manrope } from "next/font/google";
+import { Playfair_Display, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Web3Providers } from "@/providers/Web3Providers";
 import { TopNav } from "@/components/TopNav";
 
-const displayFont = Cinzel({
+const displayFont = Playfair_Display({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const bodyFont = Manrope({
+const bodyFont = Inter({
   variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const monoFont = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -29,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${displayFont.variable} ${bodyFont.variable} antialiased fx-body`}
+        className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} antialiased fx-body`}
       >
         <Web3Providers>
           <TopNav />

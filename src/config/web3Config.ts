@@ -5,6 +5,10 @@ export const JSAVIOR_CONTRACT_ADDRESS =
   '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
 export const JSAVIOR_CONTRACT_ABI = jsaviorAbi;
 
+if (!/^0x[a-fA-F0-9]{40}$/.test(JSAVIOR_CONTRACT_ADDRESS)) {
+  throw new Error(`Invalid contract address: ${JSAVIOR_CONTRACT_ADDRESS}`);
+}
+
 export const GOLD4X_CONTRACT_ADDRESS =
   '0x54bc3ae174550098da0756ea2d7b8855bd3c65cf';
 export const GOLD4X_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;

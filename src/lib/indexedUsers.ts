@@ -2,6 +2,9 @@ import { ethers } from 'ethers';
 
 // Hardcoded to avoid importing client-side config into server API
 const CONTRACT_ADDRESS = '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
+if (!/^0x[a-fA-F0-9]{40}$/.test(CONTRACT_ADDRESS)) {
+  throw new Error(`Invalid CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}`);
+}
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
 const CONTRACT_DEPLOY_BLOCK = 86656188; // Contract deploy block from BSCScan (Create: JSAVIOR tx)
 

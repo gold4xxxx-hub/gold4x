@@ -76,7 +76,7 @@ export function ContractMethod({
           blockNumber: receipt.blockNumber,
         };
       } else {
-        const data = await contract[methodName](...args);
+        const data = await contract[methodName].staticCall(...args);
         txResult = {
           success: true,
           data: formatContractResponse(data),
@@ -94,8 +94,8 @@ export function ContractMethod({
   };
 
   return (
-    <div className="fx-card p-4">
-      <h4 className="font-semibold mb-4 flex items-center gap-3">
+    <div className="fx-card p-6">
+      <h4 className="mb-4 flex items-center gap-3">
         <span className="text-base">{methodName}</span>
         <span className={`fx-chip ${isWriteMethod ? 'fx-chip--write' : 'fx-chip--read'}`}>
           {isWriteMethod ? 'Write' : 'Read'}
@@ -105,7 +105,7 @@ export function ContractMethod({
       <div className="space-y-3 mb-4">
         {parameters.map((param) => (
           <div key={param.name}>
-            <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">
+            <label className="block text-xs uppercase tracking-[0.2em] text-[#8A8A8A] mb-1">
               {param.name} ({param.type})
             </label>
             <input
