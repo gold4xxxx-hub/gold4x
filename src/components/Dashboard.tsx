@@ -1,37 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useWalletConnection, useBSCNetwork } from '@/hooks/useWalletConnection';
 import ProgressBar from './ProgressBar';
+import { CountUp } from './CountUp';
 import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
-import { ethers } from 'ethers';
-
 /** Explicit latest head for eth_call; avoids stale snapshots from some RPC/wallet defaults. */
 const READ_CALL_OPTS = { blockTag: 'latest' as const };
 
-function useCountUp(target: number | null, duration = 1200) {
-  const [value, setValue] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (target === null) {
-      setValue(null);
-      return;
-    }
-
-    let start: number | null = null;
-    let raf: number;
-
-    function step(now: number) {
-      if (start === null) start = now;
-      const t = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(eased * target!);
-      if (t < 1) raf = requestAnimationFrame(step);
-    }
-
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-
-  return value;
+let _ethers: any = null;
+async function getEthers() {
+  if (!_ethers) {
+    _ethers = (await import('ethers')).ethers;
+  }
+  return _ethers;
 }
 
 function truncateAddress(addr: string) {
@@ -77,11 +57,6 @@ function inferEffectiveRank(
   return onChainRank;
 }
 
-function fromUnits(value: unknown, decimals: number): number {
-  const v = value as bigint | number | string;
-  return Number(ethers.formatUnits(v, decimals));
-}
-
 export const Dashboard: React.FC = () => {
   const { address, isConnected } = useWalletConnection();
   const { isBSC } = useBSCNetwork();
@@ -114,16 +89,13 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const animatedCap = useCountUp(cap);
-  const animatedClaimable = useCountUp(claimable);
-  const animatedTotalEarned = useCountUp(totalEarned);
-
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!isConnected || !address || !(window as any).ethereum || !isBSC) return;
       const silent = Boolean(opts?.silent);
       if (!silent) setLoading(true);
       try {
+        const ethers = await getEthers();
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         if (!provider) return;
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
@@ -155,8 +127,8 @@ export const Dashboard: React.FC = () => {
         for (let m = launchMonthId; m <= currentMonthId; m++) {
           try {
             const vol = await contract.monthlyVolume.staticCall(address, m, READ_CALL_OPTS);
-            const monthPersonal = fromUnits(vol.personalBV, tokenDecimals);
-            const monthTeam = fromUnits(vol.teamBV, tokenDecimals);
+            const monthPersonal = Number(ethers.formatUnits(vol.personalBV, tokenDecimals));
+            const monthTeam = Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
             if (monthPersonal > 0 || monthTeam > 0) {
               console.log(`monthlyVolume monthId ${m}:`, { personal: monthPersonal, team: monthTeam });
             }
@@ -180,17 +152,17 @@ export const Dashboard: React.FC = () => {
         });
         console.log('Full dashboard array:', Array.from(dashboard).map((v, i) => `${i}: ${v?.toString?.()}`).join(', '));
 
-        setInvested(fromUnits(dashboard.totalInvested, tokenDecimals));
-        setCap(fromUnits(dashboard.totalCap, tokenDecimals));
-        setClaimable(fromUnits(dashboard.claimable, tokenDecimals));
-        setAvailable(fromUnits(dashboard.available, tokenDecimals));
-        setReserved(fromUnits(dashboard.reserved, tokenDecimals));
-        setWithdrawn(fromUnits(dashboard.withdrawn, tokenDecimals));
-        setTotalEarned(fromUnits(dashboard.totalEarned, tokenDecimals));
-        setRoiIncome(fromUnits(dashboard.roi, tokenDecimals));
-        setDirectIncome(fromUnits(dashboard.direct, tokenDecimals));
-        setLevelIncome(fromUnits(dashboard.level, tokenDecimals));
-        setRankIncome(fromUnits(dashboard.rankIncome, tokenDecimals));
+        setInvested(Number(ethers.formatUnits(dashboard.totalInvested, tokenDecimals)));
+        setCap(Number(ethers.formatUnits(dashboard.totalCap, tokenDecimals)));
+        setClaimable(Number(ethers.formatUnits(dashboard.claimable, tokenDecimals)));
+        setAvailable(Number(ethers.formatUnits(dashboard.available, tokenDecimals)));
+        setReserved(Number(ethers.formatUnits(dashboard.reserved, tokenDecimals)));
+        setWithdrawn(Number(ethers.formatUnits(dashboard.withdrawn, tokenDecimals)));
+        setTotalEarned(Number(ethers.formatUnits(dashboard.totalEarned, tokenDecimals)));
+        setRoiIncome(Number(ethers.formatUnits(dashboard.roi, tokenDecimals)));
+        setDirectIncome(Number(ethers.formatUnits(dashboard.direct, tokenDecimals)));
+        setLevelIncome(Number(ethers.formatUnits(dashboard.level, tokenDecimals)));
+        setRankIncome(Number(ethers.formatUnits(dashboard.rankIncome, tokenDecimals)));
         setDirectCount(Number(dashboard.directCount));
         setDirectsNeeded(Number(dashboard.directsNeeded));
 
@@ -213,9 +185,9 @@ export const Dashboard: React.FC = () => {
         setRegistered(Boolean(dashboard.registered));
         setCapPercent(Number(dashboard.capPercent) / 100);
         // Use monthlyVolume data if dashboard returns 0
-        const dashPersonalBV = fromUnits(dashboard.personalBV, tokenDecimals);
-        const dashTeamBV = fromUnits(dashboard.teamBV, tokenDecimals);
-        const dashTotalBV = fromUnits(dashboard.totalBV, tokenDecimals);
+        const dashPersonalBV = Number(ethers.formatUnits(dashboard.personalBV, tokenDecimals));
+        const dashTeamBV = Number(ethers.formatUnits(dashboard.teamBV, tokenDecimals));
+        const dashTotalBV = Number(ethers.formatUnits(dashboard.totalBV, tokenDecimals));
 
         // Use total BV from all months (the contract only returns current month in dashboard)
         const finalPersonalBV = totalPersonalBV > 0 ? totalPersonalBV : dashPersonalBV;
@@ -225,7 +197,7 @@ export const Dashboard: React.FC = () => {
 
         // Compute cumulative legs with BV (contract only checks current month)
         const starBVRequiredBN = await contract.STAR_BV_REQUIRED.staticCall(READ_CALL_OPTS).catch(() => null);
-        const starBVRequired = starBVRequiredBN !== null ? fromUnits(starBVRequiredBN, tokenDecimals) : 25000;
+        const starBVRequired = starBVRequiredBN !== null ? Number(ethers.formatUnits(starBVRequiredBN, tokenDecimals)) : 25000;
         let cumulativeLegsWithBV = 0;
         const dirCount = Number(dashboard.directCount);
         if (dirCount > 0) {
@@ -245,7 +217,7 @@ export const Dashboard: React.FC = () => {
             const monthlyVols = await Promise.all(monthPromises);
             let legTotal = 0;
             for (const vol of monthlyVols) {
-              legTotal += fromUnits(vol.personalBV, tokenDecimals) + fromUnits(vol.teamBV, tokenDecimals);
+              legTotal += Number(ethers.formatUnits(vol.personalBV, tokenDecimals)) + Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
             }
             if (legTotal >= starBVRequired) cumulativeLegsWithBV++;
           }
@@ -258,9 +230,9 @@ export const Dashboard: React.FC = () => {
         setLegsWithBV(cumulativeLegsWithBV);
         setLegsWithStar(Number(dashboard.legsWithStar));
         setLegsWithGold(Number(dashboard.legsWithGold));
-        setContractJSAV(fromUnits(dashboard.contractJSAV, tokenDecimals));
-        setContractUSDT(fromUnits(dashboard.contractUSDT, 18));
-        setContractUSDC(fromUnits(dashboard.contractUSDC, 18));
+        setContractJSAV(Number(ethers.formatUnits(dashboard.contractJSAV, tokenDecimals)));
+        setContractUSDT(Number(ethers.formatUnits(dashboard.contractUSDT, 18)));
+        setContractUSDC(Number(ethers.formatUnits(dashboard.contractUSDC, 18)));
       } catch (err) {
         console.error('Dashboard fetch error:', err);
         setInvested(null);
@@ -316,7 +288,60 @@ export const Dashboard: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [isConnected, address, loadDashboard]);
 
-  if (!isConnected) return null;
+  // ── Rank-update hooks (moved before connection guard so all hooks are unconditional) ──
+  const [updatingRank, setUpdatingRank] = useState(false);
+  const [lastAutoUpdateAt, setLastAutoUpdateAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isConnected || !address || !(window as any).ethereum || !isBSC) return;
+    const effectiveRank = inferEffectiveRank(rank, directCount, legsWithBV, legsWithStar, legsWithGold);
+    const needsUpdate = rank !== null && effectiveRank !== null && effectiveRank > rank;
+    if (!needsUpdate) return;
+    const now = Date.now();
+    if (lastAutoUpdateAt && now - lastAutoUpdateAt < 5 * 60_000) return;
+    if (updatingRank) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setUpdatingRank(true);
+        setLastAutoUpdateAt(now);
+        const ethers = await getEthers();
+        const provider = new ethers.BrowserProvider((window as any).ethereum);
+        if (!provider) return;
+        const signer = await provider.getSigner();
+        if (!signer) return;
+        const contractWithSigner = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
+        const tx = await contractWithSigner.updateRank(address);
+        console.log('Auto updateRank tx sent:', tx);
+        await tx.wait();
+        if (cancelled) return;
+        await loadDashboard();
+      } catch (err) {
+        console.warn('Auto updateRank failed:', err);
+      } finally {
+        if (!cancelled) setUpdatingRank(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, address, isBSC, rank, directCount, legsWithBV, legsWithStar, legsWithGold, lastAutoUpdateAt, updatingRank, loadDashboard]);
+
+  // ── Connection guard ────────────────────────────────────────────────────────────────
+  if (!isConnected || !address) {
+    return (
+      <div className="fx-card p-8 fx-reveal">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="fx-section-title text-xl">Portfolio Overview</h2>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--fx-ink-subtle)' }}>
+          Connect your wallet to view portfolio data.
+        </p>
+      </div>
+    );
+  }
 
   let percent = 0;
   if (invested !== null && cap && cap > 0) {
@@ -337,48 +362,8 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const [updatingRank, setUpdatingRank] = useState(false);
-  const [lastAutoUpdateAt, setLastAutoUpdateAt] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!isConnected || !address || !(window as any).ethereum || !isBSC) return;
-    if (!rankNeedsUpdate) return;
-    // Throttle automatic attempts: don't try more than once per 5 minutes
-    const now = Date.now();
-    if (lastAutoUpdateAt && now - lastAutoUpdateAt < 5 * 60_000) return;
-    if (updatingRank) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        setUpdatingRank(true);
-        setLastAutoUpdateAt(now);
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        if (!provider) return;
-        const signer = await provider.getSigner();
-        if (!signer) return;
-        const contractWithSigner = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
-        const tx = await contractWithSigner.updateRank(address);
-        console.log('Auto updateRank tx sent:', tx);
-        await tx.wait();
-        if (cancelled) return;
-        // Refresh dashboard after successful update
-        await loadDashboard();
-      } catch (err) {
-        console.warn('Auto updateRank failed:', err);
-      } finally {
-        if (!cancelled) setUpdatingRank(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [rankNeedsUpdate, isConnected, address, isBSC, lastAutoUpdateAt, updatingRank, loadDashboard]);
-
-
   return (
-    <div className="fx-card p-8 mb-6">
+    <div className="fx-card p-8 fx-reveal">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h2 className="fx-section-title text-xl">Portfolio Overview</h2>
@@ -401,38 +386,32 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="fx-data-strip mb-9" style={{ position: 'relative' }}>
-        <div className="fx-data-strip__item" style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -1, left: -1, width: 12, height: 12, borderTop: '2px solid var(--fx-gold)', borderLeft: '2px solid var(--fx-gold)', opacity: 0.7 }} />
-          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderBottom: '2px solid var(--fx-gold)', borderRight: '2px solid var(--fx-gold)', opacity: 0.7 }} />
+      <div className="fx-data-strip mb-8 fx-reveal--slow" style={{ position: 'relative' }}>
+        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '250ms', background: '#111111', borderRadius: '12px' }}>
           <div className="fx-data-strip__label">ROI Cap</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-data-strip__value fx-data-strip__value--gold">{fmt(animatedCap)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={cap} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--hero-sm" />}
           <div className="fx-data-strip__unit">JSAV</div>
         </div>
-        <div className="fx-data-strip__item" style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -1, left: -1, width: 12, height: 12, borderTop: '2px solid var(--fx-gold)', borderLeft: '2px solid var(--fx-gold)', opacity: 0.7 }} />
-          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderBottom: '2px solid var(--fx-gold)', borderRight: '2px solid var(--fx-gold)', opacity: 0.7 }} />
+        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '0ms', background: '#191919', borderRadius: '12px' }}>
           <div className="fx-data-strip__label">Withdrawable</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-data-strip__value">{fmt(animatedClaimable)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={claimable} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold-bright fx-data-strip__value--hero-lg" />}
           <div className="fx-data-strip__unit">JSAV Balance</div>
         </div>
-        <div className="fx-data-strip__item" style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -1, left: -1, width: 12, height: 12, borderTop: '2px solid var(--fx-gold)', borderLeft: '2px solid var(--fx-gold)', opacity: 0.7 }} />
-          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderBottom: '2px solid var(--fx-gold)', borderRight: '2px solid var(--fx-gold)', opacity: 0.7 }} />
+        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '120ms' }}>
           <div className="fx-data-strip__label">Total Earned</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-data-strip__value fx-data-strip__value--gold">{fmt(animatedTotalEarned)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={totalEarned} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
           <div className="fx-data-strip__unit">JSAV</div>
         </div>
       </div>
 
       <div className="fx-divider my-6" />
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Status: <span style={{ color: registered ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-muted)', fontWeight: 400 }}>{registered === null ? '-' : registered ? 'Registered' : 'Not Registered'}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Withdrawn: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(withdrawn)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Directs: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmtInt(directCount)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Rank: <span style={{ color: effectiveRank && effectiveRank > 0 ? 'var(--fx-gold-strong)' : 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmtRank(effectiveRank)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Cap Used: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
+      <div className="portfolio-info-row grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        <div className="fx-alert text-xs fx-reveal">Status: <span style={{ color: registered ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-muted)', fontWeight: 600 }}>{registered === null ? '-' : registered ? 'Registered' : 'Not Registered'}</span></div>
+        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-1">Withdrawn: <span style={{ fontWeight: 500 }}><CountUp value={withdrawn} format={fmt} /></span></div>
+        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-2">Directs: <span style={{ fontWeight: 500 }}><CountUp value={directCount} format={fmtInt} /></span></div>
+        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-3">Rank: <span style={{ color: effectiveRank && effectiveRank > 0 ? 'var(--fx-ink)' : 'var(--fx-ink-muted)', fontWeight: 500 }}>{fmtRank(effectiveRank)}</span></div>
+        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-4">Cap Used: <span style={{ fontWeight: 500 }}>{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
       </div>
 
       {/* Removed unused on-chain rank / legs buttons per request */}
@@ -440,27 +419,27 @@ export const Dashboard: React.FC = () => {
       {/* Removed rank explanatory alert per request */}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="fx-stat">
+        <div className="fx-stat fx-reveal fx-reveal--offset-300">
           <div className="fx-stat__label">ROI Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value fx-data-strip__value--gold">{fmt(roiIncome)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={roiIncome} format={fmt} className="fx-stat__value fx-data-strip__value--gold" />}
           <div className="fx-stat__sub">JSAV</div>
         </div>
 
-        <div className="fx-stat">
+        <div className="fx-stat fx-reveal fx-reveal--delay-1 fx-reveal--offset-300">
           <div className="fx-stat__label">Direct Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value">{fmt(directIncome)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={directIncome} format={fmt} className="fx-stat__value" />}
           <div className="fx-stat__sub">JSAV</div>
         </div>
 
-        <div className="fx-stat">
+        <div className="fx-stat fx-reveal fx-reveal--delay-2 fx-reveal--offset-300">
           <div className="fx-stat__label">Level Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value">{fmt(levelIncome)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={levelIncome} format={fmt} className="fx-stat__value" />}
           <div className="fx-stat__sub">JSAV</div>
         </div>
 
-        <div className="fx-stat">
+        <div className="fx-stat fx-reveal fx-reveal--delay-3 fx-reveal--offset-300">
           <div className="fx-stat__label">Rank Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value fx-data-strip__value--gold">{fmt(rankIncome)}</div>}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={rankIncome} format={fmt} className="fx-stat__value fx-data-strip__value--gold" />}
           <div className="fx-stat__sub">JSAV</div>
         </div>
       </div>
@@ -468,40 +447,40 @@ export const Dashboard: React.FC = () => {
       <div className="fx-divider my-6" />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Directs Needed: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmtInt(directsNeeded)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Cap Type: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{capType === null ? '-' : capType}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Available: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(available)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Reserved: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(reserved)}</span></div>
+        <div className="fx-alert text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>Directs Needed: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 500 }}><CountUp value={directsNeeded} format={fmtInt} /></span></div>
+        <div className="fx-alert text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>Cap Type: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 500 }}>{capType === null ? '-' : capType}</span></div>
+        <div className="fx-alert text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>Available: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 500, fontVariantNumeric: 'tabular-nums', minWidth: '110px', display: 'inline-block' }}><CountUp value={available} format={fmt} /></span></div>
+        <div className="fx-alert text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>Reserved: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 500, fontVariantNumeric: 'tabular-nums', minWidth: '100px', display: 'inline-block' }}><CountUp value={reserved} format={fmt} /></span></div>
       </div>
 
       <div className="fx-divider my-6" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <div className="bv-stats grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6 fx-reveal fx-reveal--delay-2">
         <div className="fx-stat">
-          <div className="fx-stat__label" style={{ color: 'var(--fx-ink-subtle)' }}>Personal BV</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value">{fmt(personalBV)}</div>}
+          <div className="fx-stat__label">Personal BV</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={personalBV} format={fmt} className="fx-stat__value" />}
           <div className="fx-stat__sub">Volume</div>
         </div>
 
         <div className="fx-stat">
-          <div className="fx-stat__label" style={{ color: 'var(--fx-ink-subtle)' }}>Team BV</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value">{fmt(teamBV)}</div>}
+          <div className="fx-stat__label">Team BV</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={teamBV} format={fmt} className="fx-stat__value" />}
           <div className="fx-stat__sub">Volume</div>
         </div>
 
         <div className="fx-stat">
-          <div className="fx-stat__label" style={{ color: 'var(--fx-ink-subtle)' }}>Total BV</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <div className="fx-stat__value fx-data-strip__value--gold">{fmt(totalBV)}</div>}
+          <div className="fx-stat__label">Total BV</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={totalBV} format={fmt} className="fx-stat__value fx-data-strip__value--gold" />}
           <div className="fx-stat__sub">Volume</div>
         </div>
       </div>
 
       <div className="fx-divider my-6" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Contract JSAV: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(contractJSAV)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Contract USDT: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(contractUSDT)}</span></div>
-        <div className="fx-alert text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Contract USDC: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{fmt(contractUSDC)}</span></div>
+      <div className="contract-info-row grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div className="fx-alert text-xs">Contract JSAV: <span style={{ fontWeight: 500 }}><CountUp value={contractJSAV} format={fmt} /></span></div>
+        <div className="fx-alert text-xs">Contract USDT: <span style={{ fontWeight: 500 }}><CountUp value={contractUSDT} format={fmt} /></span></div>
+        <div className="fx-alert text-xs">Contract USDC: <span style={{ fontWeight: 500 }}><CountUp value={contractUSDC} format={fmt} /></span></div>
       </div>
 
       {rankNeedsUpdate && (
@@ -512,36 +491,45 @@ export const Dashboard: React.FC = () => {
 
       <div className="fx-alert text-xs mb-6">
         Can Claim Now:{' '}
-        <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>
+<span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>
           {claimable === null ? '-' : claimable > 0 ? 'Yes' : 'No'}
         </span>
       </div>
 
-      <div className="mb-6">
-        <div className="flex items-end justify-between mb-1">
-          <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Capital Allocation</div>
-          {!loading && <div className="text-xs" style={{ color: 'var(--fx-gold-strong)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{percent.toFixed(1)}%</div>}
-        </div>
-        {loading ? <div className="fx-skeleton h-4 w-full" /> : <ProgressBar percent={percent} />}
-        {!loading && (
-          <div className="flex justify-between text-xs mt-1.5" style={{ color: 'var(--fx-ink-subtle)' }}>
-            <span>{fmt(invested)} used</span>
-            <span>{fmt(cap)} ceiling</span>
+        <div className="mb-6">
+          <div className="flex items-end justify-between mb-1">
+            <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Capital Allocation</div>
+            {!loading && <div className="text-xs" style={{ color: 'var(--fx-ink-muted)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{percent.toFixed(1)}%</div>}
           </div>
-        )}
-      </div>
+          {loading ? <div className="fx-skeleton h-4 w-full" /> : <ProgressBar percent={percent} />}
+          {!loading && (
+            <div className="flex justify-between text-xs mt-1.5" style={{ color: 'var(--fx-ink-subtle)' }}>
+              <span><CountUp value={invested} format={fmt} /> used</span>
+              <span><CountUp value={cap} format={fmt} /> ceiling</span>
+            </div>
+          )}
+        </div>
 
       <div className="flex items-center justify-between pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: 'var(--fx-emerald)', boxShadow: '0 0 8px rgba(0,201,173,0.65)' }} />
-          <span className="text-xs font-mono" style={{ color: 'var(--fx-ink-muted)' }}>{truncateAddress(address || '')}</span>
+          <div className="w-2 h-2 rounded-full" style={{ background: 'var(--fx-ink-subtle)' }} />
+          <span className="fx-address-mono">{truncateAddress(address || '')}</span>
         </div>
         <button
           onClick={handleCopy}
-          className="text-xs transition-colors"
-          style={{ color: copied ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-subtle)' }}
+          className="fx-copy-btn"
+          title="Copy address"
         >
-          {copied ? 'Copied' : 'Copy address'}
+          {copied ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
         </button>
       </div>
     </div>
