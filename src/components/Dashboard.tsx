@@ -100,9 +100,8 @@ export const Dashboard: React.FC = () => {
         if (!provider) return;
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
 
-        const [dashboard, launchTime] = await Promise.all([
+        const [dashboard] = await Promise.all([
           contract.dashboardMegaView.staticCall(address, READ_CALL_OPTS),
-          contract.launchTime.staticCall(READ_CALL_OPTS),
         ]);
 
         let tokenDecimals = 18;
@@ -112,45 +111,6 @@ export const Dashboard: React.FC = () => {
           console.warn('decimals() call failed, defaulting to 18:', e);
           tokenDecimals = 18;
         }
-
-        // Calculate month IDs like the contract does: block.timestamp / 30 days
-        const now = Math.floor(Date.now() / 1000);
-        const launch = Number(launchTime);
-        const SECONDS_PER_MONTH = 30 * 24 * 60 * 60;
-        const currentMonthId = Math.floor(now / SECONDS_PER_MONTH);
-        const launchMonthId = Math.floor(launch / SECONDS_PER_MONTH);
-        console.log('Month calculation:', { now, launch, currentMonthId, launchMonthId });
-
-        // Fetch ALL monthly volumes and sum them up (BV is stored per month by timestamp)
-        let totalPersonalBV = 0;
-        let totalTeamBV = 0;
-        for (let m = launchMonthId; m <= currentMonthId; m++) {
-          try {
-            const vol = await contract.monthlyVolume.staticCall(address, m, READ_CALL_OPTS);
-            const monthPersonal = Number(ethers.formatUnits(vol.personalBV, tokenDecimals));
-            const monthTeam = Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
-            if (monthPersonal > 0 || monthTeam > 0) {
-              console.log(`monthlyVolume monthId ${m}:`, { personal: monthPersonal, team: monthTeam });
-            }
-            totalPersonalBV += monthPersonal;
-            totalTeamBV += monthTeam;
-          } catch (mvErr) {
-            console.warn(`monthlyVolume monthId ${m} failed:`, mvErr);
-          }
-        }
-        console.log('Total BV across all months:', { totalPersonalBV, totalTeamBV, monthsChecked: currentMonthId - launchMonthId + 1 });
-
-        // Debug: log raw BV values from contract
-        console.log('Raw dashboard:', dashboard);
-        console.log('Dashboard type:', typeof dashboard, Array.isArray(dashboard) ? 'isArray' : 'notArray');
-        console.log('Keys:', Object.keys(dashboard));
-        console.log('Index 15-17:', dashboard[15]?.toString?.(), dashboard[16]?.toString?.(), dashboard[17]?.toString?.());
-        console.log('Named props:', {
-          personalBV: dashboard.personalBV?.toString?.(),
-          teamBV: dashboard.teamBV?.toString?.(),
-          totalBV: dashboard.totalBV?.toString?.(),
-        });
-        console.log('Full dashboard array:', Array.from(dashboard).map((v, i) => `${i}: ${v?.toString?.()}`).join(', '));
 
         setInvested(Number(ethers.formatUnits(dashboard.totalInvested, tokenDecimals)));
         setCap(Number(ethers.formatUnits(dashboard.totalCap, tokenDecimals)));
@@ -184,70 +144,27 @@ export const Dashboard: React.FC = () => {
         setCapType(Number(dashboard.capType));
         setRegistered(Boolean(dashboard.registered));
         setCapPercent(Number(dashboard.capPercent) / 100);
-        // Use monthlyVolume data if dashboard returns 0
+
+        // Use BV directly from contract (current month only — matches _calculateRank)
         const dashPersonalBV = Number(ethers.formatUnits(dashboard.personalBV, tokenDecimals));
         const dashTeamBV = Number(ethers.formatUnits(dashboard.teamBV, tokenDecimals));
-        const dashTotalBV = Number(ethers.formatUnits(dashboard.totalBV, tokenDecimals));
+        const finalPersonalBV = dashPersonalBV;
+        const finalTeamBV = dashTeamBV;
+        const finalTotalBV = dashPersonalBV + dashTeamBV;
+        console.log('BV values (current month):', { finalPersonalBV, finalTeamBV, finalTotalBV });
 
-        // Use total BV from all months (the contract only returns current month in dashboard)
-        const finalPersonalBV = totalPersonalBV > 0 ? totalPersonalBV : dashPersonalBV;
-        const finalTeamBV = totalTeamBV > 0 ? totalTeamBV : dashTeamBV;
-        const finalTotalBV = finalPersonalBV + finalTeamBV;
-        console.log('Final BV values:', { finalPersonalBV, finalTeamBV, finalTotalBV });
-
-        // Compute cumulative legs with BV (contract only checks current month)
-        const starBVRequiredBN = await contract.STAR_BV_REQUIRED.staticCall(READ_CALL_OPTS).catch(() => null);
-        const starBVRequired = starBVRequiredBN !== null ? Number(ethers.formatUnits(starBVRequiredBN, tokenDecimals)) : 25000;
-        let cumulativeLegsWithBV = 0;
-        let cumulativeLegsWithStar = 0;
-        let cumulativeLegsWithGold = 0;
-        const dirCount = Number(dashboard.directCount);
-        if (dirCount > 0) {
-          const directAddrPromises: Promise<string | null>[] = [];
-          for (let i = 0; i < dirCount; i++) {
-            directAddrPromises.push(
-              contract.directs.staticCall(address, i, READ_CALL_OPTS).catch(() => null)
-            );
-          }
-          const directAddresses = (await Promise.all(directAddrPromises)).filter(Boolean) as string[];
-          for (const legAddr of directAddresses) {
-            const monthPromises = [];
-            for (let m = launchMonthId; m <= currentMonthId; m++) {
-              monthPromises.push(
-                contract.monthlyVolume.staticCall(legAddr, m, READ_CALL_OPTS)
-                  .catch(() => ({ personalBV: BigInt(0), teamBV: BigInt(0) }))
-              );
-            }
-            const monthlyVols = await Promise.all(monthPromises);
-            let legTotal = 0;
-            for (const vol of monthlyVols) {
-              legTotal += Number(ethers.formatUnits(vol.personalBV, tokenDecimals)) + Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
-            }
-            if (legTotal >= starBVRequired) cumulativeLegsWithBV++;
-
-            // Count cumulative legs with Star/Gold using all-time data
-            try {
-              const legData = await contract.dashboardMegaView.staticCall(legAddr, READ_CALL_OPTS).catch(() => null);
-              if (legData) {
-                const legDirCount = Number(legData.directCount);
-                if (legTotal >= starBVRequired && legDirCount >= 4) {
-                  cumulativeLegsWithStar++;
-                  if (legTotal >= starBVRequired * 5) {
-                    cumulativeLegsWithGold++;
-                  }
-                }
-              }
-            } catch {}
-          }
-        }
-        console.log('Cumulative legs:', { withBV: cumulativeLegsWithBV, withStar: cumulativeLegsWithStar, withGold: cumulativeLegsWithGold });
+        // Use legs directly from contract (current month only — matches _calculateRank)
+        const legsWithBV = Number(dashboard.legsWithBV);
+        const legsWithStar = Number(dashboard.legsWithStar);
+        const legsWithGold = Number(dashboard.legsWithGold);
+        console.log('Contract legs:', { withBV: legsWithBV, withStar: legsWithStar, withGold: legsWithGold });
 
         setPersonalBV(finalPersonalBV);
         setTeamBV(finalTeamBV);
         setTotalBV(finalTotalBV);
-        setLegsWithBV(cumulativeLegsWithBV);
-        setLegsWithStar(cumulativeLegsWithStar);
-        setLegsWithGold(cumulativeLegsWithGold);
+        setLegsWithBV(legsWithBV);
+        setLegsWithStar(legsWithStar);
+        setLegsWithGold(legsWithGold);
         setContractJSAV(Number(ethers.formatUnits(dashboard.contractJSAV, tokenDecimals)));
         setContractUSDT(Number(ethers.formatUnits(dashboard.contractUSDT, 18)));
         setContractUSDC(Number(ethers.formatUnits(dashboard.contractUSDC, 18)));
