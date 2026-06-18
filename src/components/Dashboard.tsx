@@ -304,7 +304,6 @@ export const Dashboard: React.FC = () => {
           <h2 className="fx-section-title text-xl">Portfolio Overview</h2>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="fx-pill fx-pill--ghost">{fmtRank(effectiveRank)}</span>
           <button
             className="fx-button fx-button--dark fx-button--sm"
             onClick={() => window.location.href = '/p2p'}
@@ -345,15 +344,14 @@ export const Dashboard: React.FC = () => {
         <div className="fx-alert text-xs fx-reveal">Status: <span style={{ color: registered ? 'var(--fx-emerald-bright)' : 'var(--fx-ink-muted)', fontWeight: 600 }}>{registered === null ? '-' : registered ? 'Registered' : 'Not Registered'}</span></div>
         <div className="fx-alert text-xs fx-reveal fx-reveal--delay-1">Withdrawn: <span style={{ fontWeight: 500 }}><CountUp value={withdrawn} format={fmt} /></span></div>
         <div className="fx-alert text-xs fx-reveal fx-reveal--delay-2">Directs: <span style={{ fontWeight: 500 }}><CountUp value={directCount} format={fmtInt} /></span></div>
-        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-3">Rank: <span style={{ color: effectiveRank && effectiveRank > 0 ? 'var(--fx-ink)' : 'var(--fx-ink-muted)', fontWeight: 500 }}>{fmtRank(effectiveRank)}</span></div>
-        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-4">Cap Used: <span style={{ fontWeight: 500 }}>{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
+        <div className="fx-alert text-xs fx-reveal fx-reveal--delay-3">Cap Used: <span style={{ fontWeight: 500 }}>{capPercent === null ? '-' : `${capPercent.toFixed(2)}%`}</span></div>
       </div>
 
       {/* Removed unused on-chain rank / legs buttons per request */}
 
       {/* Removed rank explanatory alert per request */}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <div className="fx-stat fx-reveal fx-reveal--offset-300">
           <div className="fx-stat__label">ROI Income</div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={roiIncome} format={fmt} className="fx-stat__value fx-data-strip__value--gold" />}
@@ -369,12 +367,6 @@ export const Dashboard: React.FC = () => {
         <div className="fx-stat fx-reveal fx-reveal--delay-2 fx-reveal--offset-300">
           <div className="fx-stat__label">Level Income</div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={levelIncome} format={fmt} className="fx-stat__value" />}
-          <div className="fx-stat__sub">JSAV</div>
-        </div>
-
-        <div className="fx-stat fx-reveal fx-reveal--delay-3 fx-reveal--offset-300">
-          <div className="fx-stat__label">Rank Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={rankIncome} format={fmt} className="fx-stat__value fx-data-strip__value--gold" />}
           <div className="fx-stat__sub">JSAV</div>
         </div>
       </div>
