@@ -29,11 +29,11 @@ export function StatusRibbon() {
         <span className={`fx-ribbon__dot ${isConnected ? 'fx-ribbon__dot--on' : 'fx-ribbon__dot--off'}`} />
         <span style={{
           fontSize: '0.72rem',
-          fontWeight: 400,
+          fontWeight: 500,
           color: isConnecting 
-            ? 'var(--fx-ink-muted)' 
+            ? 'rgba(255,255,255,0.6)' 
             : isConnected 
-              ? 'var(--fx-emerald)' 
+              ? 'var(--fx-emerald-bright)' 
               : 'rgba(240,80,80,0.85)'
         }}>
           {statusLabel}
@@ -42,9 +42,9 @@ export function StatusRibbon() {
       <div className="fx-ribbon__item">
         <span className="fx-ribbon__label">Network</span>
         <span style={{ 
-          color: isBSC ? 'var(--fx-emerald)' : 'rgba(240,80,80,0.85)',
+          color: isBSC ? 'var(--fx-emerald-bright)' : 'rgba(240,80,80,0.85)',
           fontSize: '0.72rem',
-          fontWeight: 400
+          fontWeight: 500
         }}>
           {networkLabel}
         </span>

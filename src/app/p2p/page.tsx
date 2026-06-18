@@ -299,7 +299,7 @@ const P2PPage: React.FC = () => {
                   </tr>
                 )}
                 {orders.map(order => (
-                  <tr key={order.id} className={order.type === 'buy' ? 'bg-[rgba(56,183,161,0.08)]' : 'bg-[rgba(216,76,76,0.08)]'}>
+                  <tr key={order.id} className={order.type === 'buy' ? 'bg-[rgba(201,168,76,0.06)]' : 'bg-[rgba(216,76,76,0.08)]'}>
                     <td className="text-center">{order.token}</td>
                     <td className="text-center">{order.type.toUpperCase()}</td>
                     <td className="text-center">{order.amount}</td>
@@ -307,9 +307,9 @@ const P2PPage: React.FC = () => {
                     <td className="text-center">{order.user}</td>
                     <td className="text-center">
                       <span className={
-                        order.status === 'completed' ? 'text-[#8fe3d4]' :
+                        order.status === 'completed' ? 'text-[#c9a84c]' :
                         order.status === 'cancelled' ? 'text-[#b9b0a3] line-through' :
-                        order.status === 'payment sent' ? 'text-[#8fe3d4]' :
+                        order.status === 'payment sent' ? 'text-[#c9a84c]' :
                         order.status === 'in progress' ? 'text-[#b9b0a3]' :
                         ''
                       }>
@@ -341,7 +341,7 @@ const P2PPage: React.FC = () => {
         </div>
       {/* Chat & Docs Modal */}
       {chatOpen !== null && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/60 fx-modal-backdrop flex items-center justify-center z-50 px-4">
           <div className="fx-card w-full max-w-md p-6 relative">
             <button className="absolute top-3 right-3 text-[#b9b0a3] hover:text-[#f6f0e6]" onClick={() => setChatOpen(null)}>&times;</button>
             <h3 className="fx-section-title text-lg mb-2">Chat & Docs (Order #{chatOpen})</h3>

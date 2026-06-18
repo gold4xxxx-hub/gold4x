@@ -10,24 +10,30 @@ import '@rainbow-me/rainbowkit/styles.css';
 const queryClient = new QueryClient();
 
 function SafePalReconnect() {
-  const { isConnected } = useAccount();
+  const { isConnecting, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
 
   useEffect(() => {
     if (
       typeof window !== 'undefined' &&
+      typeof (window as any).ethereum !== 'undefined' &&
       (window as any).ethereum &&
-      !isConnected
+      !isConnected &&
+      !isConnecting
     ) {
-      const injected = connectors.find(
-        (connector) => connector.id === 'injected'
-      );
+      try {
+        const injected = connectors.find(
+          (connector) => connector.id === 'injected'
+        );
 
-      if (injected) {
-        connect({ connector: injected });
+        if (injected) {
+          connect({ connector: injected });
+        }
+      } catch (e) {
+        console.warn('Auto-reconnect skipped:', e);
       }
     }
-  }, [connect, connectors, isConnected]);
+  }, [connect, connectors, isConnected, isConnecting]);
 
   return null;
 }

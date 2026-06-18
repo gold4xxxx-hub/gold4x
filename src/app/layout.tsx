@@ -3,6 +3,8 @@ import { Playfair_Display, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Web3Providers } from "@/providers/Web3Providers";
 import { TopNav } from "@/components/TopNav";
+import { RevealInit } from "@/components/RevealInit";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const displayFont = Playfair_Display({
   variable: "--font-display",
@@ -33,14 +35,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} antialiased fx-body`}
+        suppressHydrationWarning
       >
-        <Web3Providers>
-          <TopNav />
-          {children}
-        </Web3Providers>
+        <ErrorBoundary>
+          <Web3Providers>
+            <RevealInit />
+            <TopNav />
+            {children}
+          </Web3Providers>
+        </ErrorBoundary>
+        <svg aria-hidden="true" style={{position:'fixed',pointerEvents:'none',width:0,height:0,opacity:0}}>
+          <filter id="fx-noise">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+            <feColorMatrix type="saturate" values="0" />
+          </filter>
+        </svg>
       </body>
     </html>
   );

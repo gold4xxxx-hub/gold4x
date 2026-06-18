@@ -25,6 +25,7 @@ export const SAMPLE_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 // RainbowKit config
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc } from 'viem/chains';
+import { cookieStorage, createStorage } from 'wagmi';
 
 export const web3Config = getDefaultConfig({
   appName: 'JSAVIOR',
@@ -33,6 +34,10 @@ export const web3Config = getDefaultConfig({
     'YOUR_WALLETCONNECT_PROJECT_ID',
   chains: [bsc],
   ssr: true,
+  multiInjectedProviderDiscovery: true,
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
 });
 
 export const BSC_CONFIG = {

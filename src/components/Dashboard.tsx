@@ -199,13 +199,17 @@ export const Dashboard: React.FC = () => {
         const starBVRequiredBN = await contract.STAR_BV_REQUIRED.staticCall(READ_CALL_OPTS).catch(() => null);
         const starBVRequired = starBVRequiredBN !== null ? Number(ethers.formatUnits(starBVRequiredBN, tokenDecimals)) : 25000;
         let cumulativeLegsWithBV = 0;
+        let cumulativeLegsWithStar = 0;
+        let cumulativeLegsWithGold = 0;
         const dirCount = Number(dashboard.directCount);
         if (dirCount > 0) {
-          const directAddrPromises: Promise<string>[] = [];
+          const directAddrPromises: Promise<string | null>[] = [];
           for (let i = 0; i < dirCount; i++) {
-            directAddrPromises.push(contract.directs.staticCall(address, i, READ_CALL_OPTS));
+            directAddrPromises.push(
+              contract.directs.staticCall(address, i, READ_CALL_OPTS).catch(() => null)
+            );
           }
-          const directAddresses = await Promise.all(directAddrPromises);
+          const directAddresses = (await Promise.all(directAddrPromises)).filter(Boolean) as string[];
           for (const legAddr of directAddresses) {
             const monthPromises = [];
             for (let m = launchMonthId; m <= currentMonthId; m++) {
@@ -220,16 +224,30 @@ export const Dashboard: React.FC = () => {
               legTotal += Number(ethers.formatUnits(vol.personalBV, tokenDecimals)) + Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
             }
             if (legTotal >= starBVRequired) cumulativeLegsWithBV++;
+
+            // Count cumulative legs with Star/Gold using all-time data
+            try {
+              const legData = await contract.dashboardMegaView.staticCall(legAddr, READ_CALL_OPTS).catch(() => null);
+              if (legData) {
+                const legDirCount = Number(legData.directCount);
+                if (legTotal >= starBVRequired && legDirCount >= 4) {
+                  cumulativeLegsWithStar++;
+                  if (legTotal >= starBVRequired * 5) {
+                    cumulativeLegsWithGold++;
+                  }
+                }
+              }
+            } catch {}
           }
         }
-        console.log('Cumulative legs with BV (all months):', cumulativeLegsWithBV);
+        console.log('Cumulative legs:', { withBV: cumulativeLegsWithBV, withStar: cumulativeLegsWithStar, withGold: cumulativeLegsWithGold });
 
         setPersonalBV(finalPersonalBV);
         setTeamBV(finalTeamBV);
         setTotalBV(finalTotalBV);
         setLegsWithBV(cumulativeLegsWithBV);
-        setLegsWithStar(Number(dashboard.legsWithStar));
-        setLegsWithGold(Number(dashboard.legsWithGold));
+        setLegsWithStar(cumulativeLegsWithStar);
+        setLegsWithGold(cumulativeLegsWithGold);
         setContractJSAV(Number(ethers.formatUnits(dashboard.contractJSAV, tokenDecimals)));
         setContractUSDT(Number(ethers.formatUnits(dashboard.contractUSDT, 18)));
         setContractUSDC(Number(ethers.formatUnits(dashboard.contractUSDC, 18)));
