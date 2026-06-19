@@ -734,7 +734,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="mb-6">
           <div className="flex items-end justify-between mb-1">
-            <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Current Cycle Capital Allocation</div>
+            <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>All-Time Capital Allocation</div>
             {!loading && <div className="text-xs" style={{ color: 'var(--fx-ink-muted)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{percent.toFixed(1)}%</div>}
           </div>
           {loading ? <div className="fx-skeleton h-4 w-full" /> : <ProgressBar percent={percent} />}
