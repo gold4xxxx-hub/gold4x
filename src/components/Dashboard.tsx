@@ -249,11 +249,10 @@ export const Dashboard: React.FC = () => {
           setAllTimeTeamBV(sumTeam);
           setAllTimeTotalBV(sumPersonal + sumTeam);
           setMonthlyBreakdown(breakdown);
-          // Show fallback date immediately from cycle data (already computed)
+          // Show fallback date immediately from first active epoch
           if (firstActiveEpoch !== null) {
-            const cycleIndex = Math.max(0, Math.floor((firstActiveEpoch * CYCLE - LAUNCH_TIME) / CYCLE));
-            const cycleStartDate = new Date((LAUNCH_TIME + cycleIndex * CYCLE) * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
-            setJoinDate(`${cycleStartDate}`);
+            const epochStart = Math.max(firstActiveEpoch * CYCLE, LAUNCH_TIME);
+            setJoinDate(new Date(epochStart * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
           }
           // Try fetching exact first transaction date from BscScan via API (overrides fallback)
           (async () => {
