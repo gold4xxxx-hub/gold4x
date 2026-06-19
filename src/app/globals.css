@@ -837,8 +837,15 @@ select.fx-input option {
   content: ' ';
 }
 @media (max-width: 639px) {
+  .fx-data-strip--alltime {
+    gap: 16px;
+  }
   .fx-data-strip--alltime .fx-data-strip__item {
     padding: 5px 14px;
+  }
+  .fx-data-strip--alltime .fx-data-strip__value,
+  .fx-data-strip--alltime .fx-data-strip__value--gold {
+    font-size: 1.375rem;
   }
   .fx-data-strip__label--alltime {
     display: flex;
@@ -851,7 +858,7 @@ select.fx-input option {
     color: rgba(255,255,255,0.55);
   }
   .fx-data-strip__label--alltime .fx-data-strip__label-line2 {
-    font-size: 11px;
+    font-size: 9px;
     letter-spacing: 0.08em;
     color: rgba(255,255,255,0.75);
   }
@@ -1196,6 +1203,16 @@ select.fx-input option {
   line-height: 1.1;
 }
 
+.stats-bar__value--sm {
+  color: #ffffff;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+  white-space: nowrap;
+  line-height: 1.1;
+}
 .stats-bar__value--gold {
   background: var(--fx-grad-gold);
   -webkit-background-clip: text;
@@ -1206,6 +1223,9 @@ select.fx-input option {
   text-shadow: 0 4px 10px rgba(0,0,0,0.8);
   white-space: nowrap;
   line-height: 1.1;
+}
+.stats-bar__value--sm.stats-bar__value--gold {
+  font-size: 15px;
 }
 
 .stats-bar__dot {
@@ -1589,8 +1609,11 @@ select.fx-input option {
     gap: 0;
     padding: 0;
   }
+  .fx-data-strip--status {
+    gap: 4px;
+  }
   .fx-data-strip--status .fx-data-strip__item {
-    padding: 14px 16px;
+    padding: 10px 14px;
     min-width: 0;
     align-items: flex-start;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -1617,6 +1640,12 @@ select.fx-input option {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+  }
+  .fx-data-strip__value,
+  .fx-data-strip__value--gold,
+  .fx-data-strip__value--gold-bright,
+  .fx-data-strip__value--gold-soft {
+    font-size: 0.85rem !important;
   }
 }
 
@@ -1728,16 +1757,19 @@ select.fx-input option {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .fx-monthly-card__top {
+    margin-bottom: 10px;
+  }
   .fx-monthly-card__labels {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 4px;
-    margin-bottom: 4px;
+    gap: 8px;
+    margin-bottom: 3px;
   }
   .fx-monthly-card__labels span {
-    font-size: 8px;
+    font-size: 7px;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     color: rgba(255,255,255,0.35);
     font-weight: 500;
     text-align: center;
@@ -1745,10 +1777,10 @@ select.fx-input option {
   .fx-monthly-card__values {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 4px;
+    gap: 8px;
   }
   .fx-monthly-card__value {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: #ffffff;
     text-align: center;
     font-variant-numeric: tabular-nums;
