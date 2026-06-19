@@ -224,7 +224,7 @@ export const Dashboard: React.FC = () => {
             if (firstActiveEpoch === null && (pv > 0 || tv > 0)) {
               firstActiveEpoch = m;
             }
-            const cycleIndex = Math.floor((m * CYCLE - LAUNCH_TIME) / CYCLE);
+            const cycleIndex = Math.floor((m * CYCLE + CYCLE / 2 - LAUNCH_TIME) / CYCLE);
             if (cycleIndex >= 0 && cycleIndex <= currentCycle) {
               cycleData[cycleIndex].personalBV += pv;
               cycleData[cycleIndex].teamBV += tv;
