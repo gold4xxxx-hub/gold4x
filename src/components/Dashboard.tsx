@@ -207,36 +207,42 @@ export const Dashboard: React.FC = () => {
           const CYCLE = 2592000;
           const now = Math.floor(Date.now() / 1000);
           const currentCycle = Math.floor((now - LAUNCH_TIME) / CYCLE);
+          const firstEpoch = Math.floor(LAUNCH_TIME / CYCLE);
+          const currentEpoch = Math.floor(now / CYCLE);
           let sumPersonal = 0;
           let sumTeam = 0;
           let firstActiveEpoch: number | null = null;
+          // Pre-allocate cycle buckets
+          const cycleData: { personalBV: number; teamBV: number }[] = [];
+          for (let c = 0; c <= currentCycle; c++) cycleData.push({ personalBV: 0, teamBV: 0 });
+          // Iterate each epoch exactly once, assign to its cycle
+          const fmtDate = (ts: number) => new Date(ts * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+          for (let m = firstEpoch; m <= currentEpoch; m++) {
+            const vol = await contract.monthlyVolume.staticCall(address, m, READ_CALL_OPTS);
+            const pv = Number(ethers.formatUnits(vol.personalBV, tokenDecimals));
+            const tv = Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
+            if (firstActiveEpoch === null && (pv > 0 || tv > 0)) {
+              firstActiveEpoch = m;
+            }
+            const cycleIndex = Math.floor((m * CYCLE - LAUNCH_TIME) / CYCLE);
+            if (cycleIndex >= 0 && cycleIndex <= currentCycle) {
+              cycleData[cycleIndex].personalBV += pv;
+              cycleData[cycleIndex].teamBV += tv;
+            }
+            sumPersonal += pv;
+            sumTeam += tv;
+          }
           const breakdown: { month: number; start: string; end: string; personalBV: number; teamBV: number; totalBV: number }[] = [];
           for (let c = 0; c <= currentCycle; c++) {
             const cycleStart = LAUNCH_TIME + c * CYCLE;
             const cycleEnd = cycleStart + CYCLE;
-            const startEpoch = Math.floor(cycleStart / CYCLE);
-            const endEpoch = Math.floor((cycleEnd - 1) / CYCLE);
-            let p = 0, t = 0;
-            for (let m = startEpoch; m <= endEpoch; m++) {
-              const vol = await contract.monthlyVolume.staticCall(address, m, READ_CALL_OPTS);
-              const pv = Number(ethers.formatUnits(vol.personalBV, tokenDecimals));
-              const tv = Number(ethers.formatUnits(vol.teamBV, tokenDecimals));
-              p += pv;
-              t += tv;
-              if (firstActiveEpoch === null && (pv > 0 || tv > 0)) {
-                firstActiveEpoch = m;
-              }
-            }
-            sumPersonal += p;
-            sumTeam += t;
-            const fmtDate = (ts: number) => new Date(ts * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
             breakdown.push({
               month: c + 1,
               start: fmtDate(cycleStart),
               end: fmtDate(cycleEnd),
-              personalBV: p,
-              teamBV: t,
-              totalBV: p + t,
+              personalBV: cycleData[c].personalBV,
+              teamBV: cycleData[c].teamBV,
+              totalBV: cycleData[c].personalBV + cycleData[c].teamBV,
             });
           }
           setAllTimePersonalBV(sumPersonal);
