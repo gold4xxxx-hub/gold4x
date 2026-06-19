@@ -7,133 +7,118 @@ export const revalidate = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 const cache = new Map<string, { date: string | null; ts: number }>();
 const CONTRACT = '0x418b7e6bbc48ca93126c22a1e83b6420a4e0c6fd';
+const BSC_RPC = 'https://bsc-dataseed1.binance.org';
+const LAUNCH_TIME = 1742342400; // 19 Mar 2025 00:00:00 UTC (known launch)
 
-function decodeHtmlEntities(str: string): string {
-  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+// Approx BSC block every 3 seconds
+const BLOCKS_PER_DAY = 28800;
+const MAX_BLOCKS_TO_SCAN = BLOCKS_PER_DAY * 400; // ~400 days worth
+
+const TRANSFER_EVENT = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+async function fetchRpc(method: string, params: any[]): Promise<any> {
+  const res = await fetch(BSC_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
 
-async function fetchBscScan(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch {
-    return null;
+async function getBlockByTimestamp(targetTs: number): Promise<number | null> {
+  // Binary search to find block number closest to target timestamp
+  const latest = await fetchRpc('eth_blockNumber', []);
+  if (!latest || !latest.result) return null;
+  const latestNum = parseInt(latest.result, 16);
+  const latestBlock = await fetchRpc('eth_getBlockByNumber', [latest.result, false]);
+  if (!latestBlock?.result) return null;
+  const latestTs = parseInt(latestBlock.result.timestamp, 16);
+  if (targetTs >= latestTs) return latestNum;
+
+  let lo = 0;
+  let hi = latestNum;
+  // Estimate start: blocks = (now - launch) / 3 secs
+  const estimated = Math.floor((targetTs - LAUNCH_TIME) / 3);
+  lo = Math.max(0, estimated - BLOCKS_PER_DAY);
+
+  for (let i = 0; i < 25; i++) {
+    const mid = Math.floor((lo + hi) / 2);
+    const block = await fetchRpc('eth_getBlockByNumber', ['0x' + mid.toString(16), false]);
+    if (!block?.result) return null;
+    const ts = parseInt(block.result.timestamp, 16);
+    if (ts < targetTs) lo = mid + 1;
+    else hi = mid;
+    if (lo >= hi) break;
   }
+  return lo;
 }
 
-function extractTransactions(html: string): any[] | null {
-  // Try multiple BscScan export variable patterns
-  const patterns = [
-    /MTCS_REPORT_DATA\s*=\s*(\[.*?\])\s*;/,
-    /quickExportTransactionListData\s*=\s*'(\[.*?\])'\s*;/,
-    /listLoaded\s*\(\s*'[^']*'\s*,\s*(\[.*?\])\s*,\s*'/,
-    /dataTable\.rows\s*=\s*(\[.*?\])\s*;/,
-  ];
-  for (const pat of patterns) {
-    const m = html.match(pat);
-    if (!m) continue;
-    try {
-      const raw = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
-      const decoded = decodeHtmlEntities(raw);
-      const data = JSON.parse(decoded);
-      if (Array.isArray(data) && data.length > 0) return data;
-    } catch { /* try next pattern */ }
+async function findFirstTransferBlock(wallet: string, startBlock: number, endBlock: number): Promise<number | null> {
+  const addr = wallet.toLowerCase().replace('0x', '');
+  const padded = '0x' + addr.padStart(64, '0');
+
+  const fromTopic = padded; // user as "from" (sending to contract)
+  const toTopic = '0x000000000000000000000000' + CONTRACT.toLowerCase().replace('0x', ''); // contract as "to"
+
+  const batchSize = 50000;
+  for (let from = startBlock; from < endBlock; from += batchSize) {
+    const to = Math.min(from + batchSize - 1, endBlock);
+    const hexFrom = '0x' + from.toString(16);
+    const hexTo = '0x' + to.toString(16);
+
+    // Try both directions: user->contract (invest) and contract->user (receive)
+    const result = await fetchRpc('eth_getLogs', [{
+      address: CONTRACT,
+      fromBlock: hexFrom,
+      toBlock: hexTo,
+      topics: [TRANSFER_EVENT, fromTopic],
+    }]);
+
+    if (result?.result && result.result.length > 0) {
+      // Find earliest block among results
+      let earliest = result.result[0];
+      for (const log of result.result) {
+        if (parseInt(log.blockNumber, 16) < parseInt(earliest.blockNumber, 16)) {
+          earliest = log;
+        }
+      }
+      return parseInt(earliest.blockNumber, 16);
+    }
   }
   return null;
 }
 
-function extractTableRows(html: string): any[] | null {
-  const rows: any[] = [];
-  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
-  if (!tbodyMatch) return null;
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let rowMatch;
-  while ((rowMatch = rowRegex.exec(tbodyMatch[1])) !== null) {
-    const cells: string[] = [];
-    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    let cellMatch;
-    while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-      cells.push(cellMatch[1].replace(/<[^>]*>/g, '').trim());
-    }
-    if (cells.length >= 6) {
-      const dateTime = cells[2] || '';
-      const method = cells[5] ? cells[5].replace(/<[^>]*>/g, '').trim() : '';
-      rows.push({ DateTime: dateTime, Method: method });
-    }
-  }
-  return rows.length > 0 ? rows : null;
+async function getBlockTimestamp(blockNum: number): Promise<number | null> {
+  const block = await fetchRpc('eth_getBlockByNumber', ['0x' + blockNum.toString(16), false]);
+  if (!block?.result) return null;
+  return parseInt(block.result.timestamp, 16);
 }
 
-function parseCsvDate(raw: string): string | null {
-  // BscScan CSV date format: "2024-01-15 10:30:00" or similar
-  const d = new Date(raw.replace(' UTC', '').trim());
-  return isNaN(d.getTime()) ? null : d.toISOString();
+async function findJoinDate(wallet: string): Promise<string | null> {
+  const launchBlock = await getBlockByTimestamp(LAUNCH_TIME);
+  if (!launchBlock) return null;
+
+  const endBlock = launchBlock + MAX_BLOCKS_TO_SCAN;
+  const now = Math.floor(Date.now() / 1000);
+  const estimatedEnd = LAUNCH_TIME + MAX_BLOCKS_TO_SCAN * 3;
+  const actualEndBlock = estimatedEnd > now
+    ? await getBlockByTimestamp(now) ?? launchBlock + BLOCKS_PER_DAY
+    : endBlock;
+
+  const foundBlock = await findFirstTransferBlock(wallet, launchBlock, actualEndBlock);
+  if (!foundBlock) return null;
+
+  const ts = await getBlockTimestamp(foundBlock);
+  if (!ts) return null;
+
+  return new Date(ts * 1000).toISOString();
 }
 
-function extractOldestFromHtml(html: string): string | null {
-  // Try JS variable patterns first
-  let txs = extractTransactions(html);
-  if (!txs || txs.length === 0) {
-    txs = extractTableRows(html);
-  }
-  if (!txs || txs.length === 0) return null;
-
-  const knownPrefixes = ['register', 'invest', 'transfer'];
-  let oldest: string | null = null;
-  for (const tx of txs) {
-    const method = (tx.Method || '').toLowerCase().replace(/\s+/g, '');
-    if (!knownPrefixes.some(k => method.includes(k) || method.startsWith(k))) continue;
-    const dt = tx.DateTime;
-    if (dt && (!oldest || dt < oldest)) oldest = dt;
-  }
-  return oldest;
-}
-
-async function tryFetchTokenTxs(wallet: string): Promise<string | null> {
-  // Token transfers to the contract (e.g. USDT/USDC deposits)
-  const tokenUrl = `https://bscscan.com/token-txns?a=${wallet}&to=${CONTRACT}&ps=100`;
-  const html = await fetchBscScan(tokenUrl);
-  if (!html) return null;
-  return extractOldestFromHtml(html);
-}
-
-async function tryFetchCsv(wallet: string): Promise<string | null> {
-  // BscScan CSV export (up to 5000 rows)
-  const csvUrl = `https://bscscan.com/txns.csv?a=${wallet}`;
-  try {
-    const csv = await fetchBscScan(csvUrl);
-    if (!csv) return null;
-    const lines = csv.trim().split('\n');
-    if (lines.length < 2) return null;
-    const headers = lines[0].split(',');
-    const toIdx = headers.indexOf('To');
-    const hashIdx = headers.indexOf('TxHash');
-    const dateIdx = headers.findIndex(h => /date/i.test(h));
-    if (toIdx === -1 || dateIdx === -1) return null;
-    const oldestRaw = lines.slice(1).reduce((oldest: string | null, line: string) => {
-      const cols = line.split(',');
-      const to = (cols[toIdx] || '').replace(/"/g, '').toLowerCase();
-      if (to !== CONTRACT) return oldest;
-      const raw = cols[dateIdx];
-      if (!raw) return oldest;
-      const iso = parseCsvDate(raw);
-      if (!iso) return oldest;
-      return (!oldest || iso < oldest) ? iso : oldest;
-    }, null);
-        return oldestRaw ? oldestRaw : null;
-  } catch {
-    return null;
-  }
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
 }
 
 export async function GET(
@@ -152,35 +137,9 @@ export async function GET(
     return NextResponse.json({ date: cached.date });
   }
 
-  const baseUrl = `https://bscscan.com/txs?a=${wallet}&to=${CONTRACT}&ps=100`;
+  const iso = await findJoinDate(wallet);
+  const formatted = iso ? formatDate(iso) : null;
 
-  const page1 = await fetchBscScan(baseUrl);
-  if (!page1) {
-    // Fallback to CSV if HTML fetch fails
-    const csvDate = await tryFetchCsv(wallet);
-    cache.set(wallet, { date: csvDate, ts: now });
-    return NextResponse.json({ date: csvDate });
-  }
-
-  const pageMatch = page1.match(/Page \d+ of (\d+)/i);
-  const totalPages = pageMatch ? parseInt(pageMatch[1], 10) : 1;
-
-  const lastHtml = totalPages > 1
-    ? (await fetchBscScan(`${baseUrl}&p=${totalPages}`)) ?? page1
-    : page1;
-
-  let oldest = extractOldestFromHtml(lastHtml);
-
-  // If no tx found on txs page, try token-txns page (stablecoin deposits)
-  if (!oldest) {
-    oldest = await tryFetchTokenTxs(wallet);
-  }
-
-  // Last resort: try CSV export
-  if (!oldest) {
-    oldest = await tryFetchCsv(wallet);
-  }
-
-  cache.set(wallet, { date: oldest, ts: now });
-  return NextResponse.json({ date: oldest });
+  cache.set(wallet, { date: formatted, ts: now });
+  return NextResponse.json({ date: formatted });
 }
