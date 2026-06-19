@@ -247,7 +247,7 @@ export const Dashboard: React.FC = () => {
           if (firstActiveEpoch !== null) {
             const cycleIndex = Math.max(0, Math.floor((firstActiveEpoch * CYCLE - LAUNCH_TIME) / CYCLE));
             const cycleStartDate = new Date((LAUNCH_TIME + cycleIndex * CYCLE) * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
-            setJoinDate(`Cycle ${cycleIndex + 1} · ${cycleStartDate}`);
+            setJoinDate(`${cycleStartDate}`);
           }
           // Try fetching exact first transaction date from BscScan via API (overrides fallback)
           (async () => {
@@ -256,7 +256,8 @@ export const Dashboard: React.FC = () => {
               if (res.ok) {
                 const data = await res.json();
                 if (data.date) {
-                  const d = new Date(data.date.replace(' ', 'T') + 'Z');
+                  const raw = data.date.includes('T') ? data.date : data.date.replace(' ', 'T') + 'Z';
+                  const d = new Date(raw);
                   if (!isNaN(d.getTime())) {
                     setJoinDate(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
                   }
