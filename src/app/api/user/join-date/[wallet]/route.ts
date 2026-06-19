@@ -7,6 +7,8 @@ export const revalidate = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 const cache = new Map<string, { date: string | null; ts: number }>();
 const CONTRACT = '0x418b7e6bbc48ca93126c22a1e83b6420a4e0c6fd';
+const USDT = '0x55d398326f99059ff775485246999027b3197955';
+const USDC = '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
 const BSC_RPC = 'https://bsc-dataseed1.binance.org';
 const LAUNCH_TIME = 1742342400; // 19 Mar 2025 00:00:00 UTC (known launch)
 
@@ -53,44 +55,50 @@ async function getBlockByTimestamp(targetTs: number): Promise<number | null> {
 async function findFirstEventBlock(wallet: string, startBlock: number, endBlock: number): Promise<number | null> {
   const addr = wallet.toLowerCase().replace('0x', '');
   const padded = '0x' + addr.padStart(64, '0');
+  const contractTo = '0x000000000000000000000000' + CONTRACT.toLowerCase().replace('0x', '');
   let earliestBlock: number | null = null;
+
+  const contracts = [CONTRACT, USDT, USDC];
 
   for (let from = startBlock; from < endBlock; from += BATCH_SIZE) {
     const to = Math.min(from + BATCH_SIZE - 1, endBlock);
     const hexFrom = '0x' + from.toString(16);
     const hexTo = '0x' + to.toString(16);
 
-    // Query logs where user is topic1 (from, owner, user — covers Transfer/Approval/Withdraw/Rank*)
-    const result1 = await fetchRpc('eth_getLogs', [{
-      address: CONTRACT,
-      fromBlock: hexFrom,
-      toBlock: hexTo,
-      topics: [null, padded],
-    }]);
+    for (const cAddr of contracts) {
+      // User as topic1 (from/owner — Transfer sending, Approval owner, Withdraw user, Rank*)
+      const r1 = await fetchRpc('eth_getLogs', [{
+        address: cAddr,
+        fromBlock: hexFrom,
+        toBlock: hexTo,
+        topics: [null, padded],
+      }]);
+      if (r1?.result) {
+        for (const log of r1.result) {
+          // For stablecoin contracts, only count transfers TO the JSAVIOR contract
+          if (cAddr !== CONTRACT) {
+            if (!log.topics[2] || log.topics[2].toLowerCase() !== contractTo) continue;
+          }
+          const bn = parseInt(log.blockNumber, 16);
+          if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
+        }
+      }
 
-    if (result1?.result) {
-      for (const log of result1.result) {
-        const bn = parseInt(log.blockNumber, 16);
-        if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
+      // User as topic2 (to/receiver — Transfer receiving, Approval spender)
+      const r2 = await fetchRpc('eth_getLogs', [{
+        address: cAddr,
+        fromBlock: hexFrom,
+        toBlock: hexTo,
+        topics: [null, null, padded],
+      }]);
+      if (r2?.result) {
+        for (const log of r2.result) {
+          const bn = parseInt(log.blockNumber, 16);
+          if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
+        }
       }
     }
 
-    // Also query logs where user is topic2 (to/receiver — catches Transfer receiving)
-    const result2 = await fetchRpc('eth_getLogs', [{
-      address: CONTRACT,
-      fromBlock: hexFrom,
-      toBlock: hexTo,
-      topics: [null, null, padded],
-    }]);
-
-    if (result2?.result) {
-      for (const log of result2.result) {
-        const bn = parseInt(log.blockNumber, 16);
-        if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
-      }
-    }
-
-    // If we found anything in this batch, stop searching further
     if (earliestBlock !== null) break;
   }
   return earliestBlock;
