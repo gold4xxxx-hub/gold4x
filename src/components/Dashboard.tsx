@@ -459,20 +459,38 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="fx-data-strip fx-data-strip--top mb-8 fx-reveal--slow" style={{ position: 'relative' }}>
-        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '250ms', background: '#111111', borderRadius: '12px' }}>
-          <div className="fx-data-strip__label">ROI Cap</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={cap} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--hero-sm" />}
+      <div className="fx-data-strip mb-3 fx-reveal fx-reveal--offset-300">
+        <div className="fx-data-strip__item fx-reveal">
+          <div className="fx-data-strip__label">Withdrawable</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={claimable} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
           <div className="fx-data-strip__unit">JSAV</div>
         </div>
-        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '0ms', background: '#191919', borderRadius: '12px' }}>
-          <div className="fx-data-strip__label">Withdrawable</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={claimable} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold-bright fx-data-strip__value--hero-lg" />}
-          <div className="fx-data-strip__unit">JSAV Balance</div>
-        </div>
-        <div className="fx-data-strip__item fx-reveal" style={{ position: 'relative', transitionDelay: '120ms', background: '#111111', borderRadius: '12px' }}>
+        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1">
           <div className="fx-data-strip__label">Total Earned</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={totalEarned} duration={1500} startDelay={200} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={totalEarned} format={fmt} className="fx-data-strip__value" />}
+          <div className="fx-data-strip__unit">JSAV</div>
+        </div>
+        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2">
+          <div className="fx-data-strip__label">Withdrawn</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={withdrawn} format={fmt} className="fx-data-strip__value" />}
+          <div className="fx-data-strip__unit">JSAV</div>
+        </div>
+      </div>
+
+      <div className="fx-data-strip mb-6 fx-reveal fx-reveal--offset-300">
+        <div className="fx-data-strip__item fx-reveal">
+          <div className="fx-data-strip__label">ROI Income</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={roiIncome} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
+          <div className="fx-data-strip__unit">JSAV</div>
+        </div>
+        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1">
+          <div className="fx-data-strip__label">Direct Income</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={directIncome} format={fmt} className="fx-data-strip__value" />}
+          <div className="fx-data-strip__unit">JSAV</div>
+        </div>
+        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2">
+          <div className="fx-data-strip__label">Level Income</div>
+          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={levelIncome} format={fmt} className="fx-data-strip__value" />}
           <div className="fx-data-strip__unit">JSAV</div>
         </div>
       </div>
@@ -500,16 +518,6 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2" style={{ padding: '16px 20px' }}>
-          <div className="fx-data-strip__label">Withdrawn</div>
-          {loading ? <div className="fx-skeleton h-6 w-20" /> : (
-            <div style={{ marginTop: '4px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}><CountUp value={withdrawn} format={fmt} /></span>
-              <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--fx-ink-subtle)', marginTop: '1px' }}>JSAV</div>
-            </div>
-          )}
-        </div>
-
-        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-3" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Directs</div>
           {loading ? <div className="fx-skeleton h-6 w-16" /> : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
@@ -533,28 +541,6 @@ export const Dashboard: React.FC = () => {
               </div>
             );
           })()}
-        </div>
-      </div>
-
-      {/* Removed unused on-chain rank / legs buttons per request */}
-
-      {/* Removed rank explanatory alert per request */}
-
-      <div className="fx-data-strip mb-6 fx-reveal fx-reveal--offset-300">
-        <div className="fx-data-strip__item fx-reveal">
-          <div className="fx-data-strip__label">ROI Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={roiIncome} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
-          <div className="fx-data-strip__unit">JSAV</div>
-        </div>
-        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1">
-          <div className="fx-data-strip__label">Direct Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={directIncome} format={fmt} className="fx-data-strip__value" />}
-          <div className="fx-data-strip__unit">JSAV</div>
-        </div>
-        <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2">
-          <div className="fx-data-strip__label">Level Income</div>
-          {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={levelIncome} format={fmt} className="fx-data-strip__value" />}
-          <div className="fx-data-strip__unit">JSAV</div>
         </div>
       </div>
 
@@ -592,7 +578,7 @@ export const Dashboard: React.FC = () => {
       <div className="fx-data-strip fx-data-strip--alltime mb-6 fx-reveal fx-reveal--delay-3">
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
+            <span className="fx-data-strip__label-line1">Current Cycle</span>
             <span className="fx-data-strip__label-line2">Personal BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimePersonalBV} format={fmt} className="fx-data-strip__value" />}
@@ -600,7 +586,7 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
+            <span className="fx-data-strip__label-line1">Current Cycle</span>
             <span className="fx-data-strip__label-line2">Team BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimeTeamBV} format={fmt} className="fx-data-strip__value" />}
@@ -608,7 +594,7 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
+            <span className="fx-data-strip__label-line1">Current Cycle</span>
             <span className="fx-data-strip__label-line2">Total BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimeTotalBV} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
@@ -743,7 +729,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="mb-6">
           <div className="flex items-end justify-between mb-1">
-            <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>All-Time Capital Allocation</div>
+            <div className="text-xs" style={{ color: 'var(--fx-ink-subtle)' }}>Current Cycle Capital Allocation</div>
             {!loading && <div className="text-xs" style={{ color: 'var(--fx-ink-muted)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{percent.toFixed(1)}%</div>}
           </div>
           {loading ? <div className="fx-skeleton h-4 w-full" /> : <ProgressBar percent={percent} />}

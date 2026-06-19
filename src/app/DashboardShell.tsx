@@ -489,6 +489,28 @@ export default function DashboardShell() {
               <div className="connection-box text-sm">
                 Connection verified on BSC
               </div>
+              <section className="stats-bar py-2 px-3">
+                <div className="grid grid-cols-2 text-xs gap-y-2">
+                  <div className="stat-cell">
+                    <span className="fx-kicker">JSAV Price</span>
+                    <span className="stats-bar__value--sm"><span className="stats-bar__dot"></span><CountUp value={1.04} format={(n) => `$${n.toFixed(2)}`} /></span>
+                  </div>
+                  <div className="stat-cell">
+                    <span className="fx-kicker">BSC Gas</span>
+                    <span className="stats-bar__value--sm stats-bar__value--gold"><CountUp value={3.2} format={(n) => `${n.toFixed(1)} Gwei`} /></span>
+                  </div>
+                  <div className="stat-cell">
+                    <span className="fx-kicker">ROI Cap</span>
+                    <span className="stats-bar__value--sm"><CountUp value={3.0} format={(n) => `${n.toFixed(1)}×`} /></span>
+                  </div>
+                  <div className="stat-cell">
+                    <span className="fx-kicker">Total Users</span>
+                    <span className="stats-bar__value--sm stats-bar__value--gold">
+                      <CountUp value={indexedUsersCount} format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })} />
+                    </span>
+                  </div>
+                </div>
+              </section>
               <div className="grid grid-cols-1 gap-3">
                 {!showRegister ? (
                   <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('JSAV'); setRegisterTx(null); setRegisterError(null); }}>
@@ -554,29 +576,6 @@ export default function DashboardShell() {
             </div>
           </div>
         </header>
-
-        <section className="stats-bar py-1 sm:py-2 my-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 text-xs">
-            <div className="stat-cell fx-reveal fx-reveal--gap-100">
-              <span className="fx-kicker">JSAV Price</span>
-              <span className="stats-bar__value"><span className="stats-bar__dot"></span><CountUp value={1.04} format={(n) => `$${n.toFixed(2)}`} /></span>
-            </div>
-            <div className="stat-cell fx-reveal fx-reveal--delay-1 fx-reveal--gap-100">
-              <span className="fx-kicker">BSC Gas</span>
-              <span className="stats-bar__value stats-bar__value--gold"><CountUp value={3.2} format={(n) => `${n.toFixed(1)} Gwei`} /></span>
-            </div>
-            <div className="stat-cell fx-reveal fx-reveal--delay-2 fx-reveal--gap-100">
-              <span className="fx-kicker">ROI Cap</span>
-              <span className="stats-bar__value"><CountUp value={3.0} format={(n) => `${n.toFixed(1)}×`} /></span>
-            </div>
-            <div className="stat-cell fx-reveal fx-reveal--delay-3 fx-reveal--gap-100">
-              <span className="fx-kicker">Total Users</span>
-              <span className="stats-bar__value stats-bar__value--gold">
-                <CountUp value={indexedUsersCount} format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })} />
-              </span>
-            </div>
-          </div>
-        </section>
 
         <DashboardErrorBoundary>
           <Dashboard />

@@ -1645,7 +1645,7 @@ select.fx-input option {
   .fx-data-strip__value--gold,
   .fx-data-strip__value--gold-bright,
   .fx-data-strip__value--gold-soft {
-    font-size: 0.85rem !important;
+    font-size: 0.75rem !important;
   }
 }
 
