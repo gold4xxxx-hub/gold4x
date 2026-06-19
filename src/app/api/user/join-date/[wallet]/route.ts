@@ -10,38 +10,33 @@ const CONTRACT = '0x418b7e6bbc48ca93126c22a1e83b6420a4e0c6fd';
 const BSC_RPC = 'https://bsc-dataseed1.binance.org';
 const LAUNCH_TIME = 1742342400; // 19 Mar 2025 00:00:00 UTC (known launch)
 
-// Approx BSC block every 3 seconds
 const BLOCKS_PER_DAY = 28800;
-const MAX_BLOCKS_TO_SCAN = BLOCKS_PER_DAY * 400; // ~400 days worth
 
-const TRANSFER_EVENT = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const BATCH_SIZE = 80000;
 
 async function fetchRpc(method: string, params: any[]): Promise<any> {
   const res = await fetch(BSC_RPC, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) return null;
   return res.json();
 }
 
 async function getBlockByTimestamp(targetTs: number): Promise<number | null> {
-  // Binary search to find block number closest to target timestamp
-  const latest = await fetchRpc('eth_blockNumber', []);
-  if (!latest || !latest.result) return null;
-  const latestNum = parseInt(latest.result, 16);
-  const latestBlock = await fetchRpc('eth_getBlockByNumber', [latest.result, false]);
-  if (!latestBlock?.result) return null;
-  const latestTs = parseInt(latestBlock.result.timestamp, 16);
+  const latestResp = await fetchRpc('eth_blockNumber', []);
+  if (!latestResp?.result) return null;
+  const latestNum = parseInt(latestResp.result, 16);
+  const blockResp = await fetchRpc('eth_getBlockByNumber', [latestResp.result, false]);
+  if (!blockResp?.result) return null;
+  const latestTs = parseInt(blockResp.result.timestamp, 16);
   if (targetTs >= latestTs) return latestNum;
 
-  let lo = 0;
-  let hi = latestNum;
-  // Estimate start: blocks = (now - launch) / 3 secs
   const estimated = Math.floor((targetTs - LAUNCH_TIME) / 3);
-  lo = Math.max(0, estimated - BLOCKS_PER_DAY);
+  let lo = Math.max(0, estimated - BLOCKS_PER_DAY);
+  let hi = latestNum;
 
   for (let i = 0; i < 25; i++) {
     const mid = Math.floor((lo + hi) / 2);
@@ -55,39 +50,50 @@ async function getBlockByTimestamp(targetTs: number): Promise<number | null> {
   return lo;
 }
 
-async function findFirstTransferBlock(wallet: string, startBlock: number, endBlock: number): Promise<number | null> {
+async function findFirstEventBlock(wallet: string, startBlock: number, endBlock: number): Promise<number | null> {
   const addr = wallet.toLowerCase().replace('0x', '');
   const padded = '0x' + addr.padStart(64, '0');
+  let earliestBlock: number | null = null;
 
-  const fromTopic = padded; // user as "from" (sending to contract)
-  const toTopic = '0x000000000000000000000000' + CONTRACT.toLowerCase().replace('0x', ''); // contract as "to"
-
-  const batchSize = 50000;
-  for (let from = startBlock; from < endBlock; from += batchSize) {
-    const to = Math.min(from + batchSize - 1, endBlock);
+  for (let from = startBlock; from < endBlock; from += BATCH_SIZE) {
+    const to = Math.min(from + BATCH_SIZE - 1, endBlock);
     const hexFrom = '0x' + from.toString(16);
     const hexTo = '0x' + to.toString(16);
 
-    // Try both directions: user->contract (invest) and contract->user (receive)
-    const result = await fetchRpc('eth_getLogs', [{
+    // Query logs where user is topic1 (from, owner, user — covers Transfer/Approval/Withdraw/Rank*)
+    const result1 = await fetchRpc('eth_getLogs', [{
       address: CONTRACT,
       fromBlock: hexFrom,
       toBlock: hexTo,
-      topics: [TRANSFER_EVENT, fromTopic],
+      topics: [null, padded],
     }]);
 
-    if (result?.result && result.result.length > 0) {
-      // Find earliest block among results
-      let earliest = result.result[0];
-      for (const log of result.result) {
-        if (parseInt(log.blockNumber, 16) < parseInt(earliest.blockNumber, 16)) {
-          earliest = log;
-        }
+    if (result1?.result) {
+      for (const log of result1.result) {
+        const bn = parseInt(log.blockNumber, 16);
+        if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
       }
-      return parseInt(earliest.blockNumber, 16);
     }
+
+    // Also query logs where user is topic2 (to/receiver — catches Transfer receiving)
+    const result2 = await fetchRpc('eth_getLogs', [{
+      address: CONTRACT,
+      fromBlock: hexFrom,
+      toBlock: hexTo,
+      topics: [null, null, padded],
+    }]);
+
+    if (result2?.result) {
+      for (const log of result2.result) {
+        const bn = parseInt(log.blockNumber, 16);
+        if (earliestBlock === null || bn < earliestBlock) earliestBlock = bn;
+      }
+    }
+
+    // If we found anything in this batch, stop searching further
+    if (earliestBlock !== null) break;
   }
-  return null;
+  return earliestBlock;
 }
 
 async function getBlockTimestamp(blockNum: number): Promise<number | null> {
@@ -100,14 +106,10 @@ async function findJoinDate(wallet: string): Promise<string | null> {
   const launchBlock = await getBlockByTimestamp(LAUNCH_TIME);
   if (!launchBlock) return null;
 
-  const endBlock = launchBlock + MAX_BLOCKS_TO_SCAN;
   const now = Math.floor(Date.now() / 1000);
-  const estimatedEnd = LAUNCH_TIME + MAX_BLOCKS_TO_SCAN * 3;
-  const actualEndBlock = estimatedEnd > now
-    ? await getBlockByTimestamp(now) ?? launchBlock + BLOCKS_PER_DAY
-    : endBlock;
+  const currentBlock = await getBlockByTimestamp(now) ?? launchBlock + BLOCKS_PER_DAY;
 
-  const foundBlock = await findFirstTransferBlock(wallet, launchBlock, actualEndBlock);
+  const foundBlock = await findFirstEventBlock(wallet, launchBlock, currentBlock);
   if (!foundBlock) return null;
 
   const ts = await getBlockTimestamp(foundBlock);
