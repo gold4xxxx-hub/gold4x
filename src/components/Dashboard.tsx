@@ -576,13 +576,12 @@ export const Dashboard: React.FC = () => {
       <div className="fx-divider my-6" />
 
       <div style={{ marginBottom: '6px' }}>
-        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fx-ink-label)', fontWeight: 500 }}>Current Cycle</span>
+        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fx-ink-label)', fontWeight: 500 }}>All-Time</span>
       </div>
 
       <div className="fx-data-strip fx-data-strip--alltime mb-6 fx-reveal fx-reveal--delay-3">
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
             <span className="fx-data-strip__label-line2">Personal BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimePersonalBV} format={fmt} className="fx-data-strip__value" />}
@@ -590,7 +589,6 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
             <span className="fx-data-strip__label-line2">Team BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimeTeamBV} format={fmt} className="fx-data-strip__value" />}
@@ -598,7 +596,6 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="fx-data-strip__item">
           <div className="fx-data-strip__label fx-data-strip__label--alltime">
-            <span className="fx-data-strip__label-line1">All-Time</span>
             <span className="fx-data-strip__label-line2">Total BV</span>
           </div>
           {loading ? <div className="fx-skeleton h-8 w-24" /> : <CountUp value={allTimeTotalBV} format={fmt} className="fx-data-strip__value fx-data-strip__value--gold" />}
