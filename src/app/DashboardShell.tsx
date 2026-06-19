@@ -525,7 +525,7 @@ export default function DashboardShell() {
                     {investError && <div className="fx-alert fx-alert--error text-xs">{investError}</div>}
                     {investTx && <div className="fx-alert fx-alert--success text-xs">✓ Invested! <a href={`https://bscscan.com/tx/${investTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
                     <div className="flex gap-2">
-                      <button className="fx-btn-sweep flex-1" onClick={handleInvest} disabled={investLoading || investMetaLoading}>{investLoading ? 'Confirming…' : `Confirm (${investToken})`}</button>
+                      <button className="fx-btn-sweep fx-btn-sweep--emerald flex-1" onClick={handleInvest} disabled={investLoading || investMetaLoading}>{investLoading ? 'Confirming…' : `Confirm (${investToken})`}</button>
                       <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(false); setInvestAmount(''); setInvestError(null); setInvestMinText('-'); }} disabled={investLoading}>Cancel</button>
                     </div>
                   </div>
@@ -555,7 +555,7 @@ export default function DashboardShell() {
           </div>
         </header>
 
-        <section className="stats-bar py-4 sm:py-5 my-6">
+        <section className="stats-bar py-1 sm:py-2 my-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 text-xs">
             <div className="stat-cell fx-reveal fx-reveal--gap-100">
               <span className="fx-kicker">JSAV Price</span>
