@@ -618,7 +618,7 @@ export default function WalletContent() {
                         {withdrawError && <div className="fx-alert fx-alert--error text-xs">{withdrawError}</div>}
                         {withdrawTx && <div className="fx-alert fx-alert--success text-xs">✓ Withdrawn! <a href={`https://bscscan.com/tx/${withdrawTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
                         <div className="flex gap-2">
-                          <button className="fx-btn-sweep fx-btn-sweep--ghost flex-1" onClick={handleWithdraw} disabled={withdrawLoading}>{withdrawLoading ? 'Confirming...' : `Confirm (${withdrawToken})`}</button>
+                          <button className="fx-btn-sweep fx-btn-sweep--emerald flex-1" onClick={handleWithdraw} disabled={withdrawLoading}>{withdrawLoading ? 'Confirming...' : `Confirm (${withdrawToken})`}</button>
                           <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowWithdraw(false); setWithdrawError(null); }} disabled={withdrawLoading}>Cancel</button>
                         </div>
                       </div>

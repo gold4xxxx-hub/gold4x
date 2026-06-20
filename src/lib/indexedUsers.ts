@@ -6,7 +6,7 @@ if (!/^0x[a-fA-F0-9]{40}$/.test(CONTRACT_ADDRESS)) {
   throw new Error(`Invalid CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}`);
 }
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
-const CONTRACT_DEPLOY_BLOCK = 86656188; // Contract deploy block from BSCScan (Create: JSAVIOR tx)
+const CONTRACT_DEPLOY_BLOCK = 86700000; // Contract deploy block
 
 export type IndexedUsersResult = {
   count: number;
@@ -187,8 +187,11 @@ export async function getIndexedUsers(): Promise<IndexedUsersResult> {
   }
 
   // If BSCScan fails or returns 0, try RPC fallback
-  console.log('[getIndexedUsers] BSCScan failed or returned 0, trying RPC fallback...');
-  const rpcUsers = await fetchUsersFromRPC();
+  console.log('[getIndexedUsers] BSCScan failed or returned 0, skipping RPC fallback (rate-limited)');
+  const rpcUsers: string[] = [];
+  // RPC fallback disabled — eth_getLogs on public BSC nodes is rate-limited
+  // and floods the RPC for all other requests
+  // const rpcUsers = await fetchUsersFromRPC();
 
   if (rpcUsers.length > 0) {
     console.log(`[getIndexedUsers] Successfully fetched ${rpcUsers.length} users from RPC`);

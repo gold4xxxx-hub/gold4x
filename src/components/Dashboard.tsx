@@ -249,12 +249,7 @@ export const Dashboard: React.FC = () => {
           setAllTimeTeamBV(sumTeam);
           setAllTimeTotalBV(sumPersonal + sumTeam);
           setMonthlyBreakdown(breakdown);
-          // Show fallback date immediately from first active epoch
-          if (firstActiveEpoch !== null) {
-            const epochStart = Math.max(firstActiveEpoch * CYCLE, LAUNCH_TIME);
-            setJoinDate(new Date(epochStart * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
-          }
-          // Try fetching exact first transaction date from BscScan via API (overrides fallback)
+          // Try fetching exact first transaction date from API (overrides fallback)
           (async () => {
             try {
               const res = await fetch(`/api/user/join-date/${address}`);
@@ -516,7 +511,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Joined</div>
-          {loading ? <div className="fx-skeleton h-5 w-24" /> : <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || (registered ? '—' : '-')}</span>}
+          {loading ? <div className="fx-skeleton h-5 w-24" /> : <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || '-'}</span>}
         </div>
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2" style={{ padding: '16px 20px' }}>
