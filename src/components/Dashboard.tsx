@@ -453,6 +453,14 @@ export const Dashboard: React.FC = () => {
           >
             Refresh
           </button>
+          <div className="flex items-center gap-2 pl-2 border-l border-white/10 ml-1">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-[#c9a84c]/30 bg-[#c9a84c]/5">
+              <span className="text-xs font-medium text-[#c9a84c] tracking-wide uppercase">ROI Cap</span>
+              <span className="text-sm font-bold text-[#c9a84c] tabular-nums">
+                {loading ? <span className="text-white/20">-</span> : <CountUp value={cap} format={fmt} />}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
