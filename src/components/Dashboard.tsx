@@ -260,7 +260,9 @@ export const Dashboard: React.FC = () => {
               const res = await fetch(`/api/user/join-date/${address}`);
               if (res.ok) {
                 const data = await res.json();
-                if (data.date) {
+                if (data.date === 'coming soon') {
+                  setJoinDate('coming soon');
+                } else if (data.date) {
                   const raw = data.date.includes('T') ? data.date : data.date.replace(' ', 'T') + 'Z';
                   const d = new Date(raw);
                   if (!isNaN(d.getTime())) {
