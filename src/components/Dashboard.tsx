@@ -519,7 +519,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Joined</div>
-          {loading ? <div className="fx-skeleton h-5 w-24" /> : <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || '-'}</span>}
+          {loading ? <div className="fx-skeleton h-5 w-24" /> : <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || 'Coming Soon'}</span>}
         </div>
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2" style={{ padding: '16px 20px' }}>
