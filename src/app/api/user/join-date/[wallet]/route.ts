@@ -7,76 +7,79 @@ export const revalidate = 0;
 const CACHE_TTL = 10 * 60 * 1000;
 const walletCache = new Map<string, { date: string | null; ts: number }>();
 
-const ANKR_KEY = process.env.ANKR_API_KEY || '';
-const ANKR_URL = `https://rpc.ankr.com/bsc/${ANKR_KEY}`;
+const RPC_URLS = [
+  'https://bsc-dataseed1.binance.org',
+  'https://bsc-dataseed2.binance.org',
+  'https://bsc-dataseed3.binance.org',
+];
 
 const JSAVIOR = '0x418b7e6bbc48ca93126c22a1e83b6420a4e0c6fd';
-const DEPLOY_BLOCK = 86700000;
+
+const LAUNCH_TIME = 1773541606;
+const CYCLE_SECS = 2592000;
+
+const SEL_LAUNCH_TIME = '0x790ca413';
+const SEL_MONTHLY_VOLUME = '0xc6752905';
+const SEL_USERS = '0xa87430ba';
 
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toISOString();
 }
 
 async function rpc(body: unknown): Promise<any> {
-  const res = await fetch(ANKR_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+  let lastErr: unknown;
+  for (const url of RPC_URLS) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error?.message ?? JSON.stringify(json.error));
+      return json.result;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+async function ethCall(data: string): Promise<string> {
+  return rpc({
+    jsonrpc: '2.0', id: 1, method: 'eth_call',
+    params: [{ to: JSAVIOR, data }, 'latest'],
   });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message);
-  return json.result;
 }
 
-async function getBlockTimestamp(blockNum: number): Promise<number> {
-  const block = await rpc({
-    jsonrpc: '2.0', id: 1, method: 'eth_getBlockByNumber',
-    params: ['0x' + blockNum.toString(16), false],
-  });
-  return parseInt(block.timestamp, 16);
+function hasVolumeInResult(result: string): boolean {
+  return parseInt(result.slice(2, 66), 16) > 0 || parseInt(result.slice(66, 130), 16) > 0;
 }
 
-const USERS_SELECTOR = '0xa87430ba';
+async function findFirstActiveCycle(wallet: string, maxCycle: number): Promise<number | null> {
+  const paddedAddr = '0x000000000000000000000000' + wallet.slice(2).toLowerCase();
 
-function decodeTotalInvested(result: string): bigint {
-  if (!result || result === '0x') return 0n;
-  const hex = result.slice(2);
-  if (hex.length < 194) return 0n;
-  return BigInt('0x' + hex.slice(192, 256));
-}
+  if (maxCycle < 0) return null;
 
-async function findFirstInvestBlock(wallet: string): Promise<number | null> {
-  const data = USERS_SELECTOR + '0'.repeat(24) + wallet.slice(2);
+  let low = 0;
+  let high = maxCycle;
+  let found = false;
 
-  const latestHex = await rpc({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] });
-  const latest = parseInt(latestHex, 16);
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const cycleHex = '0x' + BigInt(mid).toString(16).padStart(64, '0');
+    const result = await ethCall(SEL_MONTHLY_VOLUME + paddedAddr.slice(2) + cycleHex.slice(2));
 
-  let lo = DEPLOY_BLOCK;
-  let hi = latest;
-
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    const result = await rpc({
-      jsonrpc: '2.0', id: 1, method: 'eth_call',
-      params: [{ to: JSAVIOR, data }, '0x' + mid.toString(16)],
-    });
-    const invested = decodeTotalInvested(result);
-    if (invested > 0n) {
-      hi = mid;
+    if (hasVolumeInResult(result)) {
+      found = true;
+      high = mid - 1;
     } else {
-      lo = mid + 1;
+      low = mid + 1;
     }
   }
 
-  const checkResult = await rpc({
-    jsonrpc: '2.0', id: 1, method: 'eth_call',
-    params: [{ to: JSAVIOR, data }, '0x' + lo.toString(16)],
-  });
-  const checkInvested = decodeTotalInvested(checkResult);
-
-  if (checkInvested === 0n) return null;
-  return lo;
+  return found ? low : null;
 }
 
 export async function GET(
@@ -97,11 +100,8 @@ export async function GET(
 
   try {
     // Check registration
-    const usersData = USERS_SELECTOR + '0'.repeat(24) + wallet.slice(2);
-    const usersResult = await rpc({
-      jsonrpc: '2.0', id: 1, method: 'eth_call',
-      params: [{ to: JSAVIOR, data: usersData }, 'latest'],
-    });
+    const usersData = SEL_USERS + '0'.repeat(24) + wallet.slice(2).toLowerCase();
+    const usersResult = await ethCall(usersData);
     const registered = parseInt(usersResult.slice(2, 66), 16) === 1;
 
     if (!registered) {
@@ -109,15 +109,24 @@ export async function GET(
       return NextResponse.json({ date: 'coming soon' });
     }
 
-    const blockNum = await findFirstInvestBlock(wallet);
-
-    if (blockNum === null) {
+    // Check totalInvested — if 0, user registered but never invested
+    const totalInvested = parseInt(usersResult.slice(194, 258), 16);
+    if (totalInvested === 0) {
       walletCache.set(wallet, { date: 'coming soon', ts: now });
       return NextResponse.json({ date: 'coming soon' });
     }
 
-    const ts = await getBlockTimestamp(blockNum);
-    const date = formatDate(ts);
+    // Binary search monthlyVolume cycles to find first active cycle
+    const currentCycle = Math.floor((Date.now() / 1000 - LAUNCH_TIME) / CYCLE_SECS);
+    const firstCycle = await findFirstActiveCycle(wallet, currentCycle);
+
+    if (firstCycle === null) {
+      walletCache.set(wallet, { date: 'coming soon', ts: now });
+      return NextResponse.json({ date: 'coming soon' });
+    }
+
+    const joinTs = LAUNCH_TIME + firstCycle * CYCLE_SECS;
+    const date = formatDate(joinTs);
     walletCache.set(wallet, { date, ts: now });
     return NextResponse.json({ date });
   } catch (e) {
