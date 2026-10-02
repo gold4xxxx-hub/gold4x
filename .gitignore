@@ -20,3 +20,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 .vercel
+
+# local dev logs from this session
+dev-p2p.log
+dev-p2p.err
