@@ -25,6 +25,12 @@ import '../../p2p/p2p.css';
 /** Kept in step with the shared log reader's window. */
 const LOG_WINDOW = 5_000;
 
+// BSC produces a block roughly every 0.45s, so the window above is only about
+// 37 minutes of history. That is the practical limit of a list built from
+// eth_getLogs on a public node: it will not show older applicants, which is
+// why the manual wallet lookup exists and is the reliable path.
+const SECONDS_PER_BLOCK = 0.45;
+
 export default function KycAdminPage() {
   const { connect, connectors, isPending: connecting } = useConnect();
   const { address, isConnected, signer } = useEthersSigner();
@@ -32,12 +38,28 @@ export default function KycAdminPage() {
   const [applicants, setApplicants] = useState<KycApplicant[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, string> | null>(null);
+  const [detailWallet, setDetailWallet] = useState<string | null>(null);
+  const [manualWallet, setManualWallet] = useState('');
   const [loading, setLoading] = useState(false);
   const [busyWallet, setBusyWallet] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const isOwner = isP2pEscrowOwner(address);
+
+  // The event list only covers a short window (see LOG_WINDOW below), so
+  // looking an applicant up by wallet is the reliable path. It calls the
+  // contract directly, which needs no log query at all.
+  const lookupManual = async () => {
+    const value = manualWallet.trim();
+    if (!value) return;
+    if (!ethers.isAddress(value)) {
+      setError('That is not a valid wallet address.');
+      return;
+    }
+    setError(null);
+    await openDetail(ethers.getAddress(value));
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,8 +71,14 @@ export default function KycAdminPage() {
       const { applicants, truncated } = await getKycApplicants();
       setApplicants(applicants);
       setStatus(
-        `Read the most recent ${LOG_WINDOW.toLocaleString()} blocks only.` +
-          (truncated ? ' Submissions older than that are not listed.' : ''),
+        applicants.length === 0
+          ? 'No submissions in the last ' +
+            `${LOG_WINDOW.toLocaleString()} blocks, which is roughly ` +
+            `${Math.round((LOG_WINDOW * SECONDS_PER_BLOCK) / 60)} minutes of BSC history. ` +
+            'If someone applied earlier than that, look them up by wallet below.'
+          : `Showing ${applicants.length} from the last ` +
+            `${LOG_WINDOW.toLocaleString()} blocks.` +
+            (truncated ? ' Older submissions may not be listed.' : ''),
       );
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
@@ -92,13 +120,21 @@ export default function KycAdminPage() {
         mobile: String(b[1]),
         email: String(b[2]),
         pan: String(b[3]),
+        submitted: String(b[4]),
         verified: String(b[5]),
         updatedAt: String(b[6]),
       });
+      setDetailWallet(wallet);
       setExpanded(wallet);
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
-      setError(err?.shortMessage || err?.message || 'Could not read that applicant.');
+      setDetail(null);
+      setExpanded(null);
+      setError(
+        err?.shortMessage ||
+          err?.message ||
+          'Could not read that applicant. If they have not submitted KYC, the contract rejects the read.',
+      );
     } finally {
       setBusyWallet(null);
     }
@@ -118,9 +154,12 @@ export default function KycAdminPage() {
         signer,
       );
       await (await c.verifyKYC(wallet, next)).wait();
-      setStatus(`${shortAddress(wallet)} ${next ? 'approved' : 'rejected'}.`);
-      setExpanded(null);
-      setDetail(null);
+      setStatus(
+        `${shortAddress(wallet)} ${next ? 'approved' : 'rejected'} on-chain. ` +
+          'They can trade immediately if approved.',
+      );
+      // Refresh the event list, but keep the panel open so the result is
+      // visible. A user found by manual lookup will not appear in the list.
       await load();
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
@@ -180,6 +219,40 @@ export default function KycAdminPage() {
 
         {error && <div className="p2p-alert p2p-alert--error">{error}</div>}
         {status && <div className="p2p-alert p2p-alert--info">{status}</div>}
+
+        {/* Reliable path. The event list can only cover a short window, so
+            looking a wallet up directly always works: it calls the contract
+            rather than scanning for events. */}
+        <section className="p2p-panel p-6">
+          <div className="p2p-panel__head">
+            <h2 className="p2p-panel__title">Look up an applicant</h2>
+            <span className="p2p-panel__count">any wallet, any age</span>
+          </div>
+          <p className="text-sm text-[#b9b0a3] mb-4">
+            Paste the applicant&apos;s wallet address. This reads their record
+            straight from the contract, so it works even if their submission is
+            older than the list below.
+          </p>
+          <div className="flex gap-2">
+            <input
+              className="p2p-input flex-1"
+              placeholder="0x…"
+              aria-label="Applicant wallet address"
+              value={manualWallet}
+              onChange={(e) => setManualWallet(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void lookupManual();
+              }}
+            />
+            <button
+              className="p2p-btn"
+              onClick={() => void lookupManual()}
+              disabled={busyWallet === manualWallet.trim() || !manualWallet.trim()}
+            >
+              <span>Look up</span>
+            </button>
+          </div>
+        </section>
 
         <section className="p2p-panel p-6">
           <div className="p2p-panel__head">
@@ -263,18 +336,49 @@ export default function KycAdminPage() {
           )}
         </section>
 
-        {expanded && detail && (
+        {expanded && detail && detailWallet && (
           <section className="p2p-panel p-6">
             <div className="p2p-panel__head">
               <h2 className="p2p-panel__title">Applicant detail</h2>
-              <button className="p2p-btn p2p-btn--sm p2p-btn--ghost" onClick={() => { setExpanded(null); setDetail(null); }}>
+              <button className="p2p-btn p2p-btn--sm p2p-btn--ghost" onClick={() => { setExpanded(null); setDetail(null); setDetailWallet(null); }}>
                 <span>Close</span>
               </button>
             </div>
 
+            <div className="p2p-tiles">
+              <div className="p2p-tile">
+                <div className="p2p-tile__label">Status</div>
+                <div className="p2p-tile__value">
+                  {detail.verified === 'true' ? 'Verified' : 'Pending'}
+                </div>
+              </div>
+              <div className="p2p-tile">
+                <div className="p2p-tile__label">Actions</div>
+                <div className="flex gap-2 mt-1">
+                  {detail.verified === 'true' ? (
+                    <button
+                      className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                      onClick={() => void setVerified(detailWallet, false)}
+                      disabled={busyWallet === detailWallet}
+                    >
+                      <span>Revoke verification</span>
+                    </button>
+                  ) : (
+                    <button
+                      className="p2p-btn p2p-btn--sm"
+                      onClick={() => void setVerified(detailWallet, true)}
+                      disabled={busyWallet === detailWallet}
+                    >
+                      <span>Approve</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <dl className="p2p-bank__grid">
               <dt>Wallet</dt>
-              <dd>{expanded}</dd>
+              <dd>{detailWallet}</dd>
               <dt>Name</dt>
               <dd>{detail.bankHolderName || '—'}</dd>
               <dt>Bank</dt>
