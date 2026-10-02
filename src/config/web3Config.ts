@@ -54,11 +54,21 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc } from 'viem/chains';
 import { cookieStorage, createStorage } from 'wagmi';
 
+// WalletConnect Cloud project id. Mobile wallets (SafePal on Android, for
+// example) reach the dApp through the WalletConnect relay, and that relay is
+// keyed off this id. Without a real one the placeholder below is rejected by
+// the network, so only browser extensions can connect — which is why the
+// desktop worked and phones did not.
+//
+// Get a free id at cloud.walletconnect.com and set
+// NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in .env.local (and in Vercel under
+// Settings > Environment Variables, for every environment).
+const WALLETCONNECT_PROJECT_ID =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() || '';
+
 export const web3Config = getDefaultConfig({
   appName: 'JSAVIOR',
-  projectId:
-    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
-    'YOUR_WALLETCONNECT_PROJECT_ID',
+  projectId: WALLETCONNECT_PROJECT_ID || 'placeholder-project-id-not-configured',
   chains: [bsc],
   ssr: true,
   multiInjectedProviderDiscovery: true,
@@ -66,6 +76,10 @@ export const web3Config = getDefaultConfig({
     storage: cookieStorage,
   }),
 });
+
+// Surfaced so the UI can explain a mobile connection failure instead of the
+// button silently doing nothing. Checked by the connect panels.
+export const isWalletConnectConfigured = WALLETCONNECT_PROJECT_ID.length > 0;
 
 export const BSC_CONFIG = {
   chainId: 56,

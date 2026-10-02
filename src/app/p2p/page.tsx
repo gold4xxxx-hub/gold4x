@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ethers } from 'ethers';
 import type { Signer } from 'ethers';
 import { useConnection, useConnectorClient, useConnect, useSwitchChain } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './p2p.css';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
@@ -127,7 +128,7 @@ function useSigner() {
   const { address, isConnected, connector } = useConnection();
   const { data: client } = useConnectorClient({ connector });
   const { switchChain, isPending: switching } = useSwitchChain();
-  const { connect: connectWallet, connectors, isPending: connecting } = useConnect();
+  const { isPending: connecting } = useConnect();
 
   // Derive the EIP-1193 provider from the connector client. viem clients expose
   // it as `transport`, which is the actual request-capable object for an
@@ -161,16 +162,9 @@ function useSigner() {
   // gesture, so it is triggered from the button rather than on mount.
   const wrongChain = isConnected && client && client.chain?.id !== BSC_CONFIG.chainId;
 
-  const connect = async () => {
-    const injectedConnector =
-      connectors.find((c) => c.id === 'injected') ?? connectors[0];
-    if (!injectedConnector) {
-      alert('No browser wallet detected. Install SafePal, MetaMask or similar.');
-      return;
-    }
-    connectWallet({ connector: injectedConnector });
-  };
-
+  // The page renders RainbowKit's ConnectButton rather than calling wagmi's
+  // connect() with a hand-picked connector, which silently did nothing when no
+  // injected connector was present.
   const ensureBsc = async () => {
     if (!wrongChain) return true;
     try {
@@ -184,7 +178,6 @@ function useSigner() {
   return {
     account,
     signer: ethersSigner,
-    connect,
     busy: connecting || switching,
     isConnected,
     wrongChain: Boolean(wrongChain),
@@ -196,7 +189,6 @@ const P2PPage: React.FC = () => {
   const {
     account,
     signer,
-    connect,
     busy: connecting,
     wrongChain,
     ensureBsc,
@@ -459,13 +451,9 @@ const P2PPage: React.FC = () => {
                   </span>
                 </>
               ) : (
-                <button
-                  className="p2p-btn"
-                  onClick={() => void connect()}
-                  disabled={connecting}
-                >
-                  {connecting ? 'Connecting…' : 'Connect Wallet'}
-                </button>
+                <div className="gold-connect-wrapper rounded-md">
+                  <ConnectButton />
+                </div>
               )}
               {account && wrongChain && (
                 <button

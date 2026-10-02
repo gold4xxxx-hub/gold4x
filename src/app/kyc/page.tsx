@@ -9,7 +9,8 @@
 // invisible to the trading desk. That path has been removed.
 
 import { useEffect, useState } from 'react';
-import { useConnect, useSwitchChain } from 'wagmi';
+import { useSwitchChain } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import KycPanel from '@/components/p2p/KycPanel';
 import { useKycStatus, getStoredKyc } from '@/hooks/useP2PEscrow';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
@@ -18,7 +19,6 @@ import { shortAddress } from '@/config/p2pEscrow';
 import '../p2p/p2p.css';
 
 export default function KycPage() {
-  const { connect, connectors, isPending: connecting } = useConnect();
   const { switchChain, isPending: switching } = useSwitchChain();
 
   const { address, isConnected, signer, chainId } = useEthersSigner();
@@ -53,15 +53,6 @@ export default function KycPage() {
       cancelled = true;
     };
   }, [address, kyc.submitted, kyc.updatedAt]);
-
-  const onConnect = () => {
-    const injected = connectors.find((c) => c.id === 'injected') ?? connectors[0];
-    if (!injected) {
-      alert('No browser wallet detected. Install SafePal, MetaMask or similar.');
-      return;
-    }
-    connect({ connector: injected });
-  };
 
   const onSwitch = () => switchChain({ chainId: BSC_CONFIG.chainId });
 
@@ -120,13 +111,12 @@ export default function KycPage() {
               Connect the wallet you want verified. The address is the identity
               on-chain, so connect the same wallet you intend to trade with.
             </p>
-            <button
-              className="p2p-btn"
-              onClick={onConnect}
-              disabled={connecting || switching}
-            >
-              <span>{connecting || switching ? 'Connecting…' : 'Connect Wallet'}</span>
-            </button>
+            {/* RainbowKit's ConnectButton, same as the top nav, so it offers
+                every connector that is actually present and reports its own
+                errors. The previous hand-rolled button silently did nothing. */}
+            <div className="gold-connect-wrapper rounded-md">
+              <ConnectButton />
+            </div>
           </div>
         )}
 

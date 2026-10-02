@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import { useConnect } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
   P2PESCROW_CONTRACT_ABI,
@@ -32,7 +32,6 @@ const LOG_WINDOW = 5_000;
 const SECONDS_PER_BLOCK = 0.45;
 
 export default function KycAdminPage() {
-  const { connect, connectors, isPending: connecting } = useConnect();
   const { address, isConnected, signer } = useEthersSigner();
 
   const [applicants, setApplicants] = useState<KycApplicant[]>([]);
@@ -169,10 +168,15 @@ export default function KycAdminPage() {
     }
   };
 
-  const onConnect = () => {
-    const injected = connectors.find((c) => c.id === 'injected') ?? connectors[0];
-    if (injected) connect({ connector: injected });
-  };
+  // The previous button called wagmi's connect() with a hand-picked injected
+  // connector and did nothing when none was found, so it failed silently for
+  // everyone. RainbowKit's ConnectButton enumerates whatever is actually
+  // available and surfaces its own errors, matching the top-nav button.
+  const walletConnect = (
+    <div className="gold-connect-wrapper rounded-md">
+      <ConnectButton />
+    </div>
+  );
 
   return (
     <div className="fx-shell p2p-root">
@@ -203,9 +207,7 @@ export default function KycAdminPage() {
               Connect the owner wallet to review applicants. Reading is open,
               but approving is restricted to the contract owner.
             </p>
-            <button className="p2p-btn" onClick={onConnect} disabled={connecting}>
-              <span>{connecting ? 'Connecting…' : 'Connect Wallet'}</span>
-            </button>
+            {walletConnect}
           </div>
         )}
 
