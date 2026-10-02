@@ -14,7 +14,10 @@ type Props = {
   onChange: (cid: string) => void;
 };
 
-const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
+// image/* rather than an explicit extension list. Mobile browsers use the
+// accept filter to decide whether to surface the camera, and a narrow
+// extension list suppresses it on iOS and in in-app browsers like SafePal.
+const ACCEPT = 'image/*';
 const MAX_BYTES = 5 * 1024 * 1024;
 
 // Strip an ipfs:// prefix or a full gateway URL down to the bare CID, so a
@@ -102,39 +105,52 @@ export default function DocumentUpload({ id, label, value, onChange }: Props) {
     <div>
       <label className="p2p-label" htmlFor={id}>{label}</label>
 
-      <input
-        ref={inputRef}
-        id={id}
-        type="file"
-        accept={ACCEPT}
-        onChange={onPick}
-        className="sr-only"
-      />
-
+      {/* The input is positioned over the whole card at full size with zero
+          opacity, rather than being collapsed with sr-only. Mobile browsers
+          only offer the camera for a real, laid-out file input, and a 1px
+          hidden one loses that option. The card below is the visible chrome. */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          padding: '0.6rem',
+          position: 'relative',
           borderRadius: '11px',
           border: value
             ? '1px solid rgba(45,139,120,0.3)'
             : '1px dashed rgba(212,168,67,0.28)',
           background: value ? 'rgba(45,139,120,0.05)' : 'rgba(255,255,255,0.02)',
-          cursor: 'pointer',
           transition: 'border-color 0.25s ease, background 0.25s ease',
         }}
       >
+        <input
+          ref={inputRef}
+          id={id}
+          type="file"
+          accept={ACCEPT}
+          onChange={onPick}
+          aria-label={label}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            opacity: 0,
+            // Keep it above the visual layer so a tap anywhere on the card
+            // hits the input directly.
+            zIndex: 2,
+            cursor: 'pointer',
+            fontSize: '100px', // stops iOS zooming the page on focus
+          }}
+        />
+
+        <div
+          aria-hidden="true"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.6rem',
+            pointerEvents: 'none',
+          }}
+        >
         {preview ? (
           // Blob URL for a local object, so next/image optimisation does not
           // apply here and plain img is the correct choice.
@@ -201,10 +217,11 @@ export default function DocumentUpload({ id, label, value, onChange }: Props) {
                 Choose image
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--fx-ink-subtle)' }}>
-                JPG, PNG or HEIC · max 5 MB
+                Take a photo or pick a file · max 5 MB
               </div>
             </>
           )}
+          </div>
         </div>
       </div>
 
