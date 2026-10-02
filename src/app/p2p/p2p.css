@@ -1,0 +1,1027 @@
+/* ==========================================================================
+   P2P Desk — premium layer.
+
+   Scoped entirely under .p2p-root so nothing leaks into the rest of the app.
+   Built on top of the existing fx-* design tokens rather than replacing them.
+
+   Every effect here is decorative. All of it collapses under
+   prefers-reduced-motion.
+   ========================================================================== */
+
+.p2p-root {
+  position: relative;
+  isolation: isolate;
+}
+
+/* --------------------------------------------------------------------------
+   Ambient backdrop: two slow-drifting gold/emerald orbs over the black base,
+   plus a faint grid to give the flat panels some structure.
+   -------------------------------------------------------------------------- */
+
+.p2p-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.p2p-ambient__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.p2p-ambient__orb--gold {
+  width: 46vw;
+  height: 46vw;
+  min-width: 320px;
+  min-height: 320px;
+  top: -14vw;
+  left: -8vw;
+  background: radial-gradient(circle, rgba(212, 168, 67, 0.16), transparent 70%);
+  animation: p2p-drift-a 26s ease-in-out infinite alternate;
+}
+
+.p2p-ambient__orb--emerald {
+  width: 40vw;
+  height: 40vw;
+  min-width: 280px;
+  min-height: 280px;
+  bottom: -12vw;
+  right: -6vw;
+  background: radial-gradient(circle, rgba(77, 160, 140, 0.13), transparent 70%);
+  animation: p2p-drift-b 31s ease-in-out infinite alternate;
+}
+
+.p2p-ambient__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 64px 64px;
+  /* Fade the grid out toward the edges so it never reads as a hard pattern. */
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 78%);
+}
+
+@keyframes p2p-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(6vw, 4vw, 0) scale(1.12); }
+}
+
+@keyframes p2p-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.08); }
+  to   { transform: translate3d(-5vw, -5vw, 0) scale(1); }
+}
+
+/* --------------------------------------------------------------------------
+   Hero
+   -------------------------------------------------------------------------- */
+
+.p2p-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(135deg, rgba(201, 168, 76, 0.07), transparent 42%),
+    linear-gradient(180deg, #101010 0%, #0a0a0a 100%);
+  box-shadow:
+    0 40px 90px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Hairline of gold along the top edge — the main "premium" cue. */
+.p2p-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 67, 0.65), transparent);
+}
+
+/* Slow specular sweep across the hero surface. */
+.p2p-hero::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.045),
+    transparent
+  );
+  transform: skewX(-18deg);
+  animation: p2p-sweep 9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes p2p-sweep {
+  0%, 62% { left: -60%; }
+  92%, 100% { left: 130%; }
+}
+
+.p2p-hero__inner {
+  position: relative;
+  z-index: 1;
+}
+
+.p2p-hero__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  background: linear-gradient(180deg, #ffffff 30%, rgba(255, 255, 255, 0.72) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Stat cards
+   -------------------------------------------------------------------------- */
+
+.p2p-stat {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  background: linear-gradient(180deg, #101010 0%, #0b0b0b 100%);
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.4s ease,
+    box-shadow 0.4s ease;
+}
+
+/* Sheen that tracks the pointer is set from JS as --p2p-mx / --p2p-my. */
+.p2p-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    320px circle at var(--p2p-mx, 50%) var(--p2p-my, 0%),
+    rgba(212, 168, 67, 0.10),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.p2p-stat:hover {
+  transform: translateY(-4px);
+  border-color: rgba(212, 168, 67, 0.22);
+  box-shadow:
+    0 34px 70px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(212, 168, 67, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.p2p-stat:hover::after {
+  opacity: 1;
+}
+
+.p2p-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fx-ink-label);
+  font-weight: 500;
+}
+
+.p2p-stat__value {
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, var(--fx-gold-highlight), var(--fx-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--fx-gold-text);
+}
+
+.p2p-stat__value--plain {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--fx-ink);
+}
+
+.p2p-stat__sub {
+  font-size: 0.68rem;
+  color: var(--fx-ink-subtle);
+}
+
+/* Count-up numbers get a brief pop when they land. */
+@keyframes p2p-pop {
+  0%   { transform: scale(0.96); opacity: 0.5; }
+  60%  { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.p2p-stat__value--pop {
+  animation: p2p-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --------------------------------------------------------------------------
+   Panels
+   -------------------------------------------------------------------------- */
+
+.p2p-panel {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: linear-gradient(180deg, #0e0e0e 0%, #0a0a0a 100%);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.p2p-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.p2p-panel__title {
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fx-ink);
+}
+
+.p2p-panel__count {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fx-ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   Table
+   -------------------------------------------------------------------------- */
+
+.p2p-table-wrap {
+  overflow-x: auto;
+  /* Fade the right edge so a scrolled row does not get clipped hard. */
+  mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+}
+
+.p2p-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+
+.p2p-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fx-ink-label);
+  background: #0c0c0c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.p2p-table tbody td {
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--fx-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.p2p-table tbody tr {
+  transition: background 0.25s ease;
+}
+
+.p2p-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.022);
+  color: var(--fx-ink);
+}
+
+.p2p-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Sell/buy side marker as a left rail on the row. */
+.p2p-row--sell td:first-child,
+.p2p-row--buy td:first-child {
+  position: relative;
+}
+
+.p2p-row--sell td:first-child::before,
+.p2p-row--buy td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+}
+
+.p2p-row--sell td:first-child::before { background: rgba(216, 76, 76, 0.55); }
+.p2p-row--buy td:first-child::before  { background: rgba(201, 168, 76, 0.55); }
+
+.p2p-row--sell { background: rgba(216, 76, 76, 0.035); }
+.p2p-row--buy  { background: rgba(201, 168, 76, 0.03); }
+
+.p2p-num {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
+}
+
+.p2p-side {
+  display: inline-block;
+  padding: 0.16rem 0.5rem;
+  border-radius: 5px;
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.p2p-side--sell {
+  color: #e8a0a0;
+  background: rgba(216, 76, 76, 0.12);
+  border: 1px solid rgba(216, 76, 76, 0.25);
+}
+
+.p2p-side--buy {
+  color: var(--fx-gold-highlight);
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+}
+
+.p2p-addr {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--fx-ink-subtle);
+}
+
+.p2p-addr--me {
+  color: var(--fx-emerald-bright);
+}
+
+/* --------------------------------------------------------------------------
+   Badges & chips
+   -------------------------------------------------------------------------- */
+
+.p2p-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 5px;
+  font-size: 0.63rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.p2p-chip--open {
+  color: var(--fx-emerald-bright);
+  background: rgba(45, 139, 120, 0.12);
+  border-color: rgba(45, 139, 120, 0.28);
+}
+
+.p2p-chip--paid {
+  color: var(--fx-gold-highlight);
+  background: rgba(201, 168, 76, 0.1);
+  border-color: rgba(201, 168, 76, 0.28);
+}
+
+.p2p-chip--done {
+  color: var(--fx-ink-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.p2p-chip--dead {
+  color: #e08b8b;
+  background: rgba(216, 76, 76, 0.1);
+  border-color: rgba(216, 76, 76, 0.26);
+}
+
+.p2p-chip--muted {
+  color: var(--fx-ink-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Pulsing dot for a live/open state. */
+.p2p-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.p2p-chip--open .p2p-dot {
+  animation: p2p-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes p2p-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(45, 139, 120, 0.5); }
+  50%      { opacity: 0.7; box-shadow: 0 0 0 4px rgba(45, 139, 120, 0); }
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.p2p-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.05rem;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 168, 67, 0.28);
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.16), rgba(184, 146, 44, 0.08));
+  color: var(--fx-gold-highlight);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+/* Wipe fill on hover. */
+.p2p-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(232, 197, 106, 0.28), rgba(212, 168, 67, 0.14));
+  transform: translateY(101%);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.p2p-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(232, 197, 106, 0.5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 22px rgba(212, 168, 67, 0.14);
+}
+
+.p2p-btn:hover:not(:disabled)::before {
+  transform: translateY(0);
+}
+
+.p2p-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.p2p-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.p2p-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.p2p-btn--ghost {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--fx-ink-muted);
+}
+
+.p2p-btn--ghost::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+}
+
+.p2p-btn--sm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  border-radius: 7px;
+}
+
+.p2p-btn--block {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Form controls
+   -------------------------------------------------------------------------- */
+
+.p2p-field {
+  position: relative;
+}
+
+.p2p-input,
+.p2p-select {
+  width: 100%;
+  padding: 0.62rem 0.85rem;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.022);
+  color: var(--fx-ink);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.p2p-input::placeholder {
+  color: var(--fx-ink-subtle);
+}
+
+.p2p-input:focus,
+.p2p-select:focus {
+  border-color: rgba(212, 168, 67, 0.45);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: 0 0 0 3px rgba(212, 168, 67, 0.09);
+}
+
+.p2p-select {
+  appearance: none;
+  cursor: pointer;
+  /* Chevron drawn inline so no extra asset or wrapper element is needed. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.45) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.45) 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) calc(50% + 1px),
+    calc(100% - 12px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
+}
+
+.p2p-select option {
+  background: #101010;
+  color: var(--fx-ink);
+}
+
+.p2p-input:disabled,
+.p2p-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Native number spinners clash with the dark surface. */
+.p2p-input[type='number']::-webkit-outer-spin-button,
+.p2p-input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.p2p-input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Read-only value that mirrors an input, e.g. the computed INR total. */
+.p2p-readout {
+  display: flex;
+  align-items: center;
+  padding: 0.62rem 0.85rem;
+  border-radius: 9px;
+  border: 1px dashed rgba(212, 168, 67, 0.22);
+  background: rgba(201, 168, 76, 0.045);
+  color: var(--fx-gold-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.p2p-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fx-ink-label);
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   Alerts
+   -------------------------------------------------------------------------- */
+
+.p2p-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-radius: 11px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  border: 1px solid;
+  animation: p2p-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.p2p-alert--info {
+  color: var(--fx-ink-muted);
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+.p2p-alert--warn {
+  color: #e8c9a0;
+  background: rgba(201, 168, 76, 0.07);
+  border-color: rgba(201, 168, 76, 0.24);
+}
+
+.p2p-alert--error {
+  color: #e8b4b4;
+  background: rgba(216, 76, 76, 0.08);
+  border-color: rgba(216, 76, 76, 0.3);
+}
+
+@keyframes p2p-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --------------------------------------------------------------------------
+   Modal
+   -------------------------------------------------------------------------- */
+
+.p2p-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: p2p-fade 0.25s ease;
+}
+
+@keyframes p2p-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.p2p-modal {
+  position: relative;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(212, 168, 67, 0.16);
+  background: linear-gradient(180deg, #121212 0%, #0b0b0b 100%);
+  box-shadow:
+    0 50px 110px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: p2p-modal-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.p2p-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 67, 0.6), transparent);
+}
+
+@keyframes p2p-modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.p2p-modal__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fx-ink-label);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.p2p-modal__close:hover {
+  background: rgba(216, 76, 76, 0.14);
+  border-color: rgba(216, 76, 76, 0.35);
+  color: #fff;
+}
+
+/* Detail tiles inside the trade modal. */
+.p2p-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.p2p-tile {
+  padding: 0.8rem 0.9rem;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.p2p-tile:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.p2p-tile__label {
+  margin-bottom: 0.35rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fx-ink-label);
+  font-weight: 500;
+}
+
+.p2p-tile__value {
+  font-size: 0.92rem;
+  color: var(--fx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.p2p-tile__value--mono {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.p2p-tile--urgent {
+  border-color: rgba(216, 76, 76, 0.32);
+  background: rgba(216, 76, 76, 0.06);
+}
+
+.p2p-tile--urgent .p2p-tile__value {
+  color: #e8b4b4;
+}
+
+/* Bank details block. Monospace values so account digits stay readable. */
+.p2p-bank {
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 168, 67, 0.16);
+  background:
+    linear-gradient(135deg, rgba(201, 168, 76, 0.05), transparent 55%),
+    rgba(255, 255, 255, 0.018);
+  margin-bottom: 1rem;
+}
+
+.p2p-bank__grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.82rem;
+}
+
+.p2p-bank__grid dt {
+  color: var(--fx-ink-label);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  align-self: center;
+}
+
+.p2p-bank__grid dd {
+  color: var(--fx-ink);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+/* Chat */
+.p2p-chat {
+  height: 9.5rem;
+  overflow-y: auto;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 0.83rem;
+  line-height: 1.55;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.p2p-chat::-webkit-scrollbar { width: 6px; }
+.p2p-chat::-webkit-scrollbar-track { background: transparent; }
+.p2p-chat::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+}
+.p2p-chat::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 168, 67, 0.3);
+}
+
+.p2p-chat__msg {
+  margin-bottom: 0.4rem;
+  animation: p2p-slide-in 0.3s ease;
+}
+
+.p2p-chat__who {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fx-gold-text);
+  margin-right: 0.35rem;
+}
+
+.p2p-chat__empty {
+  color: var(--fx-ink-subtle);
+  font-size: 0.8rem;
+}
+
+/* --------------------------------------------------------------------------
+   Empty state
+   -------------------------------------------------------------------------- */
+
+.p2p-empty {
+  padding: 2.75rem 1rem;
+  text-align: center;
+}
+
+.p2p-empty__ring {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 0.9rem;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 168, 67, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fx-gold-text);
+  background: rgba(201, 168, 76, 0.05);
+}
+
+.p2p-empty__text {
+  color: var(--fx-ink-label);
+  font-size: 0.85rem;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+/* Loading bar shown while chain state is in flight. */
+.p2p-bar {
+  height: 2px;
+  border-radius: 100px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 168, 67, 0.7),
+    transparent
+  );
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: p2p-bar 1.4s ease-in-out infinite;
+  overflow: hidden;
+}
+
+@keyframes p2p-bar {
+  0%   { background-position: -40% 0; }
+  100% { background-position: 140% 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Footer / contract link
+   -------------------------------------------------------------------------- */
+
+.p2p-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--fx-ink-subtle);
+}
+
+.p2p-foot a {
+  color: var(--fx-gold-text);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.25s ease, color 0.25s ease;
+}
+
+.p2p-foot a:hover {
+  color: var(--fx-gold-highlight);
+  border-bottom-color: rgba(212, 168, 67, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   KYC
+   -------------------------------------------------------------------------- */
+
+.p2p-kyc-fields {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+/* Kicker is used in a few places outside .p2p-stat, so mirror it here. */
+.p2p-kicker {
+  font-size: 0.61rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fx-ink-label);
+  font-weight: 500;
+}
+
+.p2p-kyc-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  background: rgba(201, 168, 76, 0.05);
+  color: var(--fx-gold-text);
+  font-size: 0.8rem;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .p2p-tiles { grid-template-columns: 1fr; }
+  .p2p-hero__title { font-size: 1.75rem; }
+  .p2p-stat__value { font-size: 1.7rem; }
+  .p2p-ambient__orb { opacity: 0.35; }
+  .p2p-bank__grid { grid-template-columns: 1fr; gap: 0.15rem 0; }
+  .p2p-bank__grid dd { margin-bottom: 0.5rem; }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion: kill every animation and transition. Decorative only, so
+   removing them costs no information.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .p2p-root *,
+  .p2p-root *::before,
+  .p2p-root *::after,
+  .p2p-ambient *,
+  .p2p-backdrop,
+  .p2p-modal {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .p2p-hero::after { display: none; }
+  .p2p-ambient__orb { animation: none; }
+  .p2p-stat:hover { transform: none; }
+}

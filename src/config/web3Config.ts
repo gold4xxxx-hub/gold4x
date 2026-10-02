@@ -1,5 +1,6 @@
 // Contract constants - safe for server and client
 import jsaviorAbi from './jsaviorAbi.json';
+import p2pEscrowAbi from './p2pEscrowAbi.json';
 
 export const JSAVIOR_CONTRACT_ADDRESS =
   '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
@@ -17,8 +18,21 @@ export const USDT_CONTRACT_ADDRESS =
   '0x55d398326f99059ff775485246999027b3197955';
 export const USDT_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 
-export const JMFEscrow_CONTRACT_ADDRESS = '';
-export const JMFEscrow_CONTRACT_ABI: any[] = [];
+// P2P escrow - verified on BSC (P2PEscrow, solidity 0.8.34)
+export const P2PESCROW_CONTRACT_ADDRESS =
+  '0x8578Aaf3bA423e62A5e6ea04b69fe91B8545c2C0';
+export const P2PESCROW_CONTRACT_ABI = p2pEscrowAbi;
+
+if (!/^0x[a-fA-F0-9]{40}$/.test(P2PESCROW_CONTRACT_ADDRESS)) {
+  throw new Error(
+    `Invalid contract address: ${P2PESCROW_CONTRACT_ADDRESS}`
+  );
+}
+
+// @deprecated Kept for older imports. The deployed contract exposes
+// createAd/startTrade/confirmTrade, NOT createEscrow/fundEscrow/release/refund.
+export const JMFEscrow_CONTRACT_ADDRESS = P2PESCROW_CONTRACT_ADDRESS;
+export const JMFEscrow_CONTRACT_ABI = p2pEscrowAbi;
 
 export const SAMPLE_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 

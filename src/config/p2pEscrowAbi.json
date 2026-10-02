@@ -1,0 +1,1254 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "AdCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum P2PEscrow.PairType",
+        "name": "pairType",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "isSellOrder",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "cryptoAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quoteAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "AdCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "jsavAddr",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "usdtAddr",
+        "type": "address"
+      }
+    ],
+    "name": "ChainConfigured",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      }
+    ],
+    "name": "ChainDisabled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "message",
+        "type": "string"
+      }
+    ],
+    "name": "ChatMessage",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "buyer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "screenshotHash",
+        "type": "string"
+      }
+    ],
+    "name": "FiatMarkedPaid",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "KYCSubmitted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "KYCUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "status",
+        "type": "bool"
+      }
+    ],
+    "name": "KYCVerified",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minW",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maxW",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "defW",
+        "type": "uint256"
+      }
+    ],
+    "name": "PaymentWindowUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "hash",
+        "type": "string"
+      }
+    ],
+    "name": "ScreenshotShared",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "TradeCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "TradeCompleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "confirmer",
+        "type": "address"
+      }
+    ],
+    "name": "TradeConfirmed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "adId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "initiator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum P2PEscrow.PairType",
+        "name": "pairType",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "cryptoAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quoteAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      }
+    ],
+    "name": "TradeStarted",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "adCounter",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "adId",
+        "type": "uint256"
+      }
+    ],
+    "name": "cancelAd",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "cancelExpiredFiatTrade",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "chainPairs",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "jsav",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "usdt",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "confirmFiatReceived",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "confirmTrade",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum P2PEscrow.PairType",
+        "name": "pairType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isSellOrder",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "cryptoAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quoteAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "paymentWindow",
+        "type": "uint256"
+      }
+    ],
+    "name": "createAd",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "defaultPaymentWindow",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      }
+    ],
+    "name": "disableChain",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "adId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getAd",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "enum P2PEscrow.PairType",
+        "name": "pairType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isSellOrder",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "originalCrypto",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "originalQuote",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "remainingCrypto",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "paymentWindow",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCurrentPair",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "jsavAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "usdtAddr",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getKYCForAdmin",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "bankHolderName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankAccountNumber",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "ifscCode",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "aadharFrontHash",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getKYCForAdmin2",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "aadharBackHash",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "mobile",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "email",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "pan",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "submitted",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "verified",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "updatedAt",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMyKYC",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "bankHolderName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankAccountNumber",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "ifscCode",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "aadharFrontHash",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMyKYC2",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "aadharBackHash",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "mobile",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "email",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "pan",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "submitted",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "verified",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "updatedAt",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPair",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "jsavAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "usdtAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getTrade",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "adId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum P2PEscrow.PairType",
+        "name": "pairType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isFiat",
+        "type": "bool"
+      },
+      {
+        "internalType": "address",
+        "name": "seller",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "buyer",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "cryptoToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "cryptoAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quoteAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum P2PEscrow.TradeStatus",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getTradeBankDetails",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "bankHolderName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankAccountNumber",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "ifscCode",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "bankName",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "isVerified",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "screenshotHash",
+        "type": "string"
+      }
+    ],
+    "name": "markFiatPaid",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxPaymentWindow",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minPaymentWindow",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "ownerForceCancel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      }
+    ],
+    "name": "ownerForceComplete",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "tokenAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "rescueToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "message",
+        "type": "string"
+      }
+    ],
+    "name": "sendMessage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "jsavAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "usdtAddr",
+        "type": "address"
+      }
+    ],
+    "name": "setChainPair",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "minW",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxW",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "defW",
+        "type": "uint256"
+      }
+    ],
+    "name": "setPaymentWindows",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tradeId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "ipfsHash",
+        "type": "string"
+      }
+    ],
+    "name": "shareScreenshot",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "adId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "cryptoAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "startTrade",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "bankHolderName",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "bankAccountNumber",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "ifscCode",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "bankName",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "aadharFrontHash",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "aadharBackHash",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "mobile",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "email",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "pan",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct P2PEscrow.KYCData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "name": "submitKYC",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tradeCounter",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "bankHolderName",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "bankAccountNumber",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "ifscCode",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "bankName",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "aadharFrontHash",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "aadharBackHash",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "mobile",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "email",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "pan",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct P2PEscrow.KYCData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "name": "updateKYC",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "_isVerified",
+        "type": "bool"
+      }
+    ],
+    "name": "verifyKYC",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

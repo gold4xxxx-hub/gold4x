@@ -1,403 +1,962 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { JMFEscrow_CONTRACT_ADDRESS, JMFEscrow_CONTRACT_ABI } from '@/config/web3Config';
-import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
-import { GOLD4X_CONTRACT_ADDRESS, GOLD4X_CONTRACT_ABI } from '@/config/web3Config';
-import { USDT_CONTRACT_ADDRESS, USDT_CONTRACT_ABI } from '@/config/web3Config';
+// P2P trading desk. Reads live P2PEscrow state; all writes go through the
+// verified ABI. Pairs supported: JSAV/INR and USDT/INR. G4X is not supported
+// by the deployed contract.
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ethers } from 'ethers';
+import type { Signer } from 'ethers';
+import './p2p.css';
+import {
+  P2PESCROW_CONTRACT_ADDRESS,
+  BSC_CONFIG,
+} from '@/config/web3Config';
+import {
+  FIXED_INR_PRICES,
+  tokenForPairType,
+  TRADE_STATUS_LABEL,
+  shortAddress,
+  paiseToInr,
+  inrValueOf,
+  TradeStatus,
+  type P2PToken,
+} from '@/config/p2pEscrow';
+import {
+  useEscrowStats,
+  useKycStatus,
+  useAds,
+  useTrades,
+  createAd,
+  startTrade,
+  markFiatPaid,
+  confirmFiatReceived,
+  cancelAd,
+  cancelExpiredFiatTrade,
+  sendMessage,
+  getTradeBankDetails,
+  type AdRow,
+  type TradeRow,
+} from '@/hooks/useP2PEscrow';
+import { getTradeChat, getTradeEventState, type ChatEntry } from '@/lib/p2pLogs';
+import KycPanel from '@/components/p2p/KycPanel';
 
-interface Order {
-  id: number;
-  token: 'JSAV' | 'G4X' | 'USDT';
-  type: 'buy' | 'sell';
-  amount: number;
-  price: number;
-  user: string;
-  status: 'open' | 'in progress' | 'payment sent' | 'completed' | 'cancelled';
+/** Seconds remaining until `deadline`, floored at 0. */
+function secondsLeft(deadline: number, now: number): number {
+  if (!deadline) return 0;
+  return Math.max(0, deadline - now);
 }
 
-const initialOrders: Order[] = [];
-
-interface ChatMessage {
-  sender: string;
-  text: string;
-  time: string;
+function formatCountdown(deadline: number, now: number): string | null {
+  if (!deadline) return null;
+  const left = secondsLeft(deadline, now);
+  if (left === 0) return 'window expired';
+  const m = Math.floor(left / 60);
+  const s = left % 60;
+  return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
-const SOCKET_URL = 'http://localhost:4000'; // Change if backend runs elsewhere
-const FIXED_INR_PRICES = {
-  JSAV: 100,
-  G4X: 91,
-  USDT: 92,
-} as const;
+/** Chip class for a trade status, so the list reads at a glance. */
+function tradeChipClass(status: number): string {
+  switch (status) {
+    case TradeStatus.OPEN:
+      return 'p2p-chip p2p-chip--open';
+    case TradeStatus.PAID:
+      return 'p2p-chip p2p-chip--paid';
+    case TradeStatus.COMPLETED:
+      return 'p2p-chip p2p-chip--done';
+    case TradeStatus.CANCELLED:
+      return 'p2p-chip p2p-chip--dead';
+    default:
+      return 'p2p-chip p2p-chip--muted';
+  }
+}
 
-const P2PPage: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [form, setForm] = useState({ token: 'JSAV' as 'JSAV' | 'G4X' | 'USDT', type: 'buy' as 'buy' | 'sell', amount: '' });
-  const [chatOpen, setChatOpen] = useState<number | null>(null);
-  const [chatMessages, setChatMessages] = useState<Record<number, ChatMessage[]>>({});
-  const [chatInput, setChatInput] = useState('');
-  const [fileList, setFileList] = useState<Record<number, File[]>>({});
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [escrowId, setEscrowId] = useState<number | null>(null);
-  const [escrowToken, setEscrowToken] = useState<'JSAV' | 'G4X' | 'USDT'>('JSAV');
-  const chatEndRef = useRef<HTMLDivElement>(null);
+const TOKENS: P2PToken[] = ['JSAV', 'USDT'];
 
-  useEffect(() => {
-    if (form.token !== 'JSAV' && form.type !== 'sell') {
-      setForm((prev) => ({ ...prev, type: 'sell' }));
+function useSigner() {
+  const [account, setAccount] = useState<string | null>(null);
+  const [signer, setSigner] = useState<ethers.Signer | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const connect = async () => {
+    const injected = window.ethereum;
+    if (!injected) {
+      alert('No browser wallet detected. Install MetaMask or similar.');
+      return;
     }
-  }, [form.token, form.type]);
+    setBusy(true);
+    try {
+      const provider = new ethers.BrowserProvider(injected);
+      const net = await provider.getNetwork();
+      if (Number(net.chainId) !== BSC_CONFIG.chainId) {
+        await provider.send('wallet_switchEthereumChain', [
+          { chainId: `0x${BSC_CONFIG.chainId.toString(16)}` },
+        ]);
+      }
+      const s = await provider.getSigner();
+      setSigner(s);
+      setAccount(await s.getAddress());
+    } catch (e) {
+      const err = e as { shortMessage?: string; message?: string };
+      alert(err?.shortMessage || err?.message || 'Could not connect wallet.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
-    const s = io(SOCKET_URL);
-    setSocket(s);
-    return () => { s.disconnect(); };
+    const injected = window.ethereum;
+    if (!injected) return;
+
+    // Subscribe on the raw EIP-1193 provider. ethers' BrowserProvider rejects
+    // "accountsChanged" as a ProviderEvent, so it cannot be used here.
+    const onAccounts = (...args: unknown[]) => {
+      const accs = (args[0] as string[]) ?? [];
+      const next = accs[0] ?? null;
+      setAccount(next);
+      if (!next) setSigner(null);
+    };
+    injected.on?.('accountsChanged', onAccounts);
+    injected.on?.('disconnect', () => {
+      setAccount(null);
+      setSigner(null);
+    });
+
+    // Restore an already-connected session on mount.
+    new ethers.BrowserProvider(injected)
+      .listAccounts()
+      .then((list) => setAccount(list[0]?.address ?? null))
+      .catch(() => setAccount(null));
+
+    return () => {
+      injected.removeListener?.('accountsChanged', onAccounts);
+    };
   }, []);
 
+  return { account, signer, connect, busy };
+}
+
+const P2PPage: React.FC = () => {
+  const { account, signer, connect, busy: connecting } = useSigner();
+  const { stats, loading: statsLoading, error: statsError, refresh } = useEscrowStats();
+  const { status: kyc, refresh: refreshKyc } = useKycStatus(account);
+  const { ads, loading: adsLoading } = useAds(stats.adCounter, stats.chainActive);
+  const { trades, loading: tradesLoading } = useTrades(stats.tradeCounter, stats.chainActive);
+
+  const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
+  const [activeAd, setActiveAd] = useState<AdRow | null>(null);
+  const [activeTrade, setActiveTrade] = useState<TradeRow | null>(null);
+  const [takeAmount, setTakeAmount] = useState('');
+  const [screenshot, setScreenshot] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chat, setChat] = useState<ChatEntry[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  // Per-trade detail the view getters do not expose. Loaded on open.
+  const [deadline, setDeadline] = useState(0);
+  const [fiatPaid, setFiatPaid] = useState(false);
+  const [confirmedBy, setConfirmedBy] = useState<string[]>([]);
+  const [storedScreenshot, setStoredScreenshot] = useState('');
+  const [bank, setBank] = useState<{
+    bankHolderName: string;
+    bankAccountNumber: string;
+    ifscCode: string;
+    bankName: string;
+  } | null>(null);
+  // Drives the countdown. Only ticking while a trade is open keeps this cheap.
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+
+  // Pointer position for the stat-card sheen, written as CSS vars rather than
+  // re-rendering on every move.
+  const statRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const onStatMove = (key: string) => (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = statRefs.current[key];
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--p2p-mx', `${e.clientX - r.left}px`);
+    el.style.setProperty('--p2p-my', `${e.clientY - r.top}px`);
+  };
+
+  // Replay the count-up pop whenever the value actually changes.
+  const [popKey, setPopKey] = useState('');
+  const lastAds = useRef(stats.adCounter);
+  const lastTrades = useRef(stats.tradeCounter);
   useEffect(() => {
-    if (!socket || chatOpen === null) return;
-    socket.emit('joinOrder', chatOpen);
-    socket.on('chatHistory', (msgs) => {
-      setChatMessages(msgsObj => ({ ...msgsObj, [chatOpen]: msgs }));
-    });
-    socket.on('chatMessage', (msg) => {
-      setChatMessages(msgsObj => ({
-        ...msgsObj,
-        [chatOpen]: [...(msgsObj[chatOpen] || []), msg],
-      }));
-    });
-    return () => {
-      socket.off('chatHistory');
-      socket.off('chatMessage');
-    };
-  }, [socket, chatOpen]);
+    if (stats.adCounter !== lastAds.current) {
+      lastAds.current = stats.adCounter;
+      setPopKey(`ads-${stats.adCounter}`);
+    }
+    if (stats.tradeCounter !== lastTrades.current) {
+      lastTrades.current = stats.tradeCounter;
+      setPopKey(`trades-${stats.tradeCounter}`);
+    }
+  }, [stats.adCounter, stats.tradeCounter]);
+
+  const tradeOpen = activeTrade?.status === TradeStatus.OPEN || activeTrade?.status === TradeStatus.PAID;
 
   useEffect(() => {
-    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, chatOpen]);
+    if (!tradeOpen) return;
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [tradeOpen]);
 
-  const handleCreateOrder = (e: React.FormEvent) => {
+  const reload = useCallback(async () => {
+    await Promise.all([refresh(), refreshKyc()]);
+  }, [refresh, refreshKyc]);
+
+  // Periodic resync so ads and trades appear without a manual refresh.
+  useEffect(() => {
+    const t = setInterval(reload, 20000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  // Shared preamble for every write: require a connected wallet and a
+  // verified KYC, then run and surface any revert. The signer is passed in
+  // rather than captured so the guard owns the null check.
+  const guard = async (fn: (s: Signer) => Promise<unknown>, label: string) => {
+    if (!signer) {
+      setStatus('Connect a wallet first.');
+      return;
+    }
+    if (!kyc.verified) {
+      setStatus('Your KYC must be verified before trading.');
+      return;
+    }
+    setActionBusy(true);
+    setStatus(null);
+    try {
+      await fn(signer);
+      setStatus(`${label} confirmed.`);
+      await reload();
+    } catch (e) {
+      const err = e as { shortMessage?: string; reason?: string; message?: string };
+      setStatus(`${label} failed: ${err?.shortMessage || err?.reason || err?.message}`);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const onCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newOrder: Order = {
-      id: orders.length + 1,
-      token: form.token,
-      type: form.type,
-      amount: Number(form.amount),
-      price: FIXED_INR_PRICES[form.token],
-      user: 'You',
-      status: 'open',
-    };
-    setOrders([newOrder, ...orders]);
-    setForm((prev) => ({ ...prev, amount: '' }));
+    if (!form.amount) return;
+    await guard(
+      (s) =>
+        createAd(
+          s,
+          form.token,
+          form.type === 'sell',
+          form.amount,
+          stats.defaultWindow || 1800,
+        ),
+      'Ad created',
+    );
+    setForm((f) => ({ ...f, amount: '' }));
   };
 
-  const updateOrderStatus = (orderId: number, status: Order['status']) => {
-    setOrders(orders => orders.map(o => o.id === orderId ? { ...o, status } : o));
+  const onTakeAd = async () => {
+    if (!activeAd || !takeAmount) return;
+    await guard(
+      (s) => startTrade(s, tokenForPairType(activeAd.pairType), activeAd, takeAmount),
+      'Trade started',
+    );
+    setActiveAd(null);
+    setTakeAmount('');
   };
 
-  const handleSendMessage = (orderId: number) => {
-    if (!chatInput.trim() || !socket) return;
-    socket.emit('chatMessage', { orderId, sender: 'You', text: chatInput });
+  const onMarkPaid = async () => {
+    if (!activeTrade) return;
+    if (!screenshot.trim()) {
+      setStatus('An IPFS screenshot hash is required to mark INR as paid.');
+      return;
+    }
+    await guard(
+      (s) => markFiatPaid(s, activeTrade.id, screenshot.trim()),
+      'Marked as paid',
+    );
+  };
+
+  const onConfirmReceived = async () => {
+    if (!activeTrade) return;
+    await guard((s) => confirmFiatReceived(s, activeTrade.id), 'Crypto released to buyer');
+  };
+
+  const onSend = async () => {
+    if (!activeTrade || !chatInput.trim()) return;
+    const text = chatInput.trim();
     setChatInput('');
+    // Optimistic append; the confirmed entry arrives from the log refresh.
+    setChat((c) => [
+      ...c,
+      { sender: account ?? '', text, blockNumber: now },
+    ]);
+    await guard((s) => sendMessage(s, activeTrade.id, text), 'Message sent');
+    if (signer) void refreshTradeDetail(activeTrade.id);
   };
 
-  const handleFileUpload = async (orderId: number, files: FileList | null) => {
-    if (!files) return;
-    const formData = new FormData();
-    Array.from(files).forEach(f => formData.append('files', f));
-    const res = await fetch(`${SOCKET_URL}/upload/${orderId}`, {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    setFileList(list => ({
-      ...list,
-      [orderId]: [...(list[orderId] || []), ...data.files],
-    }));
+  /** Pull chat, deadline, confirmations and bank details for one trade. */
+  const refreshTradeDetail = async (tradeId: number) => {
+    setChatLoading(true);
+    try {
+      const [{ messages }, events] = await Promise.all([
+        getTradeChat(tradeId),
+        getTradeEventState(tradeId),
+      ]);
+      setChat(messages);
+      setDeadline(events.deadline);
+      setFiatPaid(events.fiatPaid);
+      setConfirmedBy(events.confirmedBy);
+      setStoredScreenshot(events.screenshotHash);
+      if (events.truncated && messages.length === 0 && events.deadline === 0) {
+        setStatus(
+          'On-chain history for this trade is older than the log window this public RPC can serve. Chat and confirmations will stay blank.',
+        );
+      }
+    } catch {
+      setChat([]);
+    } finally {
+      setChatLoading(false);
+    }
+
+    if (signer) {
+      const details = await getTradeBankDetails(signer, tradeId);
+      setBank(details);
+    }
   };
 
-  // Escrow integration
-  const handleCreateEscrow = async (order?: Order) => {
-    if (!order) return alert('Order not found.');
-    if (!JMFEscrow_CONTRACT_ADDRESS) return alert('Escrow contract is not configured yet.');
-    if (!(window as any).ethereum) return alert('Wallet not found');
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    const escrow = new ethers.Contract(JMFEscrow_CONTRACT_ADDRESS, JMFEscrow_CONTRACT_ABI, signer);
-    const tx = await escrow.createEscrow(order.user, ethers.parseUnits(order.amount.toString(), 18));
-    const receipt = await tx.wait();
-    // Get escrowId from event or increment
-    setEscrowId(receipt.logs[0]?.args?.escrowId ?? null);
-    setEscrowToken(order.token);
-    alert('Escrow created!');
+  const openTrade = async (t: TradeRow) => {
+    setActiveTrade(t);
+    setScreenshot('');
+    setBank(null);
+    setDeadline(0);
+    setFiatPaid(false);
+    setConfirmedBy([]);
+    setStoredScreenshot('');
+    setChat([]);
+    setNow(Math.floor(Date.now() / 1000));
+    await refreshTradeDetail(t.id);
   };
 
-  const handleFundEscrow = async () => {
-    if (!JMFEscrow_CONTRACT_ADDRESS) return alert('Escrow contract is not configured yet.');
-    if (!(window as any).ethereum || escrowId === null) return alert('No escrow');
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    const tokenAddress = escrowToken === 'G4X'
-      ? GOLD4X_CONTRACT_ADDRESS
-      : escrowToken === 'USDT'
-        ? USDT_CONTRACT_ADDRESS
-        : JSAVIOR_CONTRACT_ADDRESS;
-    const tokenAbi = escrowToken === 'G4X'
-      ? GOLD4X_CONTRACT_ABI
-      : escrowToken === 'USDT'
-        ? USDT_CONTRACT_ABI
-        : JSAVIOR_CONTRACT_ABI;
-    const token = new ethers.Contract(tokenAddress, tokenAbi, signer);
-    // Approve escrow contract
-    await token.approve(JMFEscrow_CONTRACT_ADDRESS, ethers.parseUnits('100', 18)); // Replace 100 with actual amount
-    const escrow = new ethers.Contract(JMFEscrow_CONTRACT_ADDRESS, JMFEscrow_CONTRACT_ABI, signer);
-    const tx = await escrow.fundEscrow(escrowId);
-    await tx.wait();
-    alert(`${escrowToken} locked in escrow!`);
-  };
-
-  const handleReleaseEscrow = async () => {
-    if (!JMFEscrow_CONTRACT_ADDRESS) return alert('Escrow contract is not configured yet.');
-    if (!(window as any).ethereum || escrowId === null) return alert('No escrow');
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    const escrow = new ethers.Contract(JMFEscrow_CONTRACT_ADDRESS, JMFEscrow_CONTRACT_ABI, signer);
-    const tx = await escrow.release(escrowId);
-    await tx.wait();
-    alert(`${escrowToken} released to buyer!`);
-  };
-
-  const handleRefundEscrow = async () => {
-    if (!JMFEscrow_CONTRACT_ADDRESS) return alert('Escrow contract is not configured yet.');
-    if (!(window as any).ethereum || escrowId === null) return alert('No escrow');
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    const escrow = new ethers.Contract(JMFEscrow_CONTRACT_ADDRESS, JMFEscrow_CONTRACT_ABI, signer);
-    const tx = await escrow.refund(escrowId);
-    await tx.wait();
-    alert(`${escrowToken} refunded to seller!`);
+  const closeTrade = () => {
+    setActiveTrade(null);
+    setChat([]);
+    setBank(null);
   };
 
   return (
-    <div className="fx-shell">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="fx-card p-6 sm:p-8 fx-reveal">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+    <div className="fx-shell p2p-root">
+      <div className="p2p-ambient" aria-hidden="true">
+        <div className="p2p-ambient__orb p2p-ambient__orb--gold" />
+        <div className="p2p-ambient__orb p2p-ambient__orb--emerald" />
+        <div className="p2p-ambient__grid" />
+      </div>
+
+      <div className="max-w-6xl mx-auto space-y-6 relative">
+        <header className="p2p-hero p-6 sm:p-8 fx-reveal">
+          <div className="p2p-hero__inner flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="fx-pill">P2P Desk</span>
-                <span className="fx-pill fx-pill--ghost">JSAV, G4X & USDT / INR</span>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="p2p-chip p2p-chip--open">
+                  <span className="p2p-dot" />
+                  Live on BSC
+                </span>
+                <span className="p2p-chip p2p-chip--muted">JSAV &amp; USDT / INR</span>
               </div>
-              <h1 className="fx-section-title text-3xl">P2P Trading</h1>
-              <p className="text-sm text-[#b9b0a3] max-w-2xl">
-                Match buy and sell orders for JSAV in INR, and sell-only orders for G4X and USDT in INR. Use the secured chat and escrow
-                workflow to coordinate settlement.
+              <h1 className="p2p-hero__title text-4xl sm:text-5xl">P2P Trading</h1>
+              <p className="text-sm text-[#b9b0a3] max-w-2xl mt-3">
+                Buy and sell JSAV or USDT against INR at fixed rates. Crypto is
+                held in the on-chain escrow for the duration of each trade and
+                released only when both sides confirm.
               </p>
             </div>
-            <a className="fx-button fx-button--ghost" href="/">
-              Back to Dashboard
-            </a>
+            <div className="flex flex-col items-start gap-2.5">
+              {account ? (
+                <>
+                  <span className="p2p-chip p2p-chip--done">
+                    <span className="p2p-dot" />
+                    {shortAddress(account)}
+                  </span>
+                  <span
+                    className={
+                      kyc.verified ? 'p2p-chip p2p-chip--open' : 'p2p-chip p2p-chip--muted'
+                    }
+                  >
+                    {kyc.verified
+                      ? 'KYC verified'
+                      : kyc.submitted
+                        ? 'KYC pending review'
+                        : 'KYC not submitted'}
+                  </span>
+                </>
+              ) : (
+                <button className="p2p-btn" onClick={connect} disabled={connecting}>
+                  {connecting ? 'Connecting…' : 'Connect Wallet'}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 fx-reveal fx-reveal--delay-1">
-          <div className="fx-card fx-card--lift p-5">
-            <div className="fx-kicker mb-3">Liquidity</div>
-            <h3 className="fx-section-title text-lg mb-2">Active Orders</h3>
-            <p className="text-sm text-[#b9b0a3]">Monitor current buy/sell demand with instant matches.</p>
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 fx-reveal fx-reveal--delay-1">
+          <div
+            ref={(el) => { statRefs.current.ads = el; }}
+            onMouseMove={onStatMove('ads')}
+            className="p2p-stat p-5"
+          >
+            <div className="p2p-stat__label">On-chain ads</div>
+            <div
+              className={
+                'p2p-stat__value' +
+                (popKey === `ads-${stats.adCounter}` ? ' p2p-stat__value--pop' : '')
+              }
+            >
+              {statsLoading ? '…' : stats.adCounter}
+            </div>
+            <div className="p2p-stat__sub">ever created</div>
           </div>
-          <div className="fx-card fx-card--lift p-5">
-            <div className="fx-kicker mb-3">Security</div>
-            <h3 className="fx-section-title text-lg mb-2">Escrow Ready</h3>
-            <p className="text-sm text-[#b9b0a3]">Lock JSAV, G4X, or USDT securely before you release settlement.</p>
+
+          <div
+            ref={(el) => { statRefs.current.trades = el; }}
+            onMouseMove={onStatMove('trades')}
+            className="p2p-stat p-5"
+          >
+            <div className="p2p-stat__label">Trades started</div>
+            <div
+              className={
+                'p2p-stat__value' +
+                (popKey === `trades-${stats.tradeCounter}` ? ' p2p-stat__value--pop' : '')
+              }
+            >
+              {statsLoading ? '…' : stats.tradeCounter}
+            </div>
+            <div className="p2p-stat__sub">escrow opened</div>
           </div>
-          <div className="fx-card fx-card--lift p-5">
-            <div className="fx-kicker mb-3">Speed</div>
-            <h3 className="fx-section-title text-lg mb-2">Fast Settlement</h3>
-            <p className="text-sm text-[#b9b0a3]">Coordinate payment and release within a single flow.</p>
+
+          <div
+            ref={(el) => { statRefs.current.jsav = el; }}
+            onMouseMove={onStatMove('jsav')}
+            className="p2p-stat p-5"
+          >
+            <div className="p2p-stat__label">JSAV / INR</div>
+            <div className="p2p-stat__value">₹{FIXED_INR_PRICES.JSAV}</div>
+            <div className="p2p-stat__sub">fixed rate</div>
+          </div>
+
+          <div
+            ref={(el) => { statRefs.current.usdt = el; }}
+            onMouseMove={onStatMove('usdt')}
+            className="p2p-stat p-5"
+          >
+            <div className="p2p-stat__label">USDT / INR</div>
+            <div className="p2p-stat__value">₹{FIXED_INR_PRICES.USDT}</div>
+            <div className="p2p-stat__sub">fixed rate</div>
           </div>
         </section>
 
-        <div className="fx-card p-6 fx-reveal fx-reveal--delay-2">
-            <p style={{ color: 'var(--fx-ink-muted)' }}>P2P trading for JSAV/INR, G4X/INR and USDT/INR</p>
-          <p className="text-sm text-[#b9b0a3]">
-            Users can buy or sell JSAV in INR at a fixed rate, and users can sell G4X or USDT in INR at fixed rates. Chat and share documents with your counterparty after matching.
-          </p>
-          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 JSAV = {FIXED_INR_PRICES.JSAV} INR</p>
-          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 G4X = {FIXED_INR_PRICES.G4X} INR</p>
-          <p className="text-sm" style={{ color: 'var(--fx-ink-muted)' }}>Fixed rate: 1 USDT = {FIXED_INR_PRICES.USDT} INR</p>
-        </div>
+        {statsError && (
+          <div className="p2p-alert p2p-alert--error">
+            <span className="p2p-dot" style={{ marginTop: 6 }} />
+            {statsError}
+          </div>
+        )}
 
-        <form onSubmit={handleCreateOrder} className="fx-card p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2">
-          <div>
-            <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Token</label>
+        {!stats.chainActive && !statsLoading && (
+          <div className="p2p-alert p2p-alert--warn">
+            <span className="p2p-dot" style={{ marginTop: 6 }} />
+            The contract reports chain 56 as not configured. Trading calls will
+            revert until the owner enables it.
+          </div>
+        )}
+
+        {account && !kyc.verified && (
+          <div className="fx-reveal">
+            <KycPanel signer={signer} submitted={kyc.submitted} verified={kyc.verified} onDone={reload} />
+          </div>
+        )}
+
+        <form
+          onSubmit={onCreateAd}
+          className="p2p-panel p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2"
+        >
+          <div className="p2p-field">
+            <label className="p2p-label" htmlFor="p2p-token">Token</label>
             <select
+              id="p2p-token"
+              className="p2p-select"
               value={form.token}
-              onChange={e => setForm(f => ({ ...f, token: e.target.value as 'JSAV' | 'G4X' | 'USDT' }))}
-              className="fx-input"
+              onChange={(e) => setForm((f) => ({ ...f, token: e.target.value as P2PToken }))}
             >
-              <option value="JSAV">JSAV</option>
-              <option value="G4X">G4X</option>
-              <option value="USDT">USDT</option>
+              {TOKENS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
             </select>
           </div>
-          <div>
-            <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Type</label>
+          <div className="p2p-field">
+            <label className="p2p-label" htmlFor="p2p-type">Type</label>
             <select
+              id="p2p-type"
+              className="p2p-select"
               value={form.type}
-              onChange={e => setForm(f => ({ ...f, type: e.target.value as 'buy' | 'sell' }))}
-              className="fx-input"
-              disabled={form.token !== 'JSAV'}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'buy' | 'sell' }))}
             >
-              {form.token === 'JSAV' && <option value="buy">Buy</option>}
-              <option value="sell">Sell</option>
+              <option value="sell">Sell {form.token} for INR</option>
+              <option value="buy">Buy {form.token} with INR</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Amount ({form.token})</label>
+          <div className="p2p-field">
+            <label className="p2p-label" htmlFor="p2p-amount">Amount ({form.token})</label>
             <input
-              type="number"
-              min="1"
-              required
-              placeholder={`Amount (${form.token})`}
+              id="p2p-amount"
+              type="number" min="0" step="any" required
+              className="p2p-input"
               value={form.amount}
-              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              className="fx-input"
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
             />
           </div>
-          <div>
-            <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Fixed Price (INR)</label>
-            <div className="fx-input flex items-center">{FIXED_INR_PRICES[form.token]}</div>
+          <div className="p2p-field">
+            <span className="p2p-label">Value (INR)</span>
+            <div className="p2p-readout">
+              {form.amount ? `₹${inrValueOf(form.token, form.amount)}` : '—'}
+            </div>
           </div>
-          <button type="submit" className="fx-button">Post Order</button>
+          <button type="submit" className="p2p-btn" disabled={actionBusy}>
+            <span>{actionBusy ? 'Working…' : 'Post Ad'}</span>
+          </button>
         </form>
 
-        <div className="fx-card p-6 fx-reveal fx-reveal--delay-3">
-          <h2 className="fx-section-title text-xl mb-4">Order Book</h2>
-          <div className="overflow-x-auto">
-            <table className="fx-table text-sm">
-              <thead>
-                <tr>
-                  <th>Token</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Price (INR)</th>
-                  <th>User</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 && (
-                  <tr>
-                    <td className="text-center text-[#b9b0a3] py-6" colSpan={7}>
-                      No previous orders. Post the first JSAV, G4X, or USDT order to go live.
-                    </td>
-                  </tr>
-                )}
-                {orders.map(order => (
-                  <tr key={order.id} className={order.type === 'buy' ? 'bg-[rgba(201,168,76,0.06)]' : 'bg-[rgba(216,76,76,0.08)]'}>
-                    <td className="text-center">{order.token}</td>
-                    <td className="text-center">{order.type.toUpperCase()}</td>
-                    <td className="text-center">{order.amount}</td>
-                    <td className="text-center">{order.price}</td>
-                    <td className="text-center">{order.user}</td>
-                    <td className="text-center">
-                      <span className={
-                        order.status === 'completed' ? 'text-[#c9a84c]' :
-                        order.status === 'cancelled' ? 'text-[#b9b0a3] line-through' :
-                        order.status === 'payment sent' ? 'text-[#c9a84c]' :
-                        order.status === 'in progress' ? 'text-[#b9b0a3]' :
-                        ''
-                      }>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <button
-                        className={order.type === 'buy' ? 'fx-button' : 'fx-button fx-button--dark'}
-                        onClick={() => {
-                          setChatOpen(order.id);
-                          setTimeout(() => {
-                            setChatInput(
-                              order.type === 'buy'
-                                ? `I want to sell ${order.amount} ${order.token} at ${order.price} INR`
-                                : `I want to buy ${order.amount} ${order.token} at ${order.price} INR`
-                            );
-                          }, 100);
-                        }}
-                      >
-                        {order.type === 'buy' ? 'Sell' : 'Buy'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {status && <div className="p2p-alert p2p-alert--info">{status}</div>}
+
+        <section className="p2p-panel p-6 fx-reveal fx-reveal--delay-3">
+          <div className="p2p-panel__head">
+            <h2 className="p2p-panel__title">Order Book</h2>
+            <span className="p2p-panel__count">
+              {ads.length} live{ads.length < stats.adCounter && ` · ${stats.adCounter} total`}
+            </span>
           </div>
-        </div>
-      {/* Chat & Docs Modal */}
-      {chatOpen !== null && (
-        <div className="fixed inset-0 bg-black/60 fx-modal-backdrop flex items-center justify-center z-50 px-4">
-          <div className="fx-card w-full max-w-md p-6 relative">
-            <button className="absolute top-3 right-3 text-[#b9b0a3] hover:text-[#f6f0e6]" onClick={() => setChatOpen(null)}>&times;</button>
-            <h3 className="fx-section-title text-lg mb-2">Chat & Docs (Order #{chatOpen})</h3>
-            <div className="mb-2 text-sm text-[#b9b0a3]">
-              <span style={{ color: 'var(--fx-ink)' }}>Order Status: </span>
-              <span>{orders.find(o => o.id === chatOpen)?.status}</span>
+
+          {adsLoading && <div className="p2p-bar my-4" />}
+
+          {ads.length === 0 ? (
+            <div className="p2p-empty">
+              <div className="p2p-empty__ring">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 17l5-5 4 4 8-8" />
+                  <path d="M14 8h6v6" />
+                </svg>
+              </div>
+              <p className="p2p-empty__text">
+                {adsLoading
+                  ? 'Reading the order book from chain…'
+                  : stats.adCounter === 0
+                    ? 'No ads on-chain yet. Post the first JSAV or USDT order to open the book.'
+                    : 'No active ads. Every order so far has been filled or cancelled.'}
+              </p>
             </div>
-            <div className="border border-[rgba(255,255,255,0.08)] rounded p-3 h-40 mb-3 overflow-y-auto bg-[rgba(15,20,34,0.85)] text-sm">
-              {(chatMessages[chatOpen] || []).map((msg, i) => (
-                <div key={i} className="mb-1">
-                  <span style={{ color: 'var(--fx-ink)' }}>{msg.sender}:</span> <span>{msg.text}</span>
-                  <span className="text-xs text-[#b9b0a3] ml-2">{msg.time}</span>
+          ) : (
+            <div className="p2p-table-wrap">
+              <table className="p2p-table">
+                <thead>
+                  <tr>
+                    <th>Ad</th>
+                    <th>Pair</th>
+                    <th>Side</th>
+                    <th>Remaining</th>
+                    <th>Value (INR)</th>
+                    <th>State</th>
+                    <th>Window</th>
+                    <th>Maker</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ads.map((ad) => {
+                    const token = tokenForPairType(ad.pairType);
+                    return (
+                      <tr key={ad.id} className={ad.isSellOrder ? 'p2p-row--sell' : 'p2p-row--buy'}>
+                        <td className="p2p-num text-center">#{ad.id}</td>
+                        <td className="text-center">{token}/INR</td>
+                        <td className="text-center">
+                          <span className={ad.isSellOrder ? 'p2p-side p2p-side--sell' : 'p2p-side p2p-side--buy'}>
+                            {ad.isSellOrder ? 'SELL' : 'BUY'} {token}
+                          </span>
+                        </td>
+                        <td className="p2p-num text-center">{ad.remainingCrypto} {token}</td>
+                        <td className="p2p-num text-center">₹{inrValueOf(token, ad.remainingCrypto)}</td>
+                        <td className="text-center">
+                          {ad.active ? (
+                            <span className="p2p-chip p2p-chip--open">
+                              <span className="p2p-dot" />
+                              {ad.isSellOrder ? 'locked' : 'open'}
+                            </span>
+                          ) : ad.exhausted ? (
+                            <span className="p2p-chip p2p-chip--done">filled</span>
+                          ) : (
+                            <span className="p2p-chip p2p-chip--muted">cancelled</span>
+                          )}
+                        </td>
+                        <td className="text-center p2p-num">
+                          {ad.paymentWindow > 0 ? `${Math.round(ad.paymentWindow / 60)}m` : '—'}
+                        </td>
+                        <td className={ad.creator === account ? 'p2p-addr p2p-addr--me' : 'p2p-addr'}>
+                          {shortAddress(ad.creator)}
+                        </td>
+                        <td className="text-center">
+                          {ad.active && ad.creator !== account && (
+                            <button
+                              className="p2p-btn p2p-btn--sm"
+                              disabled={actionBusy}
+                              onClick={() => { setActiveAd(ad); setTakeAmount(''); }}
+                            >
+                              <span>{ad.isSellOrder ? 'Buy' : 'Sell'}</span>
+                            </button>
+                          )}
+                          {ad.active && ad.creator === account && (
+                            <button
+                              className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                              disabled={actionBusy}
+                              onClick={() => guard((s) => cancelAd(s, ad.id), 'Ad cancelled')}
+                            >
+                              <span>Cancel</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="p2p-panel p-6 fx-reveal fx-reveal--delay-3">
+          <div className="p2p-panel__head">
+            <h2 className="p2p-panel__title">Trades</h2>
+            <span className="p2p-panel__count">
+              {trades.length} shown{trades.length < stats.tradeCounter && ` · ${stats.tradeCounter} total`}
+            </span>
+          </div>
+
+          {tradesLoading && <div className="p2p-bar my-4" />}
+
+          {trades.length === 0 ? (
+            <div className="p2p-empty">
+              <div className="p2p-empty__ring">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </div>
+              <p className="p2p-empty__text">
+                {tradesLoading
+                  ? 'Reading trades from chain…'
+                  : stats.tradeCounter === 0
+                    ? 'No trades started yet. Taking an ad from the order book opens the first one.'
+                    : 'Nothing in the recent window. Older trades are beyond the current page.'}
+              </p>
+            </div>
+          ) : (
+            <div className="p2p-table-wrap">
+              <table className="p2p-table">
+                <thead>
+                  <tr>
+                    <th>Trade</th>
+                    <th>Pair</th>
+                    <th>Amount</th>
+                    <th>Value</th>
+                    <th>Seller</th>
+                    <th>Buyer</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.map((t) => {
+                    const token = tokenForPairType(t.pairType);
+                    const mine = t.seller === account || t.buyer === account;
+                    return (
+                      <tr key={t.id}>
+                        <td className="p2p-num text-center">#{t.id}</td>
+                        <td className="text-center">{token}/INR</td>
+                        <td className="p2p-num text-center">{t.cryptoAmount} {token}</td>
+                        <td className="p2p-num text-center">₹{paiseToInr(t.quoteAmount)}</td>
+                        <td className={t.seller === account ? 'p2p-addr p2p-addr--me' : 'p2p-addr'}>
+                          {shortAddress(t.seller)}
+                        </td>
+                        <td className={t.buyer === account ? 'p2p-addr p2p-addr--me' : 'p2p-addr'}>
+                          {shortAddress(t.buyer)}
+                        </td>
+                        <td className="text-center">
+                          <span className={tradeChipClass(t.status)}>
+                            {t.status === TradeStatus.OPEN && <span className="p2p-dot" />}
+                            {TRADE_STATUS_LABEL[t.status] ?? t.status}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <button className="p2p-btn p2p-btn--sm p2p-btn--ghost" onClick={() => void openTrade(t)}>
+                            <span>{mine ? 'Open' : 'View'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <footer className="p2p-foot py-4">
+          <span>Escrow</span>
+          <a
+            href={`https://bscscan.com/address/${P2PESCROW_CONTRACT_ADDRESS}#code`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {shortAddress(P2PESCROW_CONTRACT_ADDRESS)}
+          </a>
+          <span>· verified P2PEscrow · owner {shortAddress(stats.owner)}</span>
+        </footer>
+      </div>
+
+      {activeAd && (
+        <div className="p2p-backdrop" onClick={() => setActiveAd(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Take ad ${activeAd.id}`}
+            className="p2p-modal max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="p2p-modal__close"
+              onClick={() => setActiveAd(null)}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+            <p className="p2p-kicker mb-2">Ad #{activeAd.id}</p>
+            <h3 className="p2p-panel__title text-lg mb-3">
+              {activeAd.isSellOrder ? 'Buy' : 'Sell'} {activeAd.remainingCrypto}{' '}
+              {tokenForPairType(activeAd.pairType)}
+            </h3>
+
+            <div className="p2p-tiles">
+              <div className="p2p-tile">
+                <div className="p2p-tile__label">Rate</div>
+                <div className="p2p-tile__value">₹{FIXED_INR_PRICES[tokenForPairType(activeAd.pairType)]} / unit</div>
+              </div>
+              <div className="p2p-tile">
+                <div className="p2p-tile__label">Payment window</div>
+                <div className="p2p-tile__value">
+                  {activeAd.paymentWindow > 0 ? `${Math.round(activeAd.paymentWindow / 60)} min` : '—'}
                 </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
-            <div className="flex gap-2 mb-3">
-              <input
-                className="fx-input flex-1"
-                placeholder="Type a message..."
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(chatOpen); }}
-              />
-              <button className="fx-button" onClick={() => handleSendMessage(chatOpen)}>Send</button>
-            </div>
-            <div className="mb-3">
-              <label className="block text-xs uppercase tracking-[0.2em] text-[#b9b0a3] mb-1">Upload Document</label>
-              <input className="text-sm text-[#b9b0a3]" type="file" multiple onChange={e => handleFileUpload(chatOpen, e.target.files)} />
-              <div className="mt-2 text-xs text-[#b9b0a3]">
-                {(fileList[chatOpen] || []).map((file: any, i) => (
-                  <div key={i}>
-                    {file.url ? (
-                      <a href={`${SOCKET_URL}${file.url}`} target="_blank" rel="noopener noreferrer" className="underline">{file.originalname || file.name}</a>
-                    ) : (
-                      file.name
-                    )}
-                  </div>
-                ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              <button className="fx-button fx-button--dark" onClick={() => updateOrderStatus(chatOpen, 'in progress')}>Mark In Progress</button>
-              <button className="fx-button" onClick={() => updateOrderStatus(chatOpen, 'payment sent')}>Payment Sent</button>
-              <button className="fx-button" onClick={() => updateOrderStatus(chatOpen, 'completed')}>Release {orders.find(o => o.id === chatOpen)?.token || 'Token'}</button>
-              <button className="fx-button fx-button--ghost" onClick={() => updateOrderStatus(chatOpen, 'cancelled')}>Cancel</button>
-              <button className="fx-button fx-button--dark" onClick={() => handleCreateEscrow(orders.find(o => o.id === chatOpen))}>Create Escrow</button>
-              <button className="fx-button fx-button--dark" onClick={handleFundEscrow}>Lock {orders.find(o => o.id === chatOpen)?.token || 'Token'}</button>
-              <button className="fx-button" onClick={handleReleaseEscrow}>Release to Buyer</button>
-              <button className="fx-button fx-button--ghost" onClick={handleRefundEscrow}>Refund to Seller</button>
+
+            <p className="text-xs text-[#b9b0a3] mb-4">
+              {activeAd.isSellOrder
+                ? 'You will send INR to the seller, who releases the crypto after confirming receipt.'
+                : 'You will send crypto into escrow now, and receive INR from the seller.'}
+            </p>
+
+            <div className="mb-3">
+              <label className="p2p-label" htmlFor="p2p-take-amount">Amount</label>
+              <input
+                id="p2p-take-amount"
+                type="number" min="0" step="any"
+                className="p2p-input"
+                value={takeAmount}
+                onChange={(e) => setTakeAmount(e.target.value)}
+              />
+              <div className="p2p-readout mt-2">
+                ₹{takeAmount ? inrValueOf(tokenForPairType(activeAd.pairType), takeAmount) : '0.00'}
+              </div>
             </div>
+
+            <button
+              className="p2p-btn p2p-btn--block"
+              disabled={actionBusy || !takeAmount}
+              onClick={onTakeAd}
+            >
+              <span>{actionBusy ? 'Working…' : 'Confirm Trade'}</span>
+            </button>
           </div>
         </div>
       )}
-      {/* TODO: Implement chat/file backend for persistence and real-time updates */}
-      </div>
+
+      {activeTrade && (
+        <div className="p2p-backdrop" onClick={closeTrade}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Trade ${activeTrade.id}`}
+            className="p2p-modal max-w-lg p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="p2p-modal__close"
+              onClick={closeTrade}
+              aria-label="Close trade"
+            >
+              &times;
+            </button>
+
+            <p className="p2p-kicker mb-2">Trade #{activeTrade.id}</p>
+            <h3 className="p2p-panel__title text-lg mb-1">
+              {activeTrade.cryptoAmount} {tokenForPairType(activeTrade.pairType)} for ₹
+              {paiseToInr(activeTrade.quoteAmount)}
+            </h3>
+            <div className="mb-4">
+              <span className={tradeChipClass(activeTrade.status)}>
+                {activeTrade.status === TradeStatus.OPEN && <span className="p2p-dot" />}
+                {TRADE_STATUS_LABEL[activeTrade.status] ?? activeTrade.status}
+              </span>
+            </div>
+
+            {/* Countdown and confirmations come from event logs, since
+                getTrade() does not expose deadline or the confirm flags. */}
+            {activeTrade.isFiat && (
+              <div className="p2p-tiles">
+                <div
+                  className={
+                    deadline > 0 && secondsLeft(deadline, now) === 0
+                      ? 'p2p-tile p2p-tile--urgent'
+                      : 'p2p-tile'
+                  }
+                >
+                  <div className="p2p-tile__label">Payment window</div>
+                  <div className="p2p-tile__value">
+                    {deadline === 0
+                      ? chatLoading
+                        ? 'loading…'
+                        : 'not on record'
+                      : formatCountdown(deadline, now)}
+                  </div>
+                </div>
+                <div className="p2p-tile">
+                  <div className="p2p-tile__label">Confirmations</div>
+                  <div className="p2p-tile__value p2p-tile__value--mono">
+                    {chatLoading
+                      ? 'loading…'
+                      : confirmedBy.length
+                        ? confirmedBy.map(shortAddress).join(', ')
+                        : 'none on record'}
+                  </div>
+                  {fiatPaid && <div className="p2p-stat__sub">INR marked as sent</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Seller's receiving details. Only a trade party can read these,
+                and the contract returns them for active INR trades only. */}
+            {activeTrade.isFiat && (
+              <div className="p2p-bank">
+                <div className="p2p-tile__label mb-2">Seller bank details — INR receiver</div>
+                {bank ? (
+                  <dl className="p2p-bank__grid">
+                    <dt>Name</dt>
+                    <dd>{bank.bankHolderName}</dd>
+                    <dt>Bank</dt>
+                    <dd>{bank.bankName}</dd>
+                    <dt>Account</dt>
+                    <dd>{bank.bankAccountNumber}</dd>
+                    <dt>IFSC</dt>
+                    <dd>{bank.ifscCode}</dd>
+                  </dl>
+                ) : (
+                  <p className="text-sm text-[#b9b0a3]">
+                    {activeTrade.status === TradeStatus.OPEN ||
+                    activeTrade.status === TradeStatus.PAID
+                      ? 'Connect a wallet and be a party to this trade to view.'
+                      : 'Unavailable once the trade is closed.'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {storedScreenshot && (
+              <div className="p2p-tile mb-4">
+                <div className="p2p-tile__label">Payment screenshot on record</div>
+                <div className="p2p-tile__value p2p-tile__value--mono break-all">
+                  {storedScreenshot}
+                </div>
+              </div>
+            )}
+
+            <div className="p2p-tile__label mb-1">On-chain chat</div>
+            <div className="p2p-chat mb-3">
+              {chatLoading && <span className="p2p-chat__empty">Loading history…</span>}
+              {!chatLoading && chat.length === 0 && (
+                <span className="p2p-chat__empty">No messages yet.</span>
+              )}
+              {chat.map((m, i) => (
+                <div key={`${m.blockNumber}-${i}`} className="p2p-chat__msg">
+                  <span className="p2p-chat__who">{shortAddress(m.sender)}</span>
+                  <span>{m.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <input
+                className="p2p-input flex-1"
+                placeholder="Message the counterparty…"
+                aria-label="Chat message"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
+              />
+              <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
+                <span>Send</span>
+              </button>
+            </div>
+
+            {activeTrade.buyer === account && activeTrade.status === TradeStatus.OPEN && !fiatPaid && (
+              <div className="mb-4">
+                <label className="p2p-label" htmlFor="p2p-shot">
+                  Payment screenshot — IPFS hash
+                </label>
+                <input
+                  id="p2p-shot"
+                  className="p2p-input mb-2"
+                  placeholder="Qm… or ipfs://…"
+                  value={screenshot}
+                  onChange={(e) => setScreenshot(e.target.value)}
+                />
+                <button className="p2p-btn p2p-btn--block" disabled={actionBusy} onClick={onMarkPaid}>
+                  <span>I have sent the INR</span>
+                </button>
+              </div>
+            )}
+
+            {activeTrade.seller === account && activeTrade.status === TradeStatus.PAID && (
+              <button
+                className="p2p-btn p2p-btn--block mb-4"
+                disabled={actionBusy}
+                onClick={onConfirmReceived}
+              >
+                <span>INR received — release crypto</span>
+              </button>
+            )}
+
+            {activeTrade.status === TradeStatus.OPEN && deadline > 0 &&
+              secondsLeft(deadline, now) === 0 && (
+                <button
+                  className="p2p-btn p2p-btn--ghost p2p-btn--block"
+                  disabled={actionBusy}
+                  onClick={() => guard((s) => cancelExpiredFiatTrade(s, activeTrade.id), 'Trade cancelled')}
+                >
+                  <span>Window expired — cancel and refund seller</span>
+                </button>
+              )}
+
+            {status && <div className="p2p-alert p2p-alert--info mt-4">{status}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
