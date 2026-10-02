@@ -72,7 +72,13 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signer) return setError('Connect a wallet first.');
+    if (!signer) {
+      // Previously this fired even for a connected wallet, because the page
+      // probed window.ethereum directly instead of reading wagmi state. It now
+      // gets a real signer from the app's connector, so this only appears
+      // when there genuinely is no connection.
+      return setError('Connect a wallet first.');
+    }
     setBusy(true);
     setError(null);
     try {

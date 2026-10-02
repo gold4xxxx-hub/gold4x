@@ -4,9 +4,10 @@
 // verified ABI. Pairs supported: JSAV/INR and USDT/INR. G4X is not supported
 // by the deployed contract.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import type { Signer } from 'ethers';
+import { useConnection, useConnectorClient, useConnect, useSwitchChain } from 'wagmi';
 import './p2p.css';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
@@ -74,71 +75,133 @@ function tradeChipClass(status: number): string {
 
 const TOKENS: P2PToken[] = ['JSAV', 'USDT'];
 
+/**
+ * Minimal async-resource hook: runs `fn`, tracks loading and error, discards
+ * results from superseded runs. Kept local rather than pulling in a data
+ * library for one call site.
+ */
+function useResource<T>(
+  fn: () => Promise<T>,
+  deps: unknown[],
+): { data: T | null; error: Error | null; loading: boolean } {
+  const [state, setState] = useState<{ data: T | null; error: Error | null }>({
+    data: null,
+    error: null,
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fn().then(
+      (value) => {
+        if (cancelled) return;
+        setState({ data: value, error: null });
+        setLoading(false);
+      },
+      (e: unknown) => {
+        if (cancelled) return;
+        setState({ data: null, error: e instanceof Error ? e : new Error(String(e)) });
+        setLoading(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return { ...state, loading };
+}
+
+/**
+ * Wallet state sourced from wagmi, not from a hand-rolled window.ethereum
+ * probe. The rest of the app connects through the RainbowKit/wagmi provider
+ * (including the SafePal auto-reconnect in Web3Providers), so a local probe
+ * misses connections made that way and the page wrongly reports "not
+ * connected" even though the wallet is.
+ *
+ * The signer is derived from the same connector client wagmi already tracks,
+ * so a connection made anywhere in the app is visible here.
+ */
 function useSigner() {
-  const [account, setAccount] = useState<string | null>(null);
-  const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { address, isConnected, connector } = useConnection();
+  const { data: client } = useConnectorClient({ connector });
+  const { switchChain, isPending: switching } = useSwitchChain();
+  const { connect: connectWallet, connectors, isPending: connecting } = useConnect();
+
+  // Derive the EIP-1193 provider from the connector client. viem clients expose
+  // it as `transport`, which is the actual request-capable object for an
+  // injected wallet; some builds expose it as `provider` instead.
+  const eip1193 = useMemo(() => {
+    if (!client) return null;
+    const c = client as unknown as { transport?: unknown; provider?: unknown };
+    const t = c.transport as { request?: unknown } | undefined;
+    if (t && typeof t.request === 'function') return t;
+    const pv = c.provider as { request?: unknown } | undefined;
+    if (pv && typeof pv.request === 'function') return pv;
+    return null;
+  }, [client]);
+
+  // The ethers signer is built asynchronously because getSigner() is async.
+  // Derived via a resource-like pattern so no setState happens synchronously
+  // inside the effect body.
+  const signerResource = useResource<ethers.Signer | null>(
+    async () => {
+      if (!eip1193) return null;
+      return new ethers.BrowserProvider(eip1193 as never).getSigner();
+    },
+    [eip1193],
+  );
+
+  const ethersSigner = signerResource.data ?? null;
+
+  const account = address ?? null;
+
+  // BSC only. If the wallet is on another chain, switching needs a user
+  // gesture, so it is triggered from the button rather than on mount.
+  const wrongChain = isConnected && client && client.chain?.id !== BSC_CONFIG.chainId;
 
   const connect = async () => {
-    const injected = window.ethereum;
-    if (!injected) {
-      alert('No browser wallet detected. Install MetaMask or similar.');
+    const injectedConnector =
+      connectors.find((c) => c.id === 'injected') ?? connectors[0];
+    if (!injectedConnector) {
+      alert('No browser wallet detected. Install SafePal, MetaMask or similar.');
       return;
     }
-    setBusy(true);
+    connectWallet({ connector: injectedConnector });
+  };
+
+  const ensureBsc = async () => {
+    if (!wrongChain) return true;
     try {
-      const provider = new ethers.BrowserProvider(injected);
-      const net = await provider.getNetwork();
-      if (Number(net.chainId) !== BSC_CONFIG.chainId) {
-        await provider.send('wallet_switchEthereumChain', [
-          { chainId: `0x${BSC_CONFIG.chainId.toString(16)}` },
-        ]);
-      }
-      const s = await provider.getSigner();
-      setSigner(s);
-      setAccount(await s.getAddress());
-    } catch (e) {
-      const err = e as { shortMessage?: string; message?: string };
-      alert(err?.shortMessage || err?.message || 'Could not connect wallet.');
-    } finally {
-      setBusy(false);
+      await switchChain({ chainId: BSC_CONFIG.chainId });
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  useEffect(() => {
-    const injected = window.ethereum;
-    if (!injected) return;
-
-    // Subscribe on the raw EIP-1193 provider. ethers' BrowserProvider rejects
-    // "accountsChanged" as a ProviderEvent, so it cannot be used here.
-    const onAccounts = (...args: unknown[]) => {
-      const accs = (args[0] as string[]) ?? [];
-      const next = accs[0] ?? null;
-      setAccount(next);
-      if (!next) setSigner(null);
-    };
-    injected.on?.('accountsChanged', onAccounts);
-    injected.on?.('disconnect', () => {
-      setAccount(null);
-      setSigner(null);
-    });
-
-    // Restore an already-connected session on mount.
-    new ethers.BrowserProvider(injected)
-      .listAccounts()
-      .then((list) => setAccount(list[0]?.address ?? null))
-      .catch(() => setAccount(null));
-
-    return () => {
-      injected.removeListener?.('accountsChanged', onAccounts);
-    };
-  }, []);
-
-  return { account, signer, connect, busy };
+  return {
+    account,
+    signer: ethersSigner,
+    connect,
+    busy: connecting || switching,
+    isConnected,
+    wrongChain: Boolean(wrongChain),
+    ensureBsc,
+  };
 }
 
 const P2PPage: React.FC = () => {
-  const { account, signer, connect, busy: connecting } = useSigner();
+  const {
+    account,
+    signer,
+    connect,
+    busy: connecting,
+    wrongChain,
+    ensureBsc,
+  } = useSigner();
   const { stats, loading: statsLoading, error: statsError, refresh } = useEscrowStats();
   const { status: kyc, refresh: refreshKyc } = useKycStatus(account);
   const { ads, loading: adsLoading } = useAds(stats.adCounter, stats.chainActive);
@@ -219,6 +282,12 @@ const P2PPage: React.FC = () => {
   const guard = async (fn: (s: Signer) => Promise<unknown>, label: string) => {
     if (!signer) {
       setStatus('Connect a wallet first.');
+      return;
+    }
+    // The contract is BSC-only, so a wrong-network signer reverts with a
+    // confusing error. Catch it here with something actionable.
+    if (!(await ensureBsc())) {
+      setStatus('Please switch your wallet to Binance Smart Chain and try again.');
       return;
     }
     if (!kyc.verified) {
@@ -391,8 +460,21 @@ const P2PPage: React.FC = () => {
                   </span>
                 </>
               ) : (
-                <button className="p2p-btn" onClick={connect} disabled={connecting}>
+                <button
+                  className="p2p-btn"
+                  onClick={() => void connect()}
+                  disabled={connecting}
+                >
                   {connecting ? 'Connecting…' : 'Connect Wallet'}
+                </button>
+              )}
+              {account && wrongChain && (
+                <button
+                  className="p2p-btn p2p-btn--ghost"
+                  onClick={() => void ensureBsc()}
+                  disabled={connecting}
+                >
+                  Switch to BSC
                 </button>
               )}
             </div>
