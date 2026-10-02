@@ -40,7 +40,6 @@ import {
   type TradeRow,
 } from '@/hooks/useP2PEscrow';
 import { getTradeChat, getTradeEventState, type ChatEntry } from '@/lib/p2pLogs';
-import KycPanel from '@/components/p2p/KycPanel';
 
 /** Seconds remaining until `deadline`, floored at 0. */
 function secondsLeft(deadline: number, now: number): number {
@@ -552,9 +551,26 @@ const P2PPage: React.FC = () => {
           </div>
         )}
 
+        {/* KYC submission lives on /kyc now, so there is one place to submit
+            and one source of truth. The desk still gates on kyc.verified,
+            because only the contract can unlock trading. */}
         {account && !kyc.verified && (
-          <div className="fx-reveal">
-            <KycPanel signer={signer} submitted={kyc.submitted} verified={kyc.verified} onDone={reload} />
+          <div className="p2p-alert p2p-alert--warn">
+            <span className="p2p-dot" style={{ marginTop: 6 }} />
+            <div className="flex-1">
+              <p className="mb-2">
+                {kyc.submitted
+                  ? 'Your KYC is submitted and waiting for owner review. You can post ads and take trades once it is approved.'
+                  : 'You need a verified KYC before you can post ads or take trades.'}
+              </p>
+              <a
+                className="p2p-btn p2p-btn--sm"
+                href="/kyc/"
+                style={{ textDecoration: 'none' }}
+              >
+                <span>{kyc.submitted ? 'View KYC status' : 'Complete KYC'}</span>
+              </a>
+            </div>
           </div>
         )}
 
