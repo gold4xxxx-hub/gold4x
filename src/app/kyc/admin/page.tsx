@@ -16,6 +16,7 @@ import {
   P2PESCROW_CONTRACT_ADDRESS,
   P2PESCROW_CONTRACT_ABI,
   BSC_CONFIG,
+  isP2pEscrowOwner,
 } from '@/config/web3Config';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
 import { shortAddress } from '@/config/p2pEscrow';
@@ -46,9 +47,7 @@ export default function KycAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const isOwner = Boolean(
-    address && address.toLowerCase() === '0xb32fccf4723fc19b8a097006f59437c15e88bbce',
-  );
+  const isOwner = isP2pEscrowOwner(address);
 
   const load = useCallback(async () => {
     setLoading(true);

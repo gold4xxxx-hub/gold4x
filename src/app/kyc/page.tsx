@@ -13,7 +13,7 @@ import { useConnect, useSwitchChain } from 'wagmi';
 import KycPanel from '@/components/p2p/KycPanel';
 import { useKycStatus, getStoredKyc } from '@/hooks/useP2PEscrow';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
-import { BSC_CONFIG } from '@/config/web3Config';
+import { BSC_CONFIG, isP2pEscrowOwner } from '@/config/web3Config';
 import { shortAddress } from '@/config/p2pEscrow';
 import '../p2p/p2p.css';
 
@@ -72,6 +72,8 @@ export default function KycPage() {
 
   const wrongChain = isConnected && chainId !== null && chainId !== BSC_CONFIG.chainId;
 
+  const isOwner = isP2pEscrowOwner(address);
+
   return (
     <div className="fx-shell p2p-root">
       <div className="p2p-ambient" aria-hidden="true">
@@ -95,6 +97,19 @@ export default function KycPage() {
               and can only be updated by you. An owner verifies the application,
               which is what unlocks posting ads and taking trades on the P2P desk.
             </p>
+            {/* Owner-only, so the applicant list is not advertised to every
+                visitor. The admin page enforces the same check on-chain. */}
+            {isOwner && (
+              <div className="mt-5">
+                <a
+                  className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                  href="/kyc/admin/"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <span>Owner: review KYC applications</span>
+                </a>
+              </div>
+            )}
           </div>
         </header>
 

@@ -18,6 +18,19 @@ export const USDT_CONTRACT_ADDRESS =
   '0x55d398326f99059ff775485246999027b3197955';
 export const USDT_CONTRACT_ABI = JSAVIOR_CONTRACT_ABI;
 
+// Contract owner of P2PEscrow. Controls KYC approval (verifyKYC), the
+// payment windows, chain enable/disable, and can drain the escrow via
+// rescueToken. Used to gate owner-only UI affordances; the contract remains
+// the authority, so hiding a button is presentation only.
+export const P2PESCROW_OWNER_ADDRESS =
+  '0xb32fccf4723fc19b8a097006f59437c15e88bbce';
+
+/** True when `address` is the P2PEscrow owner. */
+export function isP2pEscrowOwner(address?: string | null): boolean {
+  if (!address) return false;
+  return address.toLowerCase() === P2PESCROW_OWNER_ADDRESS.toLowerCase();
+}
+
 // P2P escrow - verified on BSC (P2PEscrow, solidity 0.8.34)
 export const P2PESCROW_CONTRACT_ADDRESS =
   '0x8578Aaf3bA423e62A5e6ea04b69fe91B8545c2C0';
