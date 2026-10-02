@@ -173,7 +173,12 @@ export function useKycStatus(address: string | null) {
       const c = readContract();
       const [verified, mine] = await Promise.all([
         c.isVerified(address),
-        c.getMyKYC2(),
+        // `from` is required here. getMyKYC2() reads msg.sender, and over an
+        // eth_call with no from the node treats msg.sender as the zero
+        // address, so it always reported submitted=false. That made the form
+        // offer Submit KYC for wallets that had already submitted, and clicking
+        // it reverted with "KYC exists; use updateKYC".
+        c.getMyKYC2({ from: address }),
       ]);
       setStatus({
         loading: false,

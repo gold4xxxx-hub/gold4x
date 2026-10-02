@@ -89,6 +89,10 @@ function explainKycError(err: unknown): string {
 export default function KycPanel({ signer, submitted, verified, onDone }: Props) {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  // A verified user gets a read-only summary by default, with the option to
+  // open the form to correct a mistake. Hiding the form outright left them no
+  // way to fix a typo without the owner revoking their verification first.
+  const [showEdit, setShowEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
@@ -167,13 +171,20 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
     }
   };
 
-  if (verified) {
+  if (verified && !showEdit) {
     return (
       <div className="p2p-panel p-5">
         <div className="p2p-tile__label mb-2">KYC</div>
-        <p className="text-sm text-[#b9b0a3]">
+        <p className="text-sm text-[#b9b0a3] mb-3">
           Your KYC is verified. You can post ads and take trades.
         </p>
+        <button
+          type="button"
+          className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+          onClick={() => setShowEdit(true)}
+        >
+          <span>Correct my details</span>
+        </button>
       </div>
     );
   }
@@ -186,6 +197,28 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
           ? 'Your application is pending owner review. You can update the details below while it is pending.'
           : 'Submit your details to enable trading. An owner must verify the application before you can post ads.'}
       </p>
+
+      {/* Editing resets verified to false in the contract, so say so rather
+          than letting the user discover their trading was unlocked. */}
+      {verified && (
+        <div className="p2p-alert p2p-alert--warn mb-4">
+          <span className="p2p-dot" style={{ marginTop: 6 }} />
+          <div className="flex-1">
+            <p className="mb-2">
+              Saving changes sends your application back to pending. You will
+              not be able to post ads or take trades until the owner approves
+              it again.
+            </p>
+            <button
+              type="button"
+              className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+              onClick={() => setShowEdit(false)}
+            >
+              <span>Cancel</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="p2p-kyc-banner mb-4">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ flexShrink: 0 }}>
