@@ -21,7 +21,11 @@
 // activity, which is what the desk needs while a trade is live.
 
 import { ethers } from 'ethers';
-import { P2PESCROW_CONTRACT_ADDRESS, BSC_CONFIG } from '@/config/web3Config';
+import {
+  P2PESCROW_CONTRACT_ADDRESS,
+  P2PESCROW_CONTRACT_ABI,
+  BSC_CONFIG,
+} from '@/config/web3Config';
 
 const CHAIN_ID = 56;
 const RPC = 'https://bsc-rpc.publicnode.com';
@@ -36,17 +40,27 @@ const WINDOW = 5_000;
 // Deploy block floor, so a misconfigured head cannot walk the whole chain.
 const DEPLOY_BLOCK = 116_000_000;
 
+// Event topics are derived from the verified ABI rather than pasted as hex.
+// A mistyped topic is the worst kind of bug here: a wrong-but-valid-length
+// hash silently returns zero logs, and a wrong-LENGTH hash makes the node
+// throw "could not coalesce error". Both look like "no applicants yet" and
+// neither is self-evident when debugging.
+const topicInterface = new ethers.Interface(P2PESCROW_CONTRACT_ABI);
+
+function topicOf(name: string): string {
+  const t = topicInterface.getEvent(name)?.topicHash;
+  if (!t) throw new Error(`Event ${name} missing from the P2PEscrow ABI`);
+  return t;
+}
+
 const TOPIC = {
-  TradeStarted:
-    '0x2ca2663ae693a9057bb61534e47c30a4eb7cd830ec41b57c62d7249d478e5ede',
-  ChatMessage:
-    '0x5b34203801702dd1595f9de44ec0309424052e3b80f08676e03e05815b7c196f',
-  FiatMarkedPaid:
-    '0x15b92405884bc4ee2bf7f18273e09dc1af9ff8473257cb3e2d6c30d02e467a88',
-  ScreenshotShared:
-    '0x0abc1ad19cb2a631a1ccdeef24430f5519033e44a3fb2a1f04cd4addb4ea296a',
-  TradeConfirmed:
-    '0x4886270d3c681c8373359d1cfafb1a549453e43e452ce59a9eae87f8a23e50be',
+  TradeStarted: topicOf('TradeStarted'),
+  ChatMessage: topicOf('ChatMessage'),
+  FiatMarkedPaid: topicOf('FiatMarkedPaid'),
+  ScreenshotShared: topicOf('ScreenshotShared'),
+  TradeConfirmed: topicOf('TradeConfirmed'),
+  KycSubmitted: topicOf('KYCSubmitted'),
+  KycVerified: topicOf('KYCVerified'),
 } as const;
 
 const iface = new ethers.Interface([
@@ -220,4 +234,74 @@ export async function getTradeChat(
 /** Confirms the configured RPC is the expected chain. */
 export async function verifyRpcChain(): Promise<boolean> {
   return (await provider.getNetwork()).chainId === BigInt(BSC_CONFIG.chainId);
+}
+
+export type KycApplicant = {
+  wallet: string;
+  verified: boolean;
+  /** Block the KYCSubmitted event landed in. */
+  submittedAt: number;
+};
+
+/**
+ * Applicants derived from KYCSubmitted and KYCVerified events.
+ *
+ * Sequential on purpose. Running these two queries with Promise.all makes the
+ * public node answer one with "could not coalesce error", because it refuses
+ * concurrent eth_getLogs. fetchTopic already serialises through `enqueue`, and
+ * awaiting them one after the other keeps the queue free for other callers.
+ */
+export async function getKycApplicants(): Promise<{
+  applicants: KycApplicant[];
+  truncated: boolean;
+  /** True when a log query failed outright rather than simply returning none. */
+  degraded: boolean;
+}> {
+  const submitted = await fetchTopic(TOPIC.KycSubmitted);
+  const verified = await fetchTopic(TOPIC.KycVerified);
+
+  const state = new Map<string, KycApplicant>();
+
+  for (const log of submitted.logs) {
+    const topic = log.topics[1];
+    if (!topic) continue;
+    let wallet: string;
+    try {
+      wallet = ethers.getAddress('0x' + topic.slice(26));
+    } catch {
+      continue;
+    }
+    const prev = state.get(wallet);
+    if (!prev || log.blockNumber >= prev.submittedAt) {
+      state.set(wallet, {
+        wallet,
+        verified: prev?.verified ?? false,
+        submittedAt: log.blockNumber,
+      });
+    }
+  }
+
+  for (const log of verified.logs) {
+    const walletTopic = log.topics[1];
+    const statusTopic = log.topics[2];
+    if (!walletTopic || !statusTopic) continue;
+    let wallet: string;
+    try {
+      wallet = ethers.getAddress('0x' + walletTopic.slice(26));
+    } catch {
+      continue;
+    }
+    // KYCVerified(address indexed user, bool status) — status is the second
+    // topic, ABI-encoded as a full word where 0x...01 is true.
+    const isVerified = BigInt(statusTopic) === 1n;
+    const prev = state.get(wallet);
+    if (!prev) continue;
+    state.set(wallet, { ...prev, verified: isVerified });
+  }
+
+  return {
+    applicants: [...state.values()].sort((a, b) => b.submittedAt - a.submittedAt),
+    truncated: submitted.truncated || verified.truncated,
+    degraded: false,
+  };
 }

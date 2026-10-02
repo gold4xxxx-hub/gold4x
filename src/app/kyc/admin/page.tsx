@@ -15,31 +15,21 @@ import { useConnect } from 'wagmi';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
   P2PESCROW_CONTRACT_ABI,
-  BSC_CONFIG,
   isP2pEscrowOwner,
 } from '@/config/web3Config';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
+import { getKycApplicants, type KycApplicant } from '@/lib/p2pLogs';
 import { shortAddress } from '@/config/p2pEscrow';
 import '../../p2p/p2p.css';
 
-// keccak256("KYCSubmitted(address)") and keccak256("KYCVerified(address,bool)")
-const TOPIC_SUBMITTED = '0x50254a0dab3f208f414bf247012e8d8c90928d1a1b1699b1b62df2326bfb09ab';
-const TOPIC_VERIFIED = '0x7a02eb9b107b2ab713e88c3cdac538e5c21b689d0f1b1f22367578b28fc5d09';
-
-type Applicant = {
-  wallet: string;
-  verified: boolean;
-  submittedAt: number;
-};
-
-const RPC = 'https://bsc-rpc.publicnode.com';
-const WINDOW = 5_000; // public-node limit, same as the P2P log reader
+/** Kept in step with the shared log reader's window. */
+const LOG_WINDOW = 5_000;
 
 export default function KycAdminPage() {
   const { connect, connectors, isPending: connecting } = useConnect();
   const { address, isConnected, signer } = useEthersSigner();
 
-  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [applicants, setApplicants] = useState<KycApplicant[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,53 +43,14 @@ export default function KycAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const provider = new ethers.JsonRpcProvider(RPC, BSC_CONFIG.chainId, {
-        staticNetwork: true,
-      });
-      const head = await provider.getBlockNumber();
-      const from = Math.max(0, head - WINDOW);
-
-      const [submitted, verified] = await Promise.all([
-        provider.getLogs({
-          address: P2PESCROW_CONTRACT_ADDRESS,
-          topics: [TOPIC_SUBMITTED],
-          fromBlock: from,
-          toBlock: head,
-        }),
-        provider.getLogs({
-          address: P2PESCROW_CONTRACT_ADDRESS,
-          topics: [TOPIC_VERIFIED],
-          fromBlock: from,
-          toBlock: head,
-        }),
-      ]);
-
-      const state = new Map<string, Applicant>();
-      for (const log of submitted) {
-        const wallet = ethers.getAddress('0x' + log.topics[1].slice(26));
-        const prev = state.get(wallet);
-        if (!prev || log.blockNumber >= prev.submittedAt) {
-          state.set(wallet, {
-            wallet,
-            verified: prev?.verified ?? false,
-            submittedAt: log.blockNumber,
-          });
-        }
-      }
-      for (const log of verified) {
-        const wallet = ethers.getAddress('0x' + log.topics[1].slice(26));
-        const prev = state.get(wallet);
-        if (!prev) continue;
-        // topic2 is the ABI-encoded bool: 0x...01 true, 0x...00 false
-        const isTrue = BigInt(log.topics[2]) === 1n;
-        state.set(wallet, { ...prev, verified: isTrue });
-      }
-
-      setApplicants(
-        [...state.values()].sort((a, b) => b.submittedAt - a.submittedAt),
-      );
+      // Delegates to the shared log reader, which serialises eth_getLogs. Two
+      // concurrent queries here made the public node return "could not
+      // coalesce error".
+      const { applicants, truncated } = await getKycApplicants();
+      setApplicants(applicants);
       setStatus(
-        `Read the most recent ${WINDOW.toLocaleString()} blocks only. Submissions older than that are not listed.`,
+        `Read the most recent ${LOG_WINDOW.toLocaleString()} blocks only.` +
+          (truncated ? ' Submissions older than that are not listed.' : ''),
       );
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
