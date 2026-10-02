@@ -364,20 +364,64 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
   return { trades, loading, refresh: load, hasMore: tradeCounter > PAGE_SIZE };
 }
 
+/**
+ * Simulate the KYC submission against the public RPC before sending.
+ *
+ * Wallets run their own pre-flight check through their own endpoint, and some
+ * of them return a bare "execution reverted" with no reason payload. ethers
+ * renders that as "missing revert data", which tells the user nothing. Running
+ * the same call here surfaces the contract's actual revert string, so the
+ * failure is legible before the signing prompt appears.
+ *
+ * Returns null when the simulation succeeds.
+ */
+export async function preflightKyc(
+  signer: ethers.Signer,
+  data: KycDraft,
+  alreadySubmitted: boolean,
+): Promise<string | null> {
+  const provider = new ethers.JsonRpcProvider(BSC_RPC, CHAIN_ID, {
+    staticNetwork: true,
+  });
+  const address = await signer.getAddress();
+
+  // Read-only contract on the public RPC, with `from` supplied as an override.
+  // No signer is needed because this never sends anything.
+  const c = new ethers.Contract(
+    P2PESCROW_CONTRACT_ADDRESS,
+    P2PESCROW_CONTRACT_ABI,
+    provider,
+  );
+  const fn = alreadySubmitted ? 'updateKYC' : 'submitKYC';
+
+  try {
+    await c[fn].staticCall(data, { from: address });
+    return null;
+  } catch (e) {
+    const err = e as {
+      reason?: string;
+      shortMessage?: string;
+      revert?: { name?: string; args?: unknown[] };
+      info?: { error?: { message?: string } };
+    };
+
+    // Prefer the decoded reason, then the node message, then the event name.
+    if (err.reason) return err.reason;
+    const msg = err.info?.error?.message || err.shortMessage || '';
+    const quoted = msg.match(/reverted: "([^"]+)"/);
+    if (quoted?.[1]) return quoted[1];
+    if (err.revert?.name) return err.revert.name;
+    if (/missing revert data/i.test(msg) || /execution reverted/i.test(msg)) {
+      return 'The contract rejected this submission but did not say why. This usually means a required field was empty.';
+    }
+    return msg || 'The contract rejected this submission.';
+  }
+}
+
 /** Submit a KYC application, or update it if one already exists. */
 export async function submitKyc(
   signer: ethers.Signer,
-  data: {
-    bankHolderName: string;
-    bankAccountNumber: string;
-    ifscCode: string;
-    bankName: string;
-    aadharFrontHash: string;
-    aadharBackHash: string;
-    mobile: string;
-    email: string;
-    pan: string;
-  },
+  data: KycDraft,
   alreadySubmitted: boolean,
 ) {
   const c = readContract(signer);
