@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Signer } from 'ethers';
 import { submitKyc, getStoredKyc } from '@/hooks/useP2PEscrow';
+import DocumentUpload from './DocumentUpload';
 
 type Props = {
   signer: Signer | null;
@@ -32,12 +33,15 @@ const KYC_LABELS: Record<keyof typeof EMPTY, string> = {
   bankAccountNumber: 'Bank account number',
   ifscCode: 'IFSC code',
   bankName: 'Bank name',
-  aadharFrontHash: 'Aadhaar front (IPFS hash)',
-  aadharBackHash: 'Aadhaar back (IPFS hash)',
+  aadharFrontHash: 'Aadhaar front',
+  aadharBackHash: 'Aadhaar back',
   mobile: 'Mobile',
   email: 'Email',
   pan: 'PAN',
 };
+
+// The Aadhaar fields take an image upload rather than typed text.
+const DOCUMENT_FIELDS = ['aadharFrontHash', 'aadharBackHash'] as const;
 
 export default function KycPanel({ signer, submitted, verified, onDone }: Props) {
   const [form, setForm] = useState(EMPTY);
@@ -103,21 +107,43 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
           : 'Submit your details to enable trading. An owner must verify the application before you can post ads.'}
       </p>
 
+      <div className="p2p-kyc-banner mb-4">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ flexShrink: 0 }}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <circle cx="9" cy="11" r="2" />
+          <path d="M5 17c1.5-2 3-3 4-3s2.5 1 4 3" />
+        </svg>
+        <span>
+          Aadhaar images upload to a private link. Only the link is stored on-chain.
+        </span>
+      </div>
+
       <form onSubmit={onSubmit} className="p2p-kyc-fields">
-        {(Object.keys(form) as (keyof typeof EMPTY)[]).map((k) => (
-          <div key={k} className="p2p-field">
-            <label className="p2p-label" htmlFor={`kyc-${k}`}>
-              {KYC_LABELS[k]}
-            </label>
-            <input
-              id={`kyc-${k}`}
-              required
-              className="p2p-input"
-              value={form[k]}
-              onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
-            />
-          </div>
-        ))}
+        {(Object.keys(form) as (keyof typeof EMPTY)[]).map((k) =>
+          (DOCUMENT_FIELDS as readonly string[]).includes(k) ? (
+            <div key={k}>
+              <DocumentUpload
+                id={`kyc-${k}`}
+                label={KYC_LABELS[k]}
+                value={form[k]}
+                onChange={(cid) => setForm((f) => ({ ...f, [k]: cid }))}
+              />
+            </div>
+          ) : (
+            <div key={k} className="p2p-field">
+              <label className="p2p-label" htmlFor={`kyc-${k}`}>
+                {KYC_LABELS[k]}
+              </label>
+              <input
+                id={`kyc-${k}`}
+                required
+                className="p2p-input"
+                value={form[k]}
+                onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
+              />
+            </div>
+          ),
+        )}
         <div className="md:col-span-2">
           <button type="submit" className="p2p-btn" disabled={busy}>
             <span>{busy ? 'Submitting…' : submitted ? 'Update KYC' : 'Submit KYC'}</span>
