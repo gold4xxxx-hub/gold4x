@@ -9,8 +9,8 @@
 // invisible to the trading desk. That path has been removed.
 
 import { useEffect, useState } from 'react';
-import { useSwitchChain } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useConnect, useSwitchChain } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import KycPanel from '@/components/p2p/KycPanel';
 import { useKycStatus, getStoredKyc } from '@/hooks/useP2PEscrow';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
@@ -20,6 +20,8 @@ import '../p2p/p2p.css';
 
 export default function KycPage() {
   const { switchChain, isPending: switching } = useSwitchChain();
+  const { connect: connectWallet } = useConnect();
+  const [connecting, setConnecting] = useState(false);
 
   const { address, isConnected, signer, chainId } = useEthersSigner();
   const { status: kyc, refresh: refreshKyc } = useKycStatus(address);
@@ -55,6 +57,27 @@ export default function KycPage() {
   }, [address, kyc.submitted, kyc.updatedAt]);
 
   const onSwitch = () => switchChain({ chainId: BSC_CONFIG.chainId });
+
+  // Mirrors the main page's golden button exactly.
+  const handleConnect = () => {
+    setNotice(null);
+    connectWallet(
+      { connector: injected() },
+      {
+        onSuccess: () => setConnecting(false),
+        onError: (e: Error) => {
+          setConnecting(false);
+          setNotice(
+            e?.message?.includes('not available') ||
+              e?.message?.includes('No EIP-1193')
+              ? 'No wallet detected. Open this page inside your SafePal app, or install a browser extension on desktop.'
+              : e?.message || 'Could not connect the wallet.',
+          );
+        },
+      },
+    );
+    setConnecting(true);
+  };
 
   const onDone = () => {
     setNotice('KYC submitted. An owner must verify it before you can trade.');
@@ -111,12 +134,18 @@ export default function KycPage() {
               Connect the wallet you want verified. The address is the identity
               on-chain, so connect the same wallet you intend to trade with.
             </p>
-            {/* RainbowKit's ConnectButton, same as the top nav, so it offers
-                every connector that is actually present and reports its own
-                errors. The previous hand-rolled button silently did nothing. */}
-            <div className="gold-connect-wrapper rounded-md">
-              <ConnectButton />
-            </div>
+            {/* Matches the main page's golden button: injected() constructs the
+                connector directly instead of searching the connectors array,
+                which is empty until discovery finishes. Works inside SafePal's
+                in-app browser, unlike a wallet-picker modal. */}
+            <button
+              type="button"
+              className="p2p-btn"
+              onClick={handleConnect}
+              disabled={connecting}
+            >
+              <span>{connecting ? 'Connecting…' : 'Connect Wallet'}</span>
+            </button>
           </div>
         )}
 

@@ -8,7 +8,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ethers } from 'ethers';
 import type { Signer } from 'ethers';
 import { useConnection, useConnectorClient, useConnect, useSwitchChain } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { injected } from 'wagmi/connectors';
 import './p2p.css';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
@@ -128,7 +128,6 @@ function useSigner() {
   const { address, isConnected, connector } = useConnection();
   const { data: client } = useConnectorClient({ connector });
   const { switchChain, isPending: switching } = useSwitchChain();
-  const { isPending: connecting } = useConnect();
 
   // Derive the EIP-1193 provider from the connector client. viem clients expose
   // it as `transport`, which is the actual request-capable object for an
@@ -162,9 +161,6 @@ function useSigner() {
   // gesture, so it is triggered from the button rather than on mount.
   const wrongChain = isConnected && client && client.chain?.id !== BSC_CONFIG.chainId;
 
-  // The page renders RainbowKit's ConnectButton rather than calling wagmi's
-  // connect() with a hand-picked connector, which silently did nothing when no
-  // injected connector was present.
   const ensureBsc = async () => {
     if (!wrongChain) return true;
     try {
@@ -178,7 +174,7 @@ function useSigner() {
   return {
     account,
     signer: ethersSigner,
-    busy: connecting || switching,
+    busy: switching,
     isConnected,
     wrongChain: Boolean(wrongChain),
     ensureBsc,
@@ -189,10 +185,10 @@ const P2PPage: React.FC = () => {
   const {
     account,
     signer,
-    busy: connecting,
     wrongChain,
     ensureBsc,
   } = useSigner();
+  const { connect: connectWallet } = useConnect();
   const { stats, loading: statsLoading, error: statsError, refresh } = useEscrowStats();
   const { status: kyc, refresh: refreshKyc } = useKycStatus(account);
   const { ads, loading: adsLoading } = useAds(stats.adCounter, stats.chainActive);
@@ -207,6 +203,7 @@ const P2PPage: React.FC = () => {
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
 
   // Per-trade detail the view getters do not expose. Loaded on open.
@@ -266,6 +263,31 @@ const P2PPage: React.FC = () => {
     const t = setInterval(reload, 20000);
     return () => clearInterval(t);
   }, [reload]);
+
+  // Matches the main page's golden button. injected() constructs the connector
+  // directly rather than searching the connectors array, which is empty until
+  // EIP-6963 discovery finishes, and it works inside SafePal's in-app browser.
+  // RainbowKit's ConnectButton would be wrong here: it opens a wallet-picker
+  // modal, which is pointless for someone already inside a wallet browser.
+  const handleConnect = () => {
+    setStatus(null);
+    connectWallet(
+      { connector: injected() },
+      {
+        onSuccess: () => setConnecting(false),
+        onError: (e: Error) => {
+          setConnecting(false);
+          setStatus(
+            e?.message?.includes('not available') ||
+              e?.message?.includes('No EIP-1193')
+              ? 'No wallet detected. Open this page inside your SafePal app, or install a browser extension on desktop.'
+              : e?.message || 'Could not connect the wallet.',
+          );
+        },
+      },
+    );
+    setConnecting(true);
+  };
 
   // Shared preamble for every write: require a connected wallet and a
   // verified KYC, then run and surface any revert. The signer is passed in
@@ -451,9 +473,14 @@ const P2PPage: React.FC = () => {
                   </span>
                 </>
               ) : (
-                <div className="gold-connect-wrapper rounded-md">
-                  <ConnectButton />
-                </div>
+                <button
+                  type="button"
+                  className="p2p-btn"
+                  onClick={handleConnect}
+                  disabled={connecting}
+                >
+                  <span>{connecting ? 'Connecting…' : 'Connect Wallet'}</span>
+                </button>
               )}
               {account && wrongChain && (
                 <button

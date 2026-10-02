@@ -11,7 +11,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
   P2PESCROW_CONTRACT_ABI,
@@ -33,6 +34,7 @@ const SECONDS_PER_BLOCK = 0.45;
 
 export default function KycAdminPage() {
   const { address, isConnected, signer } = useEthersSigner();
+  const { connect: connectWallet } = useConnect();
 
   const [applicants, setApplicants] = useState<KycApplicant[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function KycAdminPage() {
   const [detailWallet, setDetailWallet] = useState<string | null>(null);
   const [manualWallet, setManualWallet] = useState('');
   const [loading, setLoading] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [busyWallet, setBusyWallet] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -168,14 +171,45 @@ export default function KycAdminPage() {
     }
   };
 
-  // The previous button called wagmi's connect() with a hand-picked injected
-  // connector and did nothing when none was found, so it failed silently for
-  // everyone. RainbowKit's ConnectButton enumerates whatever is actually
-  // available and surfaces its own errors, matching the top-nav button.
+  // Matches the main page's golden button exactly: construct the injected
+  // connector directly with injected() rather than looking it up in the
+  // connectors array. Looking it up depends on EIP-6963 discovery having
+  // already finished, which it often has not on first paint, so the old button
+  // found nothing and did nothing.
+  //
+  // injected() also works inside SafePal's in-app browser, which injects
+  // window.ethereum. RainbowKit's ConnectButton was the wrong tool here: it
+  // opens a wallet-picker modal asking which wallet to use, which is
+  // pointless when the visitor is already inside a wallet browser.
+  const handleConnect = () => {
+    setError(null);
+    connectWallet(
+      { connector: injected() },
+      {
+        onSuccess: () => setConnecting(false),
+        onError: (e: Error) => {
+          setConnecting(false);
+          setError(
+            e?.message?.includes('not available') ||
+              e?.message?.includes('No EIP-1193')
+              ? 'No wallet detected. Open this page inside your SafePal app, or install a browser extension on desktop.'
+              : e?.message || 'Could not connect the wallet.',
+          );
+        },
+      },
+    );
+    setConnecting(true);
+  };
+
   const walletConnect = (
-    <div className="gold-connect-wrapper rounded-md">
-      <ConnectButton />
-    </div>
+    <button
+      type="button"
+      className="p2p-btn"
+      onClick={handleConnect}
+      disabled={connecting}
+    >
+      <span>{connecting ? 'Connecting…' : 'Connect Wallet'}</span>
+    </button>
   );
 
   return (
