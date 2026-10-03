@@ -36,7 +36,7 @@ export const TRADE_STATUS_LABEL: Record<number, string> = {
   0: 'none',
   1: 'open',
   2: 'payment sent',
-  3: 'completed',
+  3: 'closed',
   4: 'cancelled',
 };
 

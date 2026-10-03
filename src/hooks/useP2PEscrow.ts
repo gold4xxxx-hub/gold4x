@@ -294,7 +294,9 @@ export function useAds(adCounter: number, chainActive: boolean) {
       // reverting, so ghost rows must be filtered out here.
       setAds(
         (rows.filter(Boolean) as AdRow[]).filter(
-          (r) => r.creator !== '0x0000000000000000000000000000000000000000',
+          (r) =>
+            r.creator !== '0x0000000000000000000000000000000000000000' &&
+            r.active,
         ),
       );
     } catch {
