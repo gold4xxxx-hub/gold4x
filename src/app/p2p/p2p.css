@@ -842,6 +842,44 @@
   word-break: break-all;
 }
 
+.p2p-profile-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.p2p-profile {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.p2p-profile__address {
+  overflow-wrap: anywhere;
+  color: var(--fx-ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.p2p-profile__status {
+  color: var(--fx-ink-subtle);
+  font-size: 0.72rem;
+}
+
+.p2p-profile__status--verified {
+  color: #8fcbb0;
+}
+
+@media (max-width: 520px) {
+  .p2p-profile-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Chat */
 .p2p-chat {
   height: 9.5rem;

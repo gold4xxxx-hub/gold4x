@@ -38,6 +38,7 @@ import {
   sendMessage,
   shareScreenshot,
   getTradeBankDetails,
+  getWalletVerification,
   type AdRow,
   type TradeRow,
 } from '@/hooks/useP2PEscrow';
@@ -258,7 +259,9 @@ const P2PPage: React.FC = () => {
   // interleaved into the transcript by block number.
   const [shots, setShots] = useState<ScreenshotEntry[]>([]);
   const [shotUploading, setShotUploading] = useState(false);
+  const [upiUploading, setUpiUploading] = useState(false);
   const [shotOpen, setShotOpen] = useState<string | null>(null);
+  const [profileVerification, setProfileVerification] = useState<Record<string, boolean | null>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -285,6 +288,28 @@ const P2PPage: React.FC = () => {
   // button so it lines up with the Send button, but still a real file input,
   // which is what makes mobile browsers surface the camera.
   const shotInputRef = useRef<HTMLInputElement>(null);
+  const upiInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!activeTrade) {
+      setProfileVerification({});
+      return;
+    }
+
+    let cancelled = false;
+    const addresses = [...new Set([activeTrade.seller, activeTrade.buyer])];
+    Promise.all(addresses.map(async (address) => {
+      try {
+        return [address, await getWalletVerification(address)] as const;
+      } catch {
+        return [address, null] as const;
+      }
+    })).then((entries) => {
+      if (!cancelled) setProfileVerification(Object.fromEntries(entries));
+    });
+
+    return () => { cancelled = true; };
+  }, [activeTrade]);
   const onStatMove = (key: string) => (e: React.MouseEvent<HTMLDivElement>) => {
     const el = statRefs.current[key];
     if (!el) return;
@@ -464,7 +489,7 @@ const P2PPage: React.FC = () => {
    * the payment before committing to it, and the seller can send a screenshot
    * of their own bank statement afterwards.
    */
-  const onShareShot = async (file: File) => {
+  const onShareShot = async (file: File, asPaymentProof = true) => {
     if (!activeTrade) return;
 
     if (!file.type.startsWith('image/')) {
@@ -476,7 +501,8 @@ const P2PPage: React.FC = () => {
       return;
     }
 
-    setShotUploading(true);
+    if (asPaymentProof) setShotUploading(true);
+    else setUpiUploading(true);
     setStatus(null);
     let cid: string;
     try {
@@ -494,15 +520,14 @@ const P2PPage: React.FC = () => {
       return;
     } finally {
       setShotUploading(false);
+      setUpiUploading(false);
     }
 
-    // Also fill the payment-proof field, so marking the INR as sent does not
-    // require finding and pasting a CID afterwards.
-    setScreenshot(cid);
+    if (asPaymentProof) setScreenshot(cid);
 
     const ok = await guard(
       (s) => shareScreenshot(s, activeTrade.id, cid),
-      'Screenshot shared',
+      asPaymentProof ? 'Payment screenshot shared' : 'UPI QR shared',
     );
     if (ok) {
       setShotOpen(cid);
@@ -1147,6 +1172,37 @@ const P2PPage: React.FC = () => {
             {/* Seller's receiving details. Only a trade party can read these,
                 and the contract returns them for active INR trades only. */}
             {activeTrade.isFiat && (
+              <div className="p2p-profile-list mb-4" aria-label="Trade participant profiles">
+                {([
+                  ['Seller', activeTrade.seller],
+                  ['Buyer', activeTrade.buyer],
+                ] as const).map(([role, address]) => {
+                  const verified = profileVerification[address];
+                  return (
+                    <div className="p2p-profile" key={role}>
+                      <div className="p2p-tile__label">{role}{address === account ? ' · You' : ' · Counterparty'}</div>
+                      <a
+                        className="p2p-profile__address"
+                        href={`https://bscscan.com/address/${address}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {address}
+                      </a>
+                      <span className={verified ? 'p2p-profile__status p2p-profile__status--verified' : 'p2p-profile__status'}>
+                        {verified === undefined
+                          ? 'Checking verification…'
+                          : verified === null
+                            ? 'Verification unavailable'
+                          : verified ? 'KYC verified on-chain' : 'Not KYC verified'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeTrade.isFiat && (
               <div className="p2p-bank">
                 <div className="p2p-tile__label mb-2">Seller bank details — INR receiver</div>
                 {bank ? (
@@ -1186,13 +1242,13 @@ const P2PPage: React.FC = () => {
                 className="p2p-lightbox"
                 role="dialog"
                 aria-modal="true"
-                aria-label="Screenshot"
+                aria-label="Shared payment image"
                 onClick={() => setShotOpen(null)}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={ipfsUrl(shotOpen)}
-                  alt="Shared screenshot, enlarged"
+                  alt="Shared payment image, enlarged"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <button
@@ -1229,14 +1285,14 @@ const P2PPage: React.FC = () => {
                       type="button"
                       className="p2p-shot"
                       onClick={() => setShotOpen(row.cid)}
-                      aria-label="Open shared screenshot"
+                      aria-label="Open shared payment image"
                     >
                       {/* Remote IPFS image, so next/image optimisation does not
                           apply and a plain img is the correct choice. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={ipfsUrl(row.cid)}
-                        alt={`Screenshot shared by ${shortAddress(row.sender)}`}
+                        alt={`Payment image shared by ${shortAddress(row.sender)}`}
                         loading="lazy"
                       />
                       <span className="p2p-shot__zoom">
@@ -1268,7 +1324,20 @@ const P2PPage: React.FC = () => {
                   const file = e.target.files?.[0];
                   // Reset immediately so re-picking the same file still fires.
                   e.target.value = '';
-                  if (file) void onShareShot(file);
+                  if (file) void onShareShot(file, true);
+                }}
+              />
+              <input
+                ref={upiInputRef}
+                type="file"
+                accept="image/*"
+                className="p2p-shot-input"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void onShareShot(file, false);
                 }}
               />
               <input
@@ -1282,8 +1351,8 @@ const P2PPage: React.FC = () => {
               <button
                 type="button"
                 className="p2p-btn p2p-btn--icon"
-                title="Upload a screenshot"
-                aria-label="Upload a screenshot"
+                title="Upload a payment screenshot"
+                aria-label="Upload a payment screenshot"
                 onClick={() => shotInputRef.current?.click()}
                 disabled={shotUploading}
               >
@@ -1295,6 +1364,15 @@ const P2PPage: React.FC = () => {
                     <path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4" />
                   </svg>
                 )}
+              </button>
+              <button
+                type="button"
+                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                title="Share your UPI QR code in the trade chat"
+                onClick={() => upiInputRef.current?.click()}
+                disabled={upiUploading}
+              >
+                {upiUploading ? 'Uploading…' : 'UPI QR'}
               </button>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>

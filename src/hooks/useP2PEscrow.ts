@@ -537,6 +537,12 @@ export async function getTradeBankDetails(
   }
 }
 
+/** Public profile signal: only the wallet's on-chain KYC verification flag. */
+export async function getWalletVerification(address: string): Promise<boolean> {
+  const c = readContract();
+  return Boolean(await c.isVerified(address));
+}
+
 /**
  * Attach a screenshot to a trade, independent of the payment state.
  *
