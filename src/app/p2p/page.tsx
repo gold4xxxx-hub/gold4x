@@ -1279,28 +1279,23 @@ const P2PPage: React.FC = () => {
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
               />
-              <label
+              <button
+                type="button"
                 className="p2p-btn p2p-btn--icon"
-                title="Share a screenshot"
-                tabIndex={0}
-                role="button"
-                aria-label="Share a screenshot"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    shotInputRef.current?.click();
-                  }
-                }}
+                title="Upload a screenshot"
+                aria-label="Upload a screenshot"
+                onClick={() => shotInputRef.current?.click()}
+                disabled={shotUploading}
               >
                 {shotUploading ? (
                   <span className="p2p-btn__spin" aria-hidden="true" />
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-                    <path d="M3 17l5-5 4 4 8-8" />
-                    <path d="M14 8h6v6" />
+                    <path d="M12 15V3m0 0 4 4m-4-4L8 7" />
+                    <path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4" />
                   </svg>
                 )}
-              </label>
+              </button>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>
               </button>
