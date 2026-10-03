@@ -352,7 +352,7 @@ export default function KycAdminPage() {
                       <td className="p2p-addr">{a.wallet}</td>
                       <td className="text-center">
                         <span className={a.verified ? 'p2p-chip p2p-chip--open' : 'p2p-chip p2p-chip--paid'}>
-                          {a.verified ? 'approved' : 'pending'}
+                          {a.verified ? 'Approved' : 'Pending'}
                         </span>
                       </td>
                       <td className="p2p-num text-center">{a.submittedAt}</td>
@@ -365,23 +365,20 @@ export default function KycAdminPage() {
                           >
                             <span>{busyWallet === a.wallet ? '…' : 'View'}</span>
                           </button>
-                          {a.verified ? (
-                            <button
-                              className="p2p-btn p2p-btn--sm p2p-btn--ghost"
-                              onClick={() => void setVerified(a.wallet, false)}
-                              disabled={busyWallet === a.wallet}
-                            >
-                              <span>Reject</span>
-                            </button>
-                          ) : (
-                            <button
-                              className="p2p-btn p2p-btn--sm"
-                              onClick={() => void setVerified(a.wallet, true)}
-                              disabled={busyWallet === a.wallet}
-                            >
-                              <span>Approve</span>
-                            </button>
-                          )}
+                          <button
+                            className="p2p-btn p2p-btn--sm"
+                            onClick={() => void setVerified(a.wallet, true)}
+                            disabled={a.verified || busyWallet === a.wallet}
+                          >
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                            onClick={() => void setVerified(a.wallet, false)}
+                            disabled={!a.verified || busyWallet === a.wallet}
+                          >
+                            <span>Reject</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -405,29 +402,28 @@ export default function KycAdminPage() {
               <div className="p2p-tile">
                 <div className="p2p-tile__label">Status</div>
                 <div className="p2p-tile__value">
-                  {detail.verified === 'true' ? 'Approved' : 'Pending'}
+                  <span className={detail.verified === 'true' ? 'p2p-chip p2p-chip--open' : 'p2p-chip p2p-chip--paid'}>
+                    {detail.verified === 'true' ? 'Approved' : 'Pending'}
+                  </span>
                 </div>
               </div>
               <div className="p2p-tile">
                 <div className="p2p-tile__label">Actions</div>
                 <div className="flex gap-2 mt-1">
-                  {detail.verified === 'true' ? (
-                    <button
-                      className="p2p-btn p2p-btn--sm p2p-btn--ghost"
-                      onClick={() => void setVerified(detailWallet, false)}
-                      disabled={busyWallet === detailWallet}
-                    >
-                      <span>Revoke verification</span>
-                    </button>
-                  ) : (
-                    <button
-                      className="p2p-btn p2p-btn--sm"
-                      onClick={() => void setVerified(detailWallet, true)}
-                      disabled={busyWallet === detailWallet}
-                    >
-                      <span>Approve</span>
-                    </button>
-                  )}
+                  <button
+                    className="p2p-btn p2p-btn--sm"
+                    onClick={() => void setVerified(detailWallet, true)}
+                    disabled={detail.verified === 'true' || busyWallet === detailWallet}
+                  >
+                    <span>Approve</span>
+                  </button>
+                  <button
+                    className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                    onClick={() => void setVerified(detailWallet, false)}
+                    disabled={detail.verified !== 'true' || busyWallet === detailWallet}
+                  >
+                    <span>Reject</span>
+                  </button>
                 </div>
               </div>
             </div>
