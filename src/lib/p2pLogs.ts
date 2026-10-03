@@ -211,6 +211,43 @@ export async function getTradeEventState(
   return value;
 }
 
+export type ScreenshotEntry = {
+  sender: string;
+  /** IPFS CID. Only this reaches the chain. */
+  cid: string;
+  blockNumber: number;
+  /** Position within the block, so ordering is stable. */
+  index: number;
+};
+
+/**
+ * Every screenshot shared on a trade, oldest first.
+ *
+ * Kept separate from getTradeEventState's single `screenshotHash`, which only
+ * holds the most recent one. A dispute usually turns on the whole sequence,
+ * not just the last image.
+ */
+export async function getTradeScreenshots(tradeId: number): Promise<{
+  screenshots: ScreenshotEntry[];
+  truncated: boolean;
+}> {
+  const { logs, truncated } = await fetchTopic(TOPIC.ScreenshotShared, tradeId);
+  const screenshots: ScreenshotEntry[] = [];
+  for (const log of logs) {
+    const args = iface.parseLog(log)?.args;
+    if (!args) continue;
+    const cid = String(args.hash);
+    if (!cid) continue;
+    screenshots.push({
+      sender: String(args.sender),
+      cid,
+      blockNumber: log.blockNumber,
+      index: log.index,
+    });
+  }
+  return { screenshots, truncated };
+}
+
 export type ChatEntry = { sender: string; text: string; blockNumber: number };
 
 /** On-chain chat for one trade, oldest first. */

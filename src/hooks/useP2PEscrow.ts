@@ -537,6 +537,21 @@ export async function getTradeBankDetails(
   }
 }
 
+/**
+ * Attach a screenshot to a trade, independent of the payment state.
+ *
+ * Separate from markFiatPaid on purpose: the buyer can share a screenshot at any
+ * point, and either party can attach one. Only the CID goes on-chain.
+ */
+export async function shareScreenshot(
+  signer: ethers.Signer,
+  tradeId: number,
+  ipfsHash: string,
+) {
+  const c = readContract(signer);
+  return (await c.shareScreenshot(tradeId, ipfsHash)).wait();
+}
+
 /** Buyer marks INR sent, attaching an IPFS screenshot hash. */
 export async function markFiatPaid(
   signer: ethers.Signer,

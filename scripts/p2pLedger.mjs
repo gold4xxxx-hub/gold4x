@@ -57,10 +57,6 @@ const ESCROW = '0x8578Aaf3bA423e62A5e6ea04b69fe91B8545c2C0';
 const JSAV = '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD';
 const OWNER = '0xb32fccf4723fc19b8a097006f59437c15e88bbce';
 
-const CHECKPOINT = path.join(ROOT, '.ledger-checkpoint.json');
-const OUT_JSON = path.join(ROOT, 'p2p-ledger.json');
-const OUT_MD = path.join(ROOT, 'p2p-ledger.md');
-
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const opt = (f, d) => {
@@ -72,6 +68,13 @@ const WANT_TX = has('--tx');
 const DEEP = has('--deep');           // scan every block, to catch reverts
 const RESUME = has('--resume');
 const CONCURRENCY = Number(opt('--concurrency', '24'));
+
+// A deep scan and a normal scan running side by side would otherwise overwrite
+// each other's checkpoint and report. Give each mode its own files.
+const TAG = opt('--out', DEEP ? '-deep' : '');
+const CHECKPOINT = path.join(ROOT, `.ledger-checkpoint${TAG}.json`);
+const OUT_JSON = path.join(ROOT, `p2p-ledger${TAG}.json`);
+const OUT_MD = path.join(ROOT, `p2p-ledger${TAG}.md`);
 
 const endpoints = [
   process.env.BSC_RPC_URL,
@@ -148,35 +151,32 @@ const TRANSFER_TOPIC =
 // Decoding
 // ---------------------------------------------------------------------------
 
-// Topics come from the verified ABI, not memory.
-const EVENT_SIGS = {
-  '0x76f80d86dcbd233724e58be59fe546975565b2f1446ab372a18dc431a1b55656': 'AdCreated',
-  '0x20e953810446bfec422c45a49b30c7b446bc121960d6568e36a20016140f86b7': 'AdCancelled',
-  '0x2ca2663ae693a9057bb61534e47c30a4eb7cd830ec41b57c62d7249d478e5ede': 'TradeStarted',
-  '0x4886270d3c681c8373359d1cfafb1a549453e43e452ce59a9eae87f8a23e50be': 'TradeConfirmed',
-  '0x60f91a26281f20fb528663f4da55773c83e2ee8a7a5dddb6d1753749e81dc49b': 'TradeCompleted',
-  '0x4e02dcf02d8510f6c8a6878a3c54ae6e2bfbf552df29221d7a1eed173a6b1ae7': 'TradeCancelled',
-  '0x15b92405884bc4ee2bf7f18273e09dc1af9ff8473257cb3e2d6c30d02e467a88': 'FiatMarkedPaid',
-  '0x0abc1ad19cb2a631a1ccdeef24430f5519033e44a3fb2a1f04cd4addb4ea296a': 'ScreenshotShared',
-  '0x5b34203801702dd1595f9de44ec0309424052e3b80f08676e03e05815b7c196f': 'ChatMessage',
-  '0x50254a0dab3f208f414bf247012e8d8c90928d1a1b1699b1b62df2326bfb09ab': 'KYCSubmitted',
-  '0x0089007d5e59f326275727c342fc43223d3e5d048aa810660e6867e84510f907': 'KYCUpdated',
-  '0x7a02eb9b107b2ab713e88c3cdac538e5c21b689d0f1b1f22367578b28fc5d09': 'KYCVerified',
-};
+// Topics and selectors are computed from the verified ABI instead of being
+// written out by hand.
+//
+// This file previously carried a hand-written table, and it had drifted in
+// three separate ways: cancelAd was listed as 514fcac7 (actually 3f11710b),
+// verifyKYC as 7a02eb9b (actually 474adb8f), and the KYCVerified topic had a
+// single mistyped hex character (c3cdac538 instead of c3cd7ac538) which made
+// all 47 verification events decode as unknown. Deriving both tables from the
+// ABI removes the whole class of bug.
+const { ethers } = await import('ethers');
+const abi = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'src', 'config', 'p2pEscrowAbi.json'), 'utf8'),
+);
+const contractIface = new ethers.Interface(abi);
 
-const FN_SIGS = {
-  ca92a80e: 'createAd',
-  '674a0579': 'startTrade',
-  ff003449: 'markFiatPaid',
-  f8c4cc6d: 'confirmFiatReceived',
-  '514fcac7': 'cancelAd',
-  '8497b03f': 'cancelExpiredFiatTrade',
-  aae8b592: 'sendMessage',
-  '794caaaf': 'submitKYC',
-  '9be80184': 'updateKYC',
-  '7a02eb9b': 'verifyKYC',
-  a11449bb: 'getTradeBankDetails',
-};
+const EVENT_SIGS = Object.fromEntries(
+  contractIface.fragments
+    .filter((f) => f.type === 'event')
+    .map((f) => [contractIface.getEvent(f.name).topicHash, f.name]),
+);
+
+const FN_SIGS = Object.fromEntries(
+  contractIface.fragments
+    .filter((f) => f.type === 'function')
+    .map((f) => [contractIface.getFunction(f.name).selector.slice(2), f.name]),
+);
 
 const addrFromTopic = (t) => '0x' + t.slice(-40);
 const isoTs = (blockTs) =>
@@ -272,6 +272,26 @@ function ingestTransfers(logs, direction) {
   }
 }
 
+/**
+ * Receipt outcome.
+ *
+ * `status` is not reliably "1". Some clients return "0x1", others "1", and
+ * comparing against a literal "1" marked every transaction FAILED on an
+ * endpoint that returned hex. Parse it as a quantity instead.
+ */
+function receiptStatus(receipt) {
+  if (!receipt) return 'UNKNOWN';
+  // Pre-Byzantium receipts carry a root instead of a status field.
+  if (receipt.status === undefined || receipt.status === null) {
+    return receipt.root ? 'SUCCESS' : 'UNKNOWN';
+  }
+  try {
+    return BigInt(receipt.status) === 1n ? 'SUCCESS' : 'FAILED';
+  } catch {
+    return 'UNKNOWN';
+  }
+}
+
 /** Record a transaction to/from escrow together with its receipt outcome. */
 async function recordTx(tx, block) {
   const receipt = await rpc('eth_getTransactionReceipt', [tx.hash]);
@@ -287,16 +307,13 @@ async function recordTx(tx, block) {
     valueBnb: fmtUnits(tx.value || '0x0'),
     // A reverted transaction emits no logs and is invisible to any log query.
     // This is the only place it can surface.
-    status: receipt
-      ? receipt.status === '1'
-        ? 'SUCCESS'
-        : 'FAILED'
-      : 'UNKNOWN',
+    status: receiptStatus(receipt),
     gasUsed: receipt ? parseInt(receipt.gasUsed, 16) : null,
-    gasCostBnb: receipt
-      ? fmtUnits((BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice || '0x0')).toString())
-      : null,
-    logsEmitted: receipt ? receipt.logs.length : null,
+    gasCostBnb:
+      receipt && receipt.gasUsed && receipt.effectiveGasPrice
+        ? fmtUnits((BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice)).toString())
+        : null,
+    logsEmitted: receipt && Array.isArray(receipt.logs) ? receipt.logs.length : null,
     fromOwner: (tx.from || '').toLowerCase() === OWNER,
   });
 }
@@ -344,7 +361,11 @@ async function main() {
   console.log(`Range ${from} -> ${to}  (${span.toLocaleString()} blocks)`);
   console.log(`Mode: ${DEEP ? 'full block scan (finds reverted txs)' : WANT_TX ? 'logs + receipts' : 'logs only'}\n`);
 
-  const step = window || 50;
+  // In deep mode the outer step is also the block-scan granularity. Using the
+  // full 50,000-block log window there meant no progress output and no
+  // checkpoint for potentially half an hour at a time, so deep mode uses a
+  // small step purely to report and checkpoint often.
+  const step = DEEP ? 1000 : window || 50;
   let cursor = from;
   if (RESUME && fs.existsSync(CHECKPOINT)) {
     const cp = JSON.parse(fs.readFileSync(CHECKPOINT, 'utf8'));
@@ -425,8 +446,14 @@ async function main() {
 
     if (Date.now() - startedAt > 2000) {
       const pct = (((cursor - from) / span) * 100).toFixed(1);
+      const rate = blocksFetched / ((Date.now() - startedAt) / 1000);
+      const eta = rate > 0
+        ? Math.round((span - (cursor - from)) / rate / 60)
+        : null;
       process.stdout.write(
-        `  ${pct.padStart(5)}%  block ${cursor}/${to}  ev=${events.length} tr=${transfers.length} tx=${transactions.length}  req=${stats.requests}\n`,
+        `  ${pct.padStart(5)}%  block ${cursor}/${to}  ` +
+          `ev=${events.length} tr=${transfers.length} tx=${transactions.length} ` +
+          `blocks=${blocksFetched}${DEEP ? `  ${rate.toFixed(0)} blk/s  eta ~${eta}m` : ''}\n`,
       );
     }
   }

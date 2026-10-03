@@ -36,17 +36,29 @@ import {
   cancelAd,
   cancelExpiredFiatTrade,
   sendMessage,
+  shareScreenshot,
   getTradeBankDetails,
   type AdRow,
   type TradeRow,
 } from '@/hooks/useP2PEscrow';
-import { getTradeChat, getTradeEventState, type ChatEntry } from '@/lib/p2pLogs';
+import {
+  getTradeChat,
+  getTradeEventState,
+  getTradeScreenshots,
+  type ChatEntry,
+  type ScreenshotEntry,
+} from '@/lib/p2pLogs';
+import { ipfsUrl } from '@/lib/ipfs';
 
 /** Seconds remaining until `deadline`, floored at 0. */
 function secondsLeft(deadline: number, now: number): number {
   if (!deadline) return 0;
   return Math.max(0, deadline - now);
 }
+
+// Client-side pre-check only. The upload route validates again and is the real
+// authority; this just avoids a pointless round trip on an oversized file.
+const MAX_SHOT_BYTES = 5 * 1024 * 1024;
 
 function formatCountdown(deadline: number, now: number): string | null {
   if (!deadline) return null;
@@ -242,6 +254,11 @@ const P2PPage: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  // Screenshots are their own event stream, so they are tracked separately and
+  // interleaved into the transcript by block number.
+  const [shots, setShots] = useState<ScreenshotEntry[]>([]);
+  const [shotUploading, setShotUploading] = useState(false);
+  const [shotOpen, setShotOpen] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -263,6 +280,11 @@ const P2PPage: React.FC = () => {
   // Pointer position for the stat-card sheen, written as CSS vars rather than
   // re-rendering on every move.
   const statRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Hidden file input for the screenshot picker. Driven by a label styled as a
+  // button so it lines up with the Send button, but still a real file input,
+  // which is what makes mobile browsers surface the camera.
+  const shotInputRef = useRef<HTMLInputElement>(null);
   const onStatMove = (key: string) => (e: React.MouseEvent<HTMLDivElement>) => {
     const el = statRefs.current[key];
     if (!el) return;
@@ -434,15 +456,71 @@ const P2PPage: React.FC = () => {
     if (signer) void refreshTradeDetail(activeTrade.id);
   };
 
+  /**
+   * Upload a screenshot and record its CID on the trade.
+   *
+   * The CID goes on-chain, never the image. Both parties can share one at any
+   * point in a trade, which is separate from markFiatPaid: the buyer can prove
+   * the payment before committing to it, and the seller can send a screenshot
+   * of their own bank statement afterwards.
+   */
+  const onShareShot = async (file: File) => {
+    if (!activeTrade) return;
+
+    if (!file.type.startsWith('image/')) {
+      setStatus('That file is not an image.');
+      return;
+    }
+    if (file.size > MAX_SHOT_BYTES) {
+      setStatus('Image is too large. Maximum size is 5 MB.');
+      return;
+    }
+
+    setShotUploading(true);
+    setStatus(null);
+    let cid: string;
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/p2p/screenshot', { method: 'POST', body });
+      const json = (await res.json()) as { cid?: string; error?: string };
+      if (!res.ok || !json.cid) {
+        setStatus(json.error || 'Upload failed. Please try again.');
+        return;
+      }
+      cid = json.cid;
+    } catch {
+      setStatus('Could not reach the upload service. Check your connection.');
+      return;
+    } finally {
+      setShotUploading(false);
+    }
+
+    // Also fill the payment-proof field, so marking the INR as sent does not
+    // require finding and pasting a CID afterwards.
+    setScreenshot(cid);
+
+    const ok = await guard(
+      (s) => shareScreenshot(s, activeTrade.id, cid),
+      'Screenshot shared',
+    );
+    if (ok) {
+      setShotOpen(cid);
+      void refreshTradeDetail(activeTrade.id);
+    }
+  };
+
   /** Pull chat, deadline, confirmations and bank details for one trade. */
   const refreshTradeDetail = async (tradeId: number) => {
     setChatLoading(true);
     try {
-      const [{ messages }, events] = await Promise.all([
+      const [{ messages }, events, { screenshots }] = await Promise.all([
         getTradeChat(tradeId),
         getTradeEventState(tradeId),
+        getTradeScreenshots(tradeId),
       ]);
       setChat(messages);
+      setShots(screenshots);
       setDeadline(events.deadline);
       setFiatPaid(events.fiatPaid);
       setConfirmedBy(events.confirmedBy);
@@ -454,6 +532,7 @@ const P2PPage: React.FC = () => {
       }
     } catch {
       setChat([]);
+      setShots([]);
     } finally {
       setChatLoading(false);
     }
@@ -473,6 +552,8 @@ const P2PPage: React.FC = () => {
     setConfirmedBy([]);
     setStoredScreenshot('');
     setChat([]);
+    setShots([]);
+    setShotOpen(null);
     setNow(Math.floor(Date.now() / 1000));
     await refreshTradeDetail(t.id);
   };
@@ -480,8 +561,40 @@ const P2PPage: React.FC = () => {
   const closeTrade = () => {
     setActiveTrade(null);
     setChat([]);
+    setShots([]);
+    setShotOpen(null);
     setBank(null);
   };
+
+  /**
+   * Chat and screenshots are separate event streams. Interleaving them by block
+   * number gives one honest transcript, so a screenshot sits in the order it was
+   * actually shared rather than in a separate panel.
+   *
+   * A shared block number falls back to the log index, then to the stream order,
+   * so entries never jump around between refreshes.
+   */
+  const transcript = useMemo(() => {
+    type Row =
+      | { kind: 'text'; sender: string; text: string; at: number }
+      | { kind: 'shot'; sender: string; cid: string; at: number };
+
+    const rows: Row[] = [
+      ...chat.map((m, i) => ({
+        kind: 'text' as const,
+        sender: m.sender,
+        text: m.text,
+        at: m.blockNumber * 1000 + i,
+      })),
+      ...shots.map((s) => ({
+        kind: 'shot' as const,
+        sender: s.sender,
+        cid: s.cid,
+        at: s.blockNumber * 1000 + s.index,
+      })),
+    ];
+    return rows.sort((a, b) => a.at - b.at);
+  }, [chat, shots]);
 
   return (
     <div className="fx-shell p2p-root">
@@ -1067,21 +1180,97 @@ const P2PPage: React.FC = () => {
               </div>
             )}
 
+            {/* Full-size view of a shared screenshot. */}
+            {shotOpen && (
+              <div
+                className="p2p-lightbox"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Screenshot"
+                onClick={() => setShotOpen(null)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ipfsUrl(shotOpen)}
+                  alt="Shared screenshot, enlarged"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <button
+                  type="button"
+                  className="p2p-lightbox__close"
+                  aria-label="Close"
+                  onClick={() => setShotOpen(null)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             <div className="p2p-tile__label mb-1">On-chain chat</div>
             <div className="p2p-chat mb-3">
               {chatLoading && <span className="p2p-chat__empty">Loading history…</span>}
-              {!chatLoading && chat.length === 0 && (
-                <span className="p2p-chat__empty">No messages yet.</span>
+              {!chatLoading && transcript.length === 0 && (
+                <span className="p2p-chat__empty">
+                  No messages or screenshots yet.
+                </span>
               )}
-              {chat.map((m, i) => (
-                <div key={`${m.blockNumber}-${i}`} className="p2p-chat__msg">
-                  <span className="p2p-chat__who">{shortAddress(m.sender)}</span>
-                  <span>{m.text}</span>
-                </div>
-              ))}
+              {transcript.map((row, i) =>
+                row.kind === 'text' ? (
+                  <div key={`t-${row.at}-${i}`} className="p2p-chat__msg">
+                    <span className="p2p-chat__who">{shortAddress(row.sender)}</span>
+                    <span>{row.text}</span>
+                  </div>
+                ) : (
+                  <div key={`s-${row.at}-${i}`} className="p2p-chat__msg p2p-chat__msg--shot">
+                    <span className="p2p-chat__who">{shortAddress(row.sender)}</span>
+                    <button
+                      type="button"
+                      className="p2p-shot"
+                      onClick={() => setShotOpen(row.cid)}
+                      aria-label="Open shared screenshot"
+                    >
+                      {/* Remote IPFS image, so next/image optimisation does not
+                          apply and a plain img is the correct choice. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={ipfsUrl(row.cid)}
+                        alt={`Screenshot shared by ${shortAddress(row.sender)}`}
+                        loading="lazy"
+                      />
+                      <span className="p2p-shot__zoom">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="m20 20-3.5-3.5M11 8v6M8 11h6" />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
+                ),
+              )}
             </div>
 
+            {/* Screenshot picker. accept="image/*" so mobile browsers offer the
+                camera, which is how this will actually be used. */}
             <div className="flex gap-2 mb-4">
+              <input
+                ref={shotInputRef}
+                type="file"
+                accept="image/*"
+                className="p2p-shot-input"
+                // Hidden from assistive tech and skipped in the tab order: the
+                // styled label below is the real control, so exposing both
+                // would announce "share a screenshot" twice.
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  // Reset immediately so re-picking the same file still fires.
+                  e.target.value = '';
+                  if (file) void onShareShot(file);
+                }}
+              />
               <input
                 className="p2p-input flex-1"
                 placeholder="Message the counterparty…"
@@ -1090,6 +1279,28 @@ const P2PPage: React.FC = () => {
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
               />
+              <label
+                className="p2p-btn p2p-btn--icon"
+                title="Share a screenshot"
+                tabIndex={0}
+                role="button"
+                aria-label="Share a screenshot"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    shotInputRef.current?.click();
+                  }
+                }}
+              >
+                {shotUploading ? (
+                  <span className="p2p-btn__spin" aria-hidden="true" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                    <path d="M3 17l5-5 4 4 8-8" />
+                    <path d="M14 8h6v6" />
+                  </svg>
+                )}
+              </label>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>
               </button>
