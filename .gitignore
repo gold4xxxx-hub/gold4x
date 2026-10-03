@@ -24,3 +24,8 @@ Thumbs.db
 # local dev logs from this session
 dev-p2p.log
 dev-p2p.err
+
+# ledger script output (regenerated, not source)
+p2p-ledger.json
+p2p-ledger.md
+.ledger-checkpoint.json
