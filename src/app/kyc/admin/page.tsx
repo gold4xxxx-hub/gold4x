@@ -156,10 +156,17 @@ export default function KycAdminPage() {
         signer,
       );
       await (await c.verifyKYC(wallet, next)).wait();
+
+      // Read the result back from the contract rather than assuming success,
+      // and confirm the flag actually flipped. verifyKYC can be mined and the
+      // UI still show pending if the list is served from cache.
+      const nowVerified = await c.isVerified(wallet);
       setStatus(
-        `${shortAddress(wallet)} ${next ? 'approved' : 'rejected'} on-chain. ` +
-          'They can trade immediately if approved.',
+        `${shortAddress(wallet)} ${next ? 'approved' : 'revoked'} on-chain. ` +
+          `Contract now reports verified=${nowVerified}.` +
+          (next && !nowVerified ? ' Unexpected — reload before retrying.' : ''),
       );
+
       // Refresh the event list, but keep the panel open so the result is
       // visible. A user found by manual lookup will not appear in the list.
       await load();

@@ -84,6 +84,15 @@ export default function KycPage() {
     void refreshKyc();
   };
 
+  // Poll, so an approval made by the owner while this page is open appears
+  // without a manual reload. Without this the page kept showing "pending"
+  // after a successful verifyKYC, which looked like the approval had failed.
+  useEffect(() => {
+    if (!address) return;
+    const t = setInterval(() => void refreshKyc(), 15000);
+    return () => clearInterval(t);
+  }, [address, refreshKyc]);
+
   const wrongChain = isConnected && chainId !== null && chainId !== BSC_CONFIG.chainId;
 
   const isOwner = isP2pEscrowOwner(address);

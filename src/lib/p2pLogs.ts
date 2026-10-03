@@ -257,6 +257,12 @@ export async function getKycApplicants(): Promise<{
   /** True when a log query failed outright rather than simply returning none. */
   degraded: boolean;
 }> {
+  // Bypass the shared cache. This is the one read where showing a stale value
+  // is actively misleading: after an approval the cached list still reported
+  // the wallet as pending for up to the cache TTL, which looked like the
+  // verifyKYC transaction had failed.
+  clearTradeLogCache();
+
   const submitted = await fetchTopic(TOPIC.KycSubmitted);
   const verified = await fetchTopic(TOPIC.KycVerified);
 
