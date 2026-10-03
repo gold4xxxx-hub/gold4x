@@ -57,6 +57,46 @@ function formatCountdown(deadline: number, now: number): string | null {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
+/** Turn a contract revert into something a user can act on. */
+function explainTradeError(err: {
+  shortMessage?: string;
+  reason?: string;
+  message?: string;
+}): string {
+  const raw = err?.reason || err?.shortMessage || err?.message || 'unknown error';
+  const quoted = raw.match(/reverted: "([^"]+)"/);
+  const reason = quoted?.[1] || raw;
+
+  const known: Record<string, string> = {
+    'KYC not verified': 'Your KYC is not verified yet, so you cannot trade.',
+    'Invalid amount':
+      'That amount is not available. Check it is above zero and no more than the ad has left.',
+    'Quote too small':
+      'That amount is too small. The contract rounds to paise and the resulting value came out as zero, so use a larger amount.',
+    'Ad not active': 'This ad is no longer available. It may have been filled or cancelled.',
+    'Ad creator KYC missing':
+      'The person who posted this ad is no longer verified, so the ad cannot be taken.',
+    'Own ad': 'You cannot take your own ad.',
+    'Not owner': 'Only the contract owner can do that.',
+    'Not verified': 'Your KYC is not verified yet, so you cannot trade.',
+    'Chain not configured': 'The contract is not enabled on this network.',
+    'Reentrant': 'Something went wrong mid-transaction. Please try again.',
+    'TransferFrom failed':
+      'The token transfer was refused. Check you have approved the escrow contract and enough balance.',
+    'Not KYC verified': 'Your KYC is not verified yet, so you cannot trade.',
+  };
+
+  if (known[reason]) return known[reason];
+
+  if (/user rejected|denied/i.test(raw)) return 'You cancelled the transaction in your wallet.';
+  if (/insufficient funds/i.test(raw))
+    return 'Not enough BNB in this wallet to pay for the transaction.';
+  if (/missing revert data|execution reverted/i.test(raw))
+    return 'The contract rejected this without giving a reason. Check your KYC, network and balance.';
+
+  return reason;
+}
+
 /** Chip class for a trade status, so the list reads at a glance. */
 function tradeChipClass(status: number): string {
   switch (status) {
@@ -292,20 +332,28 @@ const P2PPage: React.FC = () => {
   // Shared preamble for every write: require a connected wallet and a
   // verified KYC, then run and surface any revert. The signer is passed in
   // rather than captured so the guard owns the null check.
-  const guard = async (fn: (s: Signer) => Promise<unknown>, label: string) => {
+  //
+  // Returns whether the write succeeded. Callers that own a modal must keep it
+  // open on failure: this previously returned void, so the take-ad modal closed
+  // even when the transaction reverted, and the error was rendered behind it.
+  // That is what made a failed trade look like nothing happening.
+  const guard = async (
+    fn: (s: Signer) => Promise<unknown>,
+    label: string,
+  ): Promise<boolean> => {
     if (!signer) {
       setStatus('Connect a wallet first.');
-      return;
+      return false;
     }
     // The contract is BSC-only, so a wrong-network signer reverts with a
     // confusing error. Catch it here with something actionable.
     if (!(await ensureBsc())) {
       setStatus('Please switch your wallet to Binance Smart Chain and try again.');
-      return;
+      return false;
     }
     if (!kyc.verified) {
       setStatus('Your KYC must be verified before trading.');
-      return;
+      return false;
     }
     setActionBusy(true);
     setStatus(null);
@@ -313,9 +361,13 @@ const P2PPage: React.FC = () => {
       await fn(signer);
       setStatus(`${label} confirmed.`);
       await reload();
+      return true;
     } catch (e) {
       const err = e as { shortMessage?: string; reason?: string; message?: string };
-      setStatus(`${label} failed: ${err?.shortMessage || err?.reason || err?.message}`);
+      setStatus(
+        `${label} failed: ${explainTradeError(err)}`,
+      );
+      return false;
     } finally {
       setActionBusy(false);
     }
@@ -340,12 +392,16 @@ const P2PPage: React.FC = () => {
 
   const onTakeAd = async () => {
     if (!activeAd || !takeAmount) return;
-    await guard(
+    const ok = await guard(
       (s) => startTrade(s, tokenForPairType(activeAd.pairType), activeAd, takeAmount),
       'Trade started',
     );
-    setActiveAd(null);
-    setTakeAmount('');
+    // Only close on success. Closing on failure is what made a rejected trade
+    // look like the button did nothing.
+    if (ok) {
+      setActiveAd(null);
+      setTakeAmount('');
+    }
   };
 
   const onMarkPaid = async () => {
@@ -888,6 +944,18 @@ const P2PPage: React.FC = () => {
                 ₹{takeAmount ? inrValueOf(tokenForPairType(activeAd.pairType), takeAmount) : '0.00'}
               </div>
             </div>
+
+            {/* Errors are repeated here, not only in the page behind the
+                modal, so a rejected trade cannot look like nothing happened. */}
+            {status && <div className="p2p-alert p2p-alert--error mb-3">{status}</div>}
+
+            {!kyc.verified && account && (
+              <div className="p2p-alert p2p-alert--warn mb-3">
+                <span className="p2p-dot" style={{ marginTop: 6 }} />
+                This wallet is not KYC-verified, so the transaction will be
+                rejected by the contract. Get approved first.
+              </div>
+            )}
 
             <button
               className="p2p-btn p2p-btn--block"
