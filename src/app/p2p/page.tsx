@@ -131,6 +131,8 @@ function sameWallet(a: string | null | undefined, b: string | null | undefined):
 }
 
 const TOKENS: P2PToken[] = ['JSAV', 'USDT'];
+type PairFilter = 'all' | P2PToken;
+type SideFilter = 'all' | 'buy' | 'sell';
 
 /**
  * Minimal async-resource hook: runs `fn`, tracks loading and error, discards
@@ -256,6 +258,8 @@ const P2PPage: React.FC = () => {
   } = useTrades(stats.tradeCounter, stats.chainActive);
 
   const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
+  const [pairFilter, setPairFilter] = useState<PairFilter>('all');
+  const [sideFilter, setSideFilter] = useState<SideFilter>('all');
   const [activeAd, setActiveAd] = useState<AdRow | null>(null);
   const [activeTrade, setActiveTrade] = useState<TradeRow | null>(null);
   const [takeAmount, setTakeAmount] = useState('');
@@ -288,10 +292,6 @@ const P2PPage: React.FC = () => {
   // Drives the countdown. Only ticking while a trade is open keeps this cheap.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
-  // Pointer position for the stat-card sheen, written as CSS vars rather than
-  // re-rendering on every move.
-  const statRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
   // Hidden file input for the screenshot picker. Driven by a label styled as a
   // button so it lines up with the Send button, but still a real file input,
   // which is what makes mobile browsers surface the camera.
@@ -318,29 +318,6 @@ const P2PPage: React.FC = () => {
 
     return () => { cancelled = true; };
   }, [activeTrade]);
-  const onStatMove = (key: string) => (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = statRefs.current[key];
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.setProperty('--p2p-mx', `${e.clientX - r.left}px`);
-    el.style.setProperty('--p2p-my', `${e.clientY - r.top}px`);
-  };
-
-  // Replay the count-up pop whenever the value actually changes.
-  const [popKey, setPopKey] = useState('');
-  const lastAds = useRef(stats.adCounter);
-  const lastTrades = useRef(stats.tradeCounter);
-  useEffect(() => {
-    if (stats.adCounter !== lastAds.current) {
-      lastAds.current = stats.adCounter;
-      setPopKey(`ads-${stats.adCounter}`);
-    }
-    if (stats.tradeCounter !== lastTrades.current) {
-      lastTrades.current = stats.tradeCounter;
-      setPopKey(`trades-${stats.tradeCounter}`);
-    }
-  }, [stats.adCounter, stats.tradeCounter]);
-
   const tradeOpen = activeTrade?.status === TradeStatus.OPEN || activeTrade?.status === TradeStatus.PAID;
 
   useEffect(() => {
@@ -465,10 +442,11 @@ const P2PPage: React.FC = () => {
       setStatus('An IPFS screenshot hash is required to mark INR as paid.');
       return;
     }
-    await guard(
+    const marked = await guard(
       (s) => markFiatPaid(s, activeTrade.id, screenshot.trim()),
       'Marked as paid',
     );
+    if (marked) void refreshTradeDetail(activeTrade.id);
   };
 
   const onConfirmReceived = async () => {
@@ -484,6 +462,7 @@ const P2PPage: React.FC = () => {
           ? { ...current, status: TradeStatus.COMPLETED }
           : current,
       );
+      void refreshTradeDetail(tradeId);
     }
   };
 
@@ -555,7 +534,7 @@ const P2PPage: React.FC = () => {
   };
 
   /** Pull chat, deadline, confirmations and bank details for one trade. */
-  const refreshTradeDetail = async (tradeId: number) => {
+  const refreshTradeDetail = useCallback(async (tradeId: number) => {
     setChatLoading(true);
     try {
       const [{ messages }, events, { screenshots }] = await Promise.all([
@@ -571,7 +550,7 @@ const P2PPage: React.FC = () => {
       setStoredScreenshot(events.screenshotHash);
       if (events.truncated && messages.length === 0 && events.deadline === 0) {
         setStatus(
-          'On-chain history for this trade is older than the log window this public RPC can serve. Chat and confirmations will stay blank.',
+          'Trade history could not be fully read. The public RPC may have limited older events; refresh the trade and try again.',
         );
       }
     } catch {
@@ -585,7 +564,19 @@ const P2PPage: React.FC = () => {
       const details = await getTradeBankDetails(signer, tradeId);
       setBank(details);
     }
-  };
+  }, [signer]);
+
+  useEffect(() => {
+    if (!activeTrade) return;
+    const latest = trades.find((trade) => trade.id === activeTrade.id);
+    if (!latest || latest.status === activeTrade.status) return;
+    setActiveTrade((current) =>
+      current?.id === latest.id && current.status !== latest.status
+        ? { ...current, status: latest.status }
+        : current,
+    );
+    void refreshTradeDetail(latest.id);
+  }, [activeTrade, trades, refreshTradeDetail]);
 
   const openTrade = async (t: TradeRow) => {
     setActiveTrade(t);
@@ -640,16 +631,25 @@ const P2PPage: React.FC = () => {
     return rows.sort((a, b) => a.at - b.at);
   }, [chat, shots]);
 
+  const marketAds = useMemo(
+    () => ads.filter((ad) =>
+      (pairFilter === 'all' || tokenForPairType(ad.pairType) === pairFilter) &&
+      (sideFilter === 'all' || (ad.isSellOrder ? 'sell' : 'buy') === sideFilter),
+    ),
+    [ads, pairFilter, sideFilter],
+  );
+  const openTrades = trades.filter(
+    (trade) => trade.status === TradeStatus.OPEN || trade.status === TradeStatus.PAID,
+  ).length;
+
   return (
     <div className="fx-shell p2p-root">
       <div className="p2p-ambient" aria-hidden="true">
-        <div className="p2p-ambient__orb p2p-ambient__orb--gold" />
-        <div className="p2p-ambient__orb p2p-ambient__orb--emerald" />
         <div className="p2p-ambient__grid" />
       </div>
 
-      <div className="max-w-6xl mx-auto space-y-6 relative">
-        <header className="p2p-hero p-6 sm:p-8 fx-reveal">
+      <div className="p2p-market-shell relative">
+        <header className="p2p-hero p2p-hero--market p-5 sm:p-6 fx-reveal">
           <div className="p2p-hero__inner flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -659,11 +659,11 @@ const P2PPage: React.FC = () => {
                 </span>
                 <span className="p2p-chip p2p-chip--muted">JSAV &amp; USDT / INR</span>
               </div>
-              <h1 className="p2p-hero__title text-4xl sm:text-5xl">P2P Trading</h1>
+              <h1 className="p2p-hero__title text-2xl sm:text-3xl">P2P Market</h1>
               <p className="text-sm text-[#b9b0a3] max-w-2xl mt-3">
-                Buy and sell JSAV or USDT against INR at fixed rates. Crypto is
-                held in the on-chain escrow for the duration of each trade and
-                released only when both sides confirm.
+                Buy and sell JSAV or USDT against INR at fixed rates. Crypto
+                stays in escrow until the buyer marks INR paid and the seller
+                confirms receipt.
               </p>
             </div>
             <div className="flex flex-col items-start gap-2.5">
@@ -686,14 +686,7 @@ const P2PPage: React.FC = () => {
                   </span>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="p2p-btn"
-                  onClick={handleConnect}
-                  disabled={connecting}
-                >
-                  <span>{connecting ? 'Connecting…' : 'Connect Wallet'}</span>
-                </button>
+                <span className="p2p-account-note">Connect a wallet to trade</span>
               )}
               {account && wrongChain && (
                 <button
@@ -708,56 +701,23 @@ const P2PPage: React.FC = () => {
           </div>
         </header>
 
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 fx-reveal fx-reveal--delay-1">
-          <div
-            ref={(el) => { statRefs.current.ads = el; }}
-            onMouseMove={onStatMove('ads')}
-            className="p2p-stat p-5"
-          >
-            <div className="p2p-stat__label">On-chain ads</div>
-            <div
-              className={
-                'p2p-stat__value' +
-                (popKey === `ads-${stats.adCounter}` ? ' p2p-stat__value--pop' : '')
-              }
-            >
-              {statsLoading ? '…' : stats.adCounter}
-            </div>
-            <div className="p2p-stat__sub">ever created</div>
+        <section className="p2p-market-stats fx-reveal fx-reveal--delay-1" aria-label="Market summary">
+          <div className="p2p-market-stat">
+            <div className="p2p-stat__label">Open offers</div>
+            <div className="p2p-stat__value">{adsLoading ? '—' : ads.length}</div>
+            <div className="p2p-stat__sub">available now</div>
           </div>
-
-          <div
-            ref={(el) => { statRefs.current.trades = el; }}
-            onMouseMove={onStatMove('trades')}
-            className="p2p-stat p-5"
-          >
-            <div className="p2p-stat__label">Trades started</div>
-            <div
-              className={
-                'p2p-stat__value' +
-                (popKey === `trades-${stats.tradeCounter}` ? ' p2p-stat__value--pop' : '')
-              }
-            >
-              {statsLoading ? '…' : stats.tradeCounter}
-            </div>
-            <div className="p2p-stat__sub">escrow opened</div>
+          <div className="p2p-market-stat">
+            <div className="p2p-stat__label">Open trades</div>
+            <div className="p2p-stat__value">{tradesLoading ? '—' : openTrades}</div>
+            <div className="p2p-stat__sub">awaiting completion</div>
           </div>
-
-          <div
-            ref={(el) => { statRefs.current.jsav = el; }}
-            onMouseMove={onStatMove('jsav')}
-            className="p2p-stat p-5"
-          >
+          <div className="p2p-market-stat">
             <div className="p2p-stat__label">JSAV / INR</div>
             <div className="p2p-stat__value">₹{FIXED_INR_PRICES.JSAV}</div>
             <div className="p2p-stat__sub">fixed rate</div>
           </div>
-
-          <div
-            ref={(el) => { statRefs.current.usdt = el; }}
-            onMouseMove={onStatMove('usdt')}
-            className="p2p-stat p-5"
-          >
+          <div className="p2p-market-stat">
             <div className="p2p-stat__label">USDT / INR</div>
             <div className="p2p-stat__value">₹{FIXED_INR_PRICES.USDT}</div>
             <div className="p2p-stat__sub">fixed rate</div>
@@ -854,17 +814,45 @@ const P2PPage: React.FC = () => {
 
         {status && <div className="p2p-alert p2p-alert--info">{status}</div>}
 
-        <section className="p2p-panel p-6 fx-reveal fx-reveal--delay-3">
+        <section className="p2p-panel p2p-market-panel p-5 sm:p-6 fx-reveal fx-reveal--delay-3">
           <div className="p2p-panel__head">
             <h2 className="p2p-panel__title">Order Book</h2>
-            <span className="p2p-panel__count">
-              {ads.length} live{ads.length < stats.adCounter && ` · ${stats.adCounter} total`}
-            </span>
+            <div className="p2p-market-tools">
+              <div className="p2p-segment" role="group" aria-label="Filter offers by token">
+                {(['all', ...TOKENS] as PairFilter[]).map((pair) => (
+                  <button
+                    key={pair}
+                    type="button"
+                    className={pairFilter === pair ? 'is-active' : ''}
+                    aria-pressed={pairFilter === pair}
+                    onClick={() => setPairFilter(pair)}
+                  >
+                    {pair === 'all' ? 'All pairs' : pair}
+                  </button>
+                ))}
+              </div>
+              <div className="p2p-segment" role="group" aria-label="Filter offers by side">
+                {(['all', 'buy', 'sell'] as SideFilter[]).map((side) => (
+                  <button
+                    key={side}
+                    type="button"
+                    className={sideFilter === side ? 'is-active' : ''}
+                    aria-pressed={sideFilter === side}
+                    onClick={() => setSideFilter(side)}
+                  >
+                    {side === 'all' ? 'All sides' : side === 'buy' ? 'Buy' : 'Sell'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+
+          <div className="p2p-market-count">{marketAds.length} active offers</div>
+          <p className="p2p-table-hint">Scroll horizontally to view all offer details.</p>
 
           {adsLoading && <div className="p2p-bar my-4" />}
 
-          {ads.length === 0 ? (
+          {marketAds.length === 0 ? (
             <div className="p2p-empty">
               <div className="p2p-empty__ring">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -875,6 +863,8 @@ const P2PPage: React.FC = () => {
               <p className="p2p-empty__text">
                 {adsLoading
                   ? 'Reading the order book from chain…'
+                  : ads.length > 0
+                    ? 'No active offers match these filters.'
                   : stats.adCounter === 0
                     ? 'No ads on-chain yet. Post the first JSAV or USDT order to open the book.'
                     : 'No active ads. Every order so far has been filled or cancelled.'}
@@ -897,7 +887,7 @@ const P2PPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {ads.map((ad) => {
+                  {marketAds.map((ad) => {
                     const token = tokenForPairType(ad.pairType);
                     return (
                       <tr key={ad.id} className={ad.isSellOrder ? 'p2p-row--sell' : 'p2p-row--buy'}>
@@ -966,6 +956,7 @@ const P2PPage: React.FC = () => {
           </div>
 
           {tradesLoading && <div className="p2p-bar my-4" />}
+          <p className="p2p-table-hint">Scroll horizontally to view all trade details.</p>
 
           {trades.length === 0 ? (
             <div className="p2p-empty">

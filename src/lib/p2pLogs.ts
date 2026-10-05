@@ -75,6 +75,12 @@ const iface = new ethers.Interface([
 const cache = new Map<string, { at: number; value: unknown }>();
 const TTL_MS = 15_000;
 
+type TopicResult = {
+  logs: ethers.Log[];
+  truncated: boolean;
+  failed: boolean;
+};
+
 function cached<T>(key: string): T | null {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -109,9 +115,9 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 async function fetchTopic(
   topic0: string,
   tradeId?: number,
-): Promise<{ logs: ethers.Log[]; truncated: boolean }> {
+): Promise<TopicResult> {
   const key = `logs:${topic0}:${tradeId ?? 'all'}`;
-  const hit = cached<{ logs: ethers.Log[]; truncated: boolean }>(key);
+  const hit = cached<TopicResult>(key);
   if (hit) return hit;
 
   const result = await enqueue(async () => {
@@ -129,11 +135,9 @@ async function fetchTopic(
         toBlock: head,
       });
       logs.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index);
-      // Anything older than the window is unreachable from this RPC, so a
-      // trade that started before `from` is only partially visible.
-      return { logs, truncated: true };
+      return { logs, truncated: from > DEPLOY_BLOCK, failed: false };
     } catch {
-      return { logs: [] as ethers.Log[], truncated: true };
+      return { logs: [], truncated: false, failed: true };
     }
   });
 
@@ -180,8 +184,11 @@ export async function getTradeEventState(
   ]);
 
   const out: TradeEventState = { ...EMPTY };
+  const hasTradeStart = started.logs.length > 0;
   const truncated =
-    started.truncated || paid.truncated || shots.truncated || confirmed.truncated;
+    started.failed || paid.failed || shots.failed || confirmed.failed ||
+    (!hasTradeStart &&
+      (started.truncated || paid.truncated || shots.truncated || confirmed.truncated));
 
   // parseLog returns null on a fragment mismatch; guards would only hide a
   // bug, but the topics are ours so it should not occur.
@@ -343,6 +350,6 @@ export async function getKycApplicants(): Promise<{
   return {
     applicants: [...state.values()].sort((a, b) => b.submittedAt - a.submittedAt),
     truncated: submitted.truncated || verified.truncated,
-    degraded: false,
+    degraded: submitted.failed || verified.failed,
   };
 }
