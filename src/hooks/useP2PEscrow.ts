@@ -545,6 +545,19 @@ export async function getWalletVerification(address: string): Promise<boolean> {
   return Boolean(await c.isVerified(address));
 }
 
+/** Read only the contact fields from a wallet's public KYC view. */
+export async function getWalletContactDetails(
+  address: string,
+): Promise<{ mobile: string; email: string } | null> {
+  const c = readContract();
+  const details = await c.getMyKYC2({ from: address });
+  if (!details[4]) return null;
+  return {
+    mobile: String(details[1] ?? ''),
+    email: String(details[2] ?? ''),
+  };
+}
+
 /**
  * Attach a screenshot to a trade, independent of the payment state.
  *

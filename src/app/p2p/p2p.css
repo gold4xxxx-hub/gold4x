@@ -874,6 +874,49 @@
   color: #8fcbb0;
 }
 
+.p2p-profile__contacts {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.p2p-profile__contacts > div {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.p2p-profile__contacts dt {
+  color: var(--fx-ink-subtle);
+  font-size: 0.68rem;
+}
+
+.p2p-profile__contacts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--fx-ink-muted);
+  font-size: 0.72rem;
+}
+
+.p2p-profile__contacts a {
+  color: #d8c17b;
+  text-decoration: none;
+}
+
+.p2p-profile__contacts a:hover {
+  text-decoration: underline;
+}
+
+.p2p-contact-disclosure {
+  color: #b6a878;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 520px) {
   .p2p-profile-list {
     grid-template-columns: 1fr;

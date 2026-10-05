@@ -39,6 +39,7 @@ import {
   shareScreenshot,
   getTradeBankDetails,
   getWalletVerification,
+  getWalletContactDetails,
   type AdRow,
   type TradeRow,
 } from '@/hooks/useP2PEscrow';
@@ -133,6 +134,7 @@ function sameWallet(a: string | null | undefined, b: string | null | undefined):
 const TOKENS: P2PToken[] = ['JSAV', 'USDT'];
 type PairFilter = 'all' | P2PToken;
 type SideFilter = 'all' | 'buy' | 'sell';
+type WalletContact = { mobile: string; email: string } | null;
 
 /**
  * Minimal async-resource hook: runs `fn`, tracks loading and error, discards
@@ -274,6 +276,7 @@ const P2PPage: React.FC = () => {
   const [upiUploading, setUpiUploading] = useState(false);
   const [shotOpen, setShotOpen] = useState<string | null>(null);
   const [profileVerification, setProfileVerification] = useState<Record<string, boolean | null>>({});
+  const [profileContacts, setProfileContacts] = useState<Record<string, WalletContact>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -301,23 +304,34 @@ const P2PPage: React.FC = () => {
   useEffect(() => {
     if (!activeTrade) {
       setProfileVerification({});
+      setProfileContacts({});
       return;
     }
 
     let cancelled = false;
     const addresses = [...new Set([activeTrade.seller, activeTrade.buyer])];
+    const canSeeContacts = activeTrade.isFiat &&
+      (activeTrade.status === TradeStatus.OPEN || activeTrade.status === TradeStatus.PAID) &&
+      (sameWallet(activeTrade.seller, account) || sameWallet(activeTrade.buyer, account));
+
     Promise.all(addresses.map(async (address) => {
-      try {
-        return [address, await getWalletVerification(address)] as const;
-      } catch {
-        return [address, null] as const;
-      }
-    })).then((entries) => {
-      if (!cancelled) setProfileVerification(Object.fromEntries(entries));
+      const [verification, contact] = await Promise.all([
+        getWalletVerification(address).catch(() => null),
+        canSeeContacts ? getWalletContactDetails(address).catch(() => null) : null,
+      ]);
+      return { address, verification, contact };
+    })).then((profiles) => {
+      if (cancelled) return;
+      setProfileVerification(Object.fromEntries(
+        profiles.map(({ address, verification }) => [address, verification]),
+      ));
+      setProfileContacts(Object.fromEntries(
+        profiles.map(({ address, contact }) => [address, contact]),
+      ));
     });
 
     return () => { cancelled = true; };
-  }, [activeTrade]);
+  }, [activeTrade, account]);
   const tradeOpen = activeTrade?.status === TradeStatus.OPEN || activeTrade?.status === TradeStatus.PAID;
 
   useEffect(() => {
@@ -641,6 +655,11 @@ const P2PPage: React.FC = () => {
   const openTrades = trades.filter(
     (trade) => trade.status === TradeStatus.OPEN || trade.status === TradeStatus.PAID,
   ).length;
+  const canSeeTradeContacts = Boolean(
+    activeTrade?.isFiat &&
+    (activeTrade.status === TradeStatus.OPEN || activeTrade.status === TradeStatus.PAID) &&
+    (sameWallet(activeTrade.seller, account) || sameWallet(activeTrade.buyer, account)),
+  );
 
   return (
     <div className="fx-shell p2p-root">
@@ -1188,6 +1207,7 @@ const P2PPage: React.FC = () => {
                   ['Buyer', activeTrade.buyer],
                 ] as const).map(([role, address]) => {
                   const verified = profileVerification[address];
+                  const contact = profileContacts[address];
                   return (
                     <div className="p2p-profile" key={role}>
                       <div className="p2p-tile__label">{role}{address === account ? ' · You' : ' · Counterparty'}</div>
@@ -1206,10 +1226,40 @@ const P2PPage: React.FC = () => {
                             ? 'Verification unavailable'
                           : verified ? 'KYC verified on-chain' : 'Not KYC verified'}
                       </span>
+                      {canSeeTradeContacts && (
+                        <dl className="p2p-profile__contacts">
+                          <div>
+                            <dt>Mobile</dt>
+                            <dd>
+                              {contact === undefined
+                                ? 'Loading…'
+                                : contact?.mobile
+                                  ? <a href={`tel:${encodeURIComponent(contact.mobile)}`}>{contact.mobile}</a>
+                                  : 'Not provided'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Email</dt>
+                            <dd>
+                              {contact === undefined
+                                ? 'Loading…'
+                                : contact?.email
+                                  ? <a href={`mailto:${encodeURIComponent(contact.email)}`}>{contact.email}</a>
+                                  : 'Not provided'}
+                            </dd>
+                          </div>
+                        </dl>
+                      )}
                     </div>
                   );
                 })}
               </div>
+            )}
+
+            {canSeeTradeContacts && (
+              <p className="p2p-contact-disclosure mb-4">
+                Contact details come from KYC data stored on BSC. This view is limited to trade parties, but the underlying contract data is public.
+              </p>
             )}
 
             {activeTrade.isFiat && (
