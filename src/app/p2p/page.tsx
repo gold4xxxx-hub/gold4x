@@ -126,6 +126,10 @@ function tradeChipClass(status: number): string {
   }
 }
 
+function sameWallet(a: string | null | undefined, b: string | null | undefined): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
 const TOKENS: P2PToken[] = ['JSAV', 'USDT'];
 
 /**
@@ -1379,7 +1383,7 @@ const P2PPage: React.FC = () => {
               </button>
             </div>
 
-            {activeTrade.buyer === account && activeTrade.status === TradeStatus.OPEN && !fiatPaid && (
+            {sameWallet(activeTrade.buyer, account) && activeTrade.status === TradeStatus.OPEN && !fiatPaid && (
               <div className="mb-4">
                 <label className="p2p-label" htmlFor="p2p-shot">
                   Payment screenshot — IPFS hash
@@ -1397,13 +1401,13 @@ const P2PPage: React.FC = () => {
               </div>
             )}
 
-            {activeTrade.seller === account && activeTrade.status === TradeStatus.PAID && (
+            {sameWallet(activeTrade.seller, account) && activeTrade.status === TradeStatus.PAID && (
               <button
                 className="p2p-btn p2p-btn--block mb-4"
                 disabled={actionBusy}
                 onClick={onConfirmReceived}
               >
-                <span>INR received — release crypto</span>
+                <span>I received INR — release crypto to buyer</span>
               </button>
             )}
 
