@@ -249,7 +249,11 @@ const P2PPage: React.FC = () => {
   const { stats, loading: statsLoading, error: statsError, refresh } = useEscrowStats();
   const { status: kyc, refresh: refreshKyc } = useKycStatus(account);
   const { ads, loading: adsLoading } = useAds(stats.adCounter, stats.chainActive);
-  const { trades, loading: tradesLoading } = useTrades(stats.tradeCounter, stats.chainActive);
+  const {
+    trades,
+    loading: tradesLoading,
+    refresh: refreshTrades,
+  } = useTrades(stats.tradeCounter, stats.chainActive);
 
   const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
   const [activeAd, setActiveAd] = useState<AdRow | null>(null);
@@ -346,8 +350,8 @@ const P2PPage: React.FC = () => {
   }, [tradeOpen]);
 
   const reload = useCallback(async () => {
-    await Promise.all([refresh(), refreshKyc()]);
-  }, [refresh, refreshKyc]);
+    await Promise.all([refresh(), refreshKyc(), refreshTrades()]);
+  }, [refresh, refreshKyc, refreshTrades]);
 
   // Periodic resync so ads and trades appear without a manual refresh.
   useEffect(() => {
@@ -469,7 +473,18 @@ const P2PPage: React.FC = () => {
 
   const onConfirmReceived = async () => {
     if (!activeTrade) return;
-    await guard((s) => confirmFiatReceived(s, activeTrade.id), 'Crypto released to buyer');
+    const tradeId = activeTrade.id;
+    const released = await guard(
+      (s) => confirmFiatReceived(s, tradeId),
+      'Crypto released to buyer',
+    );
+    if (released) {
+      setActiveTrade((current) =>
+        current?.id === tradeId
+          ? { ...current, status: TradeStatus.COMPLETED }
+          : current,
+      );
+    }
   };
 
   const onSend = async () => {
