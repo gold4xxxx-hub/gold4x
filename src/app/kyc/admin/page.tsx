@@ -32,11 +32,24 @@ const LOG_WINDOW = 5_000;
 // why the manual wallet lookup exists and is the reliable path.
 const SECONDS_PER_BLOCK = 0.45;
 
+type ApprovedKycUser = {
+  wallet: string;
+  verifiedAtBlock: number;
+};
+
+type ApprovedKycUsersResponse = {
+  users?: ApprovedKycUser[];
+  error?: string;
+};
+
 export default function KycAdminPage() {
   const { address, isConnected, signer } = useEthersSigner();
   const { connect: connectWallet } = useConnect();
 
   const [applicants, setApplicants] = useState<KycApplicant[]>([]);
+  const [approvedUsers, setApprovedUsers] = useState<ApprovedKycUser[]>([]);
+  const [approvedLoading, setApprovedLoading] = useState(false);
+  const [approvedError, setApprovedError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, string> | null>(null);
   const [detailWallet, setDetailWallet] = useState<string | null>(null);
@@ -90,9 +103,28 @@ export default function KycAdminPage() {
     }
   }, []);
 
+  const loadApprovedUsers = useCallback(async () => {
+    setApprovedLoading(true);
+    setApprovedError(null);
+    try {
+      const response = await fetch('/api/kyc/approved-users/', { cache: 'no-store' });
+      const payload = await response.json() as ApprovedKycUsersResponse;
+      if (!response.ok || !payload.users) {
+        throw new Error(payload.error || 'Could not load approved users.');
+      }
+      setApprovedUsers(payload.users);
+    } catch (e) {
+      const err = e as { message?: string };
+      setApprovedError(err.message || 'Could not load approved users.');
+    } finally {
+      setApprovedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadApprovedUsers();
+  }, [load, loadApprovedUsers]);
 
   // Full record for one applicant. owner-gated on-chain.
   const openDetail = async (wallet: string) => {
@@ -155,7 +187,7 @@ export default function KycAdminPage() {
         P2PESCROW_CONTRACT_ABI,
         signer,
       );
-      await (await c.verifyKYC(wallet, next)).wait();
+      const receipt = await (await c.verifyKYC(wallet, next)).wait();
 
       // Read the result back from the contract rather than assuming success,
       // and confirm the flag actually flipped. verifyKYC can be mined and the
@@ -165,6 +197,17 @@ export default function KycAdminPage() {
       // Refresh the event list, but keep the panel open so the result is
       // visible. A user found by manual lookup will not appear in the list.
       await load();
+      setApprovedUsers((current) => {
+        const remaining = current.filter(
+          (user) => user.wallet.toLowerCase() !== wallet.toLowerCase(),
+        );
+        return nowVerified
+          ? [
+              { wallet: ethers.getAddress(wallet), verifiedAtBlock: receipt?.blockNumber ?? 0 },
+              ...remaining,
+            ]
+          : remaining;
+      });
       const walletKey = wallet.toLowerCase();
       setApplicants((current) =>
         current.map((applicant) =>
@@ -380,6 +423,71 @@ export default function KycAdminPage() {
                             <span>Reject</span>
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="p2p-panel p-6">
+          <div className="p2p-panel__head">
+            <h2 className="p2p-panel__title">Approved users</h2>
+            <div className="flex items-center gap-3">
+              <span className="p2p-panel__count">{approvedUsers.length} approved</span>
+              <button
+                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                onClick={() => void loadApprovedUsers()}
+                disabled={approvedLoading}
+              >
+                <span>{approvedLoading ? 'Loading…' : 'Refresh'}</span>
+              </button>
+            </div>
+          </div>
+
+          <p className="text-sm text-[#b9b0a3] mb-4">
+            Current approvals from the full on-chain verification history. Only wallet addresses are listed here.
+          </p>
+
+          {approvedError && <div className="p2p-alert p2p-alert--error mb-4">{approvedError}</div>}
+
+          {approvedLoading && approvedUsers.length === 0 ? (
+            <div className="p2p-bar my-4" />
+          ) : approvedUsers.length === 0 ? (
+            <div className="p2p-empty">
+              <p className="p2p-empty__text">
+                {approvedError ? 'The approved-user list could not be loaded.' : 'No currently approved users were found.'}
+              </p>
+            </div>
+          ) : (
+            <div className="p2p-table-wrap">
+              <table className="p2p-table">
+                <thead>
+                  <tr>
+                    <th>Wallet</th>
+                    <th>Status</th>
+                    <th>Verified block</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {approvedUsers.map((user) => (
+                    <tr key={user.wallet}>
+                      <td className="p2p-addr">{user.wallet}</td>
+                      <td className="text-center">
+                        <span className="p2p-chip p2p-chip--open">Approved</span>
+                      </td>
+                      <td className="p2p-num text-center">{user.verifiedAtBlock}</td>
+                      <td className="text-center">
+                        <button
+                          className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                          onClick={() => void openDetail(user.wallet)}
+                          disabled={busyWallet === user.wallet}
+                        >
+                          <span>{busyWallet === user.wallet ? '…' : 'View KYC'}</span>
+                        </button>
                       </td>
                     </tr>
                   ))}

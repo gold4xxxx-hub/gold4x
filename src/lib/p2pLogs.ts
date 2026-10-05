@@ -326,17 +326,15 @@ export async function getKycApplicants(): Promise<{
 
   for (const log of verified.logs) {
     const walletTopic = log.topics[1];
-    const statusTopic = log.topics[2];
-    if (!walletTopic || !statusTopic) continue;
+    if (!walletTopic || !log.data) continue;
     let wallet: string;
     try {
       wallet = ethers.getAddress('0x' + walletTopic.slice(26));
     } catch {
       continue;
     }
-    // KYCVerified(address indexed user, bool status) — status is the second
-    // topic, ABI-encoded as a full word where 0x...01 is true.
-    const isVerified = BigInt(statusTopic) === 1n;
+    // `status` is not indexed, so it is encoded in the event data.
+    const isVerified = BigInt(log.data) !== 0n;
     const prev = state.get(wallet);
     if (!prev) continue;
     state.set(wallet, { ...prev, verified: isVerified });
