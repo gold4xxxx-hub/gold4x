@@ -538,13 +538,14 @@ const P2PPage: React.FC = () => {
       setStatus('Only the escrow contract owner can force-release a trade.');
       return;
     }
-    if (!activeTrade.isFiat || activeTrade.status !== TradeStatus.PAID) {
-      setStatus('Admin release is available only after the buyer marks an INR trade paid.');
+    if (!activeTrade.isFiat ||
+        (activeTrade.status !== TradeStatus.OPEN && activeTrade.status !== TradeStatus.PAID)) {
+      setStatus('Admin release is available only for an unsettled INR trade.');
       return;
     }
     const trade = activeTrade;
     const confirmed = window.confirm(
-      `Admin override for trade #${trade.id}: release ${trade.cryptoAmount} ${tokenForPairType(trade.pairType)} to the buyer? Only proceed after independently verifying INR receipt. This action cannot be undone.`,
+      `Admin override for trade #${trade.id} (on-chain status: ${TRADE_STATUS_LABEL[trade.status] ?? trade.status}): release ${trade.cryptoAmount} ${tokenForPairType(trade.pairType)} to the buyer? Only proceed after independently verifying INR receipt. This action cannot be undone.`,
     );
     if (!confirmed) return;
     if (!(await ensureBsc())) {
@@ -1820,14 +1821,14 @@ const P2PPage: React.FC = () => {
                   <p className="p2p-admin__note">
                     {activeTrade.status === TradeStatus.PAID
                       ? 'The buyer marked this INR trade as paid. Release only after you have independently verified the money arrived.'
-                      : 'This trade is still open and holding escrow. Cancel to return the crypto to the seller, or wait for the buyer to mark payment.'}
+                      : 'This trade is still open on-chain. If INR was paid outside the contract, independently verify receipt before using the admin release override.'}
                   </p>
 
                   <div className="p2p-admin__actions">
                     <button
                       type="button"
                       className="p2p-admin__btn p2p-admin__btn--release"
-                      disabled={actionBusy || activeTrade.status !== TradeStatus.PAID}
+                      disabled={actionBusy}
                       onClick={() => void onAdminForceRelease()}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
