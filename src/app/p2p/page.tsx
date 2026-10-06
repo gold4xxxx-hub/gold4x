@@ -35,7 +35,6 @@ import {
   confirmFiatReceived,
   cancelAd,
   cancelExpiredFiatTrade,
-  shareScreenshot,
   getTradeBankDetails,
   getWalletVerification,
   getWalletContactDetails,
@@ -64,9 +63,6 @@ function secondsLeft(deadline: number, now: number): number {
   return Math.max(0, deadline - now);
 }
 
-// Client-side pre-check only. The upload route validates again and is the real
-// authority; this just avoids a pointless round trip on an oversized file.
-const MAX_SHOT_BYTES = 5 * 1024 * 1024;
 const MAX_PRIVATE_FILE_BYTES = 10 * 1024 * 1024;
 const PRIVATE_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const NO_SCREENSHOT_PROVIDED = 'no-screenshot-provided';
@@ -274,7 +270,6 @@ const P2PPage: React.FC = () => {
   const [activeAd, setActiveAd] = useState<AdRow | null>(null);
   const [activeTrade, setActiveTrade] = useState<TradeRow | null>(null);
   const [takeAmount, setTakeAmount] = useState('');
-  const [screenshot, setScreenshot] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [privateFiles, setPrivateFiles] = useState<P2PStoredFile[]>([]);
@@ -283,8 +278,6 @@ const P2PPage: React.FC = () => {
   // Screenshots are their own event stream, so they are tracked separately and
   // interleaved into the transcript by block number.
   const [shots, setShots] = useState<ScreenshotEntry[]>([]);
-  const [shotUploading, setShotUploading] = useState(false);
-  const [upiUploading, setUpiUploading] = useState(false);
   const [privateFileUploading, setPrivateFileUploading] = useState(false);
   const [shotOpen, setShotOpen] = useState<string | null>(null);
   const [profileVerification, setProfileVerification] = useState<Record<string, boolean | null>>({});
@@ -307,11 +300,6 @@ const P2PPage: React.FC = () => {
   // Drives the countdown. Only ticking while a trade is open keeps this cheap.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
-  // Hidden file input for the screenshot picker. Driven by a label styled as a
-  // button so it lines up with the Send button, but still a real file input,
-  // which is what makes mobile browsers surface the camera.
-  const shotInputRef = useRef<HTMLInputElement>(null);
-  const upiInputRef = useRef<HTMLInputElement>(null);
   const privateFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -466,9 +454,8 @@ const P2PPage: React.FC = () => {
   const onMarkPaid = async () => {
     if (!activeTrade) return;
     const trade = activeTrade;
-    const paymentProof = screenshot.trim() || NO_SCREENSHOT_PROVIDED;
     const marked = await guard(
-      (s) => markFiatPaid(s, trade.id, paymentProof),
+      (s) => markFiatPaid(s, trade.id, NO_SCREENSHOT_PROVIDED),
       'INR marked as paid',
     );
     if (!marked) return;
@@ -561,60 +548,6 @@ const P2PPage: React.FC = () => {
     }
   };
 
-  /**
-   * Upload a screenshot and record its CID on the trade.
-   *
-   * The CID goes on-chain, never the image. Both parties can share one at any
-   * point in a trade, which is separate from markFiatPaid: the buyer can prove
-   * the payment before committing to it, and the seller can send a screenshot
-   * of their own bank statement afterwards.
-   */
-  const onShareShot = async (file: File, asPaymentProof = true) => {
-    if (!activeTrade) return;
-
-    if (!file.type.startsWith('image/')) {
-      setStatus('That file is not an image.');
-      return;
-    }
-    if (file.size > MAX_SHOT_BYTES) {
-      setStatus('Image is too large. Maximum size is 5 MB.');
-      return;
-    }
-
-    if (asPaymentProof) setShotUploading(true);
-    else setUpiUploading(true);
-    setStatus(null);
-    let cid: string;
-    try {
-      const body = new FormData();
-      body.append('file', file);
-      const res = await fetch('/api/p2p/screenshot', { method: 'POST', body });
-      const json = (await res.json()) as { cid?: string; error?: string };
-      if (!res.ok || !json.cid) {
-        setStatus(json.error || 'Upload failed. Please try again.');
-        return;
-      }
-      cid = json.cid;
-    } catch {
-      setStatus('Could not reach the upload service. Check your connection.');
-      return;
-    } finally {
-      setShotUploading(false);
-      setUpiUploading(false);
-    }
-
-    if (asPaymentProof) setScreenshot(cid);
-
-    const ok = await guard(
-      (s) => shareScreenshot(s, activeTrade.id, cid),
-      asPaymentProof ? 'Payment screenshot shared' : 'UPI QR shared',
-    );
-    if (ok) {
-      setShotOpen(cid);
-      void refreshTradeDetail(activeTrade.id, activeTrade);
-    }
-  };
-
   /** Pull chat, deadline, confirmations and bank details for one trade. */
   const refreshTradeDetail = useCallback(async (tradeId: number, tradeContext: TradeRow) => {
     setChatLoading(true);
@@ -690,7 +623,6 @@ const P2PPage: React.FC = () => {
 
   const openTrade = async (t: TradeRow) => {
     setActiveTrade(t);
-    setScreenshot('');
     setBank(null);
     setDeadline(0);
     setFiatPaid(false);
@@ -1504,39 +1436,7 @@ const P2PPage: React.FC = () => {
               </section>
             )}
 
-            {/* Screenshot picker. accept="image/*" so mobile browsers offer the
-                camera, which is how this will actually be used. */}
             <div className="flex gap-2 mb-4">
-              <input
-                ref={shotInputRef}
-                type="file"
-                accept="image/*"
-                className="p2p-shot-input"
-                // Hidden from assistive tech and skipped in the tab order: the
-                // styled label below is the real control, so exposing both
-                // would announce "share a screenshot" twice.
-                tabIndex={-1}
-                aria-hidden="true"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  // Reset immediately so re-picking the same file still fires.
-                  e.target.value = '';
-                  if (file) void onShareShot(file, true);
-                }}
-              />
-              <input
-                ref={upiInputRef}
-                type="file"
-                accept="image/*"
-                className="p2p-shot-input"
-                tabIndex={-1}
-                aria-hidden="true"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (file) void onShareShot(file, false);
-                }}
-              />
               <input
                 ref={privateFileInputRef}
                 type="file"
@@ -1561,12 +1461,12 @@ const P2PPage: React.FC = () => {
               <button
                 type="button"
                 className="p2p-btn p2p-btn--icon"
-                title="Upload a payment screenshot"
-                aria-label="Upload a payment screenshot"
-                onClick={() => shotInputRef.current?.click()}
-                disabled={shotUploading}
+                title="Share a private payment image or UPI QR"
+                aria-label="Share a private payment image or UPI QR"
+                onClick={() => privateFileInputRef.current?.click()}
+                disabled={!canUseTradeStorage || privateFileUploading}
               >
-                {shotUploading ? (
+                {privateFileUploading ? (
                   <span className="p2p-btn__spin" aria-hidden="true" />
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -1575,24 +1475,6 @@ const P2PPage: React.FC = () => {
                   </svg>
                 )}
               </button>
-              <button
-                type="button"
-                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
-                title="Share your UPI QR code in the trade chat"
-                onClick={() => upiInputRef.current?.click()}
-                disabled={upiUploading}
-              >
-                {upiUploading ? 'Uploading…' : 'UPI QR'}
-              </button>
-              <button
-                type="button"
-                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
-                title="Share a private file with this trade"
-                onClick={() => privateFileInputRef.current?.click()}
-                disabled={!canUseTradeStorage || privateFileUploading}
-              >
-                {privateFileUploading ? 'Uploading…' : 'Private file'}
-              </button>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>
               </button>
@@ -1600,16 +1482,9 @@ const P2PPage: React.FC = () => {
 
             {sameWallet(activeTrade.buyer, account) && activeTrade.status === TradeStatus.OPEN && !fiatPaid && (
               <div className="mb-4">
-                <label className="p2p-label" htmlFor="p2p-shot">
-                  Payment screenshot — optional
-                </label>
-                <input
-                  id="p2p-shot"
-                  className="p2p-input mb-2"
-                  placeholder="Optional IPFS CID"
-                  value={screenshot}
-                  onChange={(e) => setScreenshot(e.target.value)}
-                />
+                <p className="p2p-storage-note mb-2">
+                  Attach a payment image privately above if useful. A screenshot is not required to mark INR paid.
+                </p>
                 <button className="p2p-btn p2p-btn--block" disabled={actionBusy} onClick={onMarkPaid}>
                   <span>Mark INR paid &amp; notify seller</span>
                 </button>
