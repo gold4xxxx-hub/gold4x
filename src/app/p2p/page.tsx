@@ -652,9 +652,13 @@ const P2PPage: React.FC = () => {
     ),
     [ads, pairFilter, sideFilter],
   );
-  const openTrades = trades.filter(
-    (trade) => trade.status === TradeStatus.OPEN || trade.status === TradeStatus.PAID,
-  ).length;
+  const activeTrades = useMemo(
+    () => trades.filter(
+      (trade) => trade.status === TradeStatus.OPEN || trade.status === TradeStatus.PAID,
+    ),
+    [trades],
+  );
+  const openTrades = activeTrades.length;
   const canSeeTradeContacts = Boolean(
     activeTrade?.isFiat &&
     (activeTrade.status === TradeStatus.OPEN || activeTrade.status === TradeStatus.PAID) &&
@@ -970,14 +974,14 @@ const P2PPage: React.FC = () => {
           <div className="p2p-panel__head">
             <h2 className="p2p-panel__title">Trades</h2>
             <span className="p2p-panel__count">
-              {trades.length} shown{trades.length < stats.tradeCounter && ` · ${stats.tradeCounter} total`}
+              {activeTrades.length} active
             </span>
           </div>
 
           {tradesLoading && <div className="p2p-bar my-4" />}
           <p className="p2p-table-hint">Scroll horizontally to view all trade details.</p>
 
-          {trades.length === 0 ? (
+          {activeTrades.length === 0 ? (
             <div className="p2p-empty">
               <div className="p2p-empty__ring">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -990,7 +994,7 @@ const P2PPage: React.FC = () => {
                   ? 'Reading trades from chain…'
                   : stats.tradeCounter === 0
                     ? 'No trades started yet. Taking an ad from the order book opens the first one.'
-                    : 'Nothing in the recent window. Older trades are beyond the current page.'}
+                    : 'No active trades right now. Completed and cancelled trades are hidden.'}
               </p>
             </div>
           ) : (
@@ -1009,7 +1013,7 @@ const P2PPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {trades.map((t) => {
+                  {activeTrades.map((t) => {
                     const token = tokenForPairType(t.pairType);
                     const mine = t.seller === account || t.buyer === account;
                     return (
