@@ -97,8 +97,17 @@ export async function pinImage(
 
   if (!res.ok) {
     // Never echo the upstream body verbatim; it can contain key hints.
-    if (res.status === 401 || res.status === 403) {
-      throw new PinError('Storage credentials were rejected.', 502);
+    if (res.status === 401) {
+      throw new PinError(
+        'Pinata rejected the server PINATA_JWT. Create a valid Pinata JWT, update the server environment, and restart or redeploy.',
+        502,
+      );
+    }
+    if (res.status === 403) {
+      throw new PinError(
+        'The server PINATA_JWT does not have permission to pin files. Check the JWT pinning permissions and Pinata account access.',
+        502,
+      );
     }
     throw new PinError('The storage service rejected this image.', 502);
   }
