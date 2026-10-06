@@ -911,6 +911,47 @@
   text-decoration: underline;
 }
 
+.p2p-storage-note {
+  margin: 0 0 0.6rem;
+  color: var(--fx-ink-subtle);
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.p2p-private-files {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.p2p-private-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--fx-ink-muted);
+  font-size: 0.75rem;
+}
+
+.p2p-private-file__meta {
+  color: var(--fx-ink-subtle);
+  font-size: 0.68rem;
+}
+
+.p2p-private-file a {
+  color: #d8c17b;
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.p2p-private-file a:hover {
+  text-decoration: underline;
+}
+
 .p2p-contact-disclosure {
   color: #b6a878;
   font-size: 0.7rem;
@@ -920,6 +961,19 @@
 @media (max-width: 520px) {
   .p2p-profile-list {
     grid-template-columns: 1fr;
+  }
+
+  .p2p-private-file {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .p2p-private-file__meta {
+    grid-column: 1;
+  }
+
+  .p2p-private-file a {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 }
 
