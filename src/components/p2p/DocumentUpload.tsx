@@ -196,7 +196,7 @@ export default function DocumentUpload({ id, label, value, onChange }: Props) {
           ) : value ? (
             <>
               <div style={{ fontSize: '0.8rem', color: 'var(--fx-emerald-bright)' }}>
-                Uploaded
+                Pinned to public IPFS
               </div>
               <code
                 style={{
@@ -217,7 +217,7 @@ export default function DocumentUpload({ id, label, value, onChange }: Props) {
                 Choose image
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--fx-ink-subtle)' }}>
-                Take a photo or pick a file · max 5 MB
+                Take a photo or pick a file · public IPFS · max 5 MB
               </div>
             </>
           )}
