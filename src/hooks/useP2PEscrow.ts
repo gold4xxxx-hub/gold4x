@@ -589,6 +589,12 @@ export async function confirmFiatReceived(signer: ethers.Signer, tradeId: number
   return (await c.confirmFiatReceived(tradeId)).wait();
 }
 
+/** Contract-owner override: force-completes the trade and releases its escrow. */
+export async function adminForceCompleteTrade(signer: ethers.Signer, tradeId: number) {
+  const c = readContract(signer);
+  return (await c.ownerForceComplete(tradeId)).wait();
+}
+
 /** Crypto-to-crypto mutual confirmation. Not used by the INR desk. */
 export async function confirmTrade(signer: ethers.Signer, tradeId: number) {
   const c = readContract(signer);

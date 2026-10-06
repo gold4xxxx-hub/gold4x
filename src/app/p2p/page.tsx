@@ -13,6 +13,7 @@ import './p2p.css';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
   BSC_CONFIG,
+  isP2pEscrowOwner,
 } from '@/config/web3Config';
 import {
   FIXED_INR_PRICES,
@@ -33,6 +34,7 @@ import {
   startTrade,
   markFiatPaid,
   confirmFiatReceived,
+  adminForceCompleteTrade,
   cancelAd,
   cancelExpiredFiatTrade,
   getTradeBankDetails,
@@ -494,6 +496,49 @@ const P2PPage: React.FC = () => {
           : current,
       );
       void refreshTradeDetail(tradeId, activeTrade);
+    }
+  };
+
+  const onAdminForceRelease = async () => {
+    if (!activeTrade || !signer) {
+      setStatus('Connect the contract owner wallet to force-release escrow.');
+      return;
+    }
+    if (!isP2pEscrowOwner(account)) {
+      setStatus('Only the escrow contract owner can force-release a trade.');
+      return;
+    }
+    if (!activeTrade.isFiat || activeTrade.status !== TradeStatus.PAID) {
+      setStatus('Admin release is available only after the buyer marks an INR trade paid.');
+      return;
+    }
+    const trade = activeTrade;
+    const confirmed = window.confirm(
+      `Admin override for trade #${trade.id}: release ${trade.cryptoAmount} ${tokenForPairType(trade.pairType)} to the buyer? Only proceed after independently verifying INR receipt. This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+    if (!(await ensureBsc())) {
+      setStatus('Switch to Binance Smart Chain before releasing escrow.');
+      return;
+    }
+
+    setActionBusy(true);
+    setStatus(null);
+    try {
+      await adminForceCompleteTrade(signer, trade.id);
+      setActiveTrade((current) =>
+        current?.id === trade.id
+          ? { ...current, status: TradeStatus.COMPLETED }
+          : current,
+      );
+      setStatus('Admin force-release confirmed. Crypto was released to the buyer.');
+      await reload();
+      void refreshTradeDetail(trade.id, { ...trade, status: TradeStatus.COMPLETED });
+    } catch (e) {
+      const err = e as { shortMessage?: string; reason?: string; message?: string };
+      setStatus(`Admin force-release failed: ${explainTradeError(err)}`);
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -1500,6 +1545,21 @@ const P2PPage: React.FC = () => {
                 <span>I received INR — release crypto to buyer</span>
               </button>
             )}
+
+            {isP2pEscrowOwner(account) &&
+              !sameWallet(activeTrade.seller, account) &&
+              activeTrade.isFiat && activeTrade.status === TradeStatus.PAID && (
+                <div className="p2p-admin-release mb-4">
+                  <p>Admin override: independently verify INR receipt before releasing escrow.</p>
+                  <button
+                    className="p2p-btn p2p-btn--block p2p-btn--ghost"
+                    disabled={actionBusy}
+                    onClick={() => void onAdminForceRelease()}
+                  >
+                    <span>Admin release crypto to buyer</span>
+                  </button>
+                </div>
+              )}
 
             {activeTrade.status === TradeStatus.OPEN && deadline > 0 &&
               secondsLeft(deadline, now) === 0 && (

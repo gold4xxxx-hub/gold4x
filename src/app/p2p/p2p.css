@@ -958,6 +958,20 @@
   line-height: 1.45;
 }
 
+.p2p-admin-release {
+  padding: 0.8rem;
+  border: 1px solid rgba(216, 76, 76, 0.28);
+  border-radius: 8px;
+  background: rgba(216, 76, 76, 0.06);
+}
+
+.p2p-admin-release p {
+  margin: 0 0 0.65rem;
+  color: #e2b1a8;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 520px) {
   .p2p-profile-list {
     grid-template-columns: 1fr;
