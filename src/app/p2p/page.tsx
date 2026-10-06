@@ -389,6 +389,7 @@ const P2PPage: React.FC = () => {
   const guard = async (
     fn: (s: Signer) => Promise<unknown>,
     label: string,
+    requireVerifiedKyc = true,
   ): Promise<boolean> => {
     if (!signer) {
       setStatus('Connect a wallet first.');
@@ -400,7 +401,7 @@ const P2PPage: React.FC = () => {
       setStatus('Please switch your wallet to Binance Smart Chain and try again.');
       return false;
     }
-    if (!kyc.verified) {
+    if (requireVerifiedKyc && !kyc.verified) {
       setStatus('Your KYC must be verified before trading.');
       return false;
     }
@@ -459,6 +460,7 @@ const P2PPage: React.FC = () => {
     const marked = await guard(
       (s) => markFiatPaid(s, trade.id, NO_SCREENSHOT_PROVIDED),
       'INR marked as paid',
+      false,
     );
     if (!marked) return;
 
@@ -488,6 +490,7 @@ const P2PPage: React.FC = () => {
     const released = await guard(
       (s) => confirmFiatReceived(s, tradeId),
       'Crypto released to buyer',
+      false,
     );
     if (released) {
       setActiveTrade((current) =>
@@ -1037,7 +1040,7 @@ const P2PPage: React.FC = () => {
                             <button
                               className="p2p-btn p2p-btn--sm p2p-btn--ghost"
                               disabled={actionBusy}
-                              onClick={() => guard((s) => cancelAd(s, ad.id), 'Ad cancelled')}
+                              onClick={() => guard((s) => cancelAd(s, ad.id), 'Ad cancelled', false)}
                             >
                               <span>Cancel</span>
                             </button>
@@ -1566,7 +1569,7 @@ const P2PPage: React.FC = () => {
                 <button
                   className="p2p-btn p2p-btn--ghost p2p-btn--block"
                   disabled={actionBusy}
-                  onClick={() => guard((s) => cancelExpiredFiatTrade(s, activeTrade.id), 'Trade cancelled')}
+                  onClick={() => guard((s) => cancelExpiredFiatTrade(s, activeTrade.id), 'Trade cancelled', false)}
                 >
                   <span>Window expired — cancel and refund seller</span>
                 </button>

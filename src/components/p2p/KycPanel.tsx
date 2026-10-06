@@ -238,6 +238,8 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
               <DocumentUpload
                 id={`kyc-${k}`}
                 label={KYC_LABELS[k]}
+                side={k === 'aadharFrontHash' ? 'front' : 'back'}
+                signer={signer}
                 value={form[k]}
                 onChange={(cid) => setForm((f) => ({ ...f, [k]: cid }))}
               />
