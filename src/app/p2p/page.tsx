@@ -69,6 +69,7 @@ function secondsLeft(deadline: number, now: number): number {
 const MAX_SHOT_BYTES = 5 * 1024 * 1024;
 const MAX_PRIVATE_FILE_BYTES = 10 * 1024 * 1024;
 const PRIVATE_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+const NO_SCREENSHOT_PROVIDED = 'no-screenshot-provided';
 
 function formatCountdown(deadline: number, now: number): string | null {
   if (!deadline) return null;
@@ -464,15 +465,32 @@ const P2PPage: React.FC = () => {
 
   const onMarkPaid = async () => {
     if (!activeTrade) return;
-    if (!screenshot.trim()) {
-      setStatus('An IPFS screenshot hash is required to mark INR as paid.');
-      return;
-    }
+    const trade = activeTrade;
+    const paymentProof = screenshot.trim() || NO_SCREENSHOT_PROVIDED;
     const marked = await guard(
-      (s) => markFiatPaid(s, activeTrade.id, screenshot.trim()),
-      'Marked as paid',
+      (s) => markFiatPaid(s, trade.id, paymentProof),
+      'INR marked as paid',
     );
-    if (marked) void refreshTradeDetail(activeTrade.id, activeTrade);
+    if (!marked) return;
+
+    const sellerNote = 'I have sent the INR. Please verify receipt and release the crypto.';
+    setChatInput(sellerNote);
+    void refreshTradeDetail(trade.id, trade);
+
+    if (!signer) return;
+    try {
+      const saved = await sendP2PStoredMessage(signer, trade.id, sellerNote);
+      setChat((current) => [
+        ...current,
+        { sender: saved.sender_wallet, text: saved.content, blockNumber: Number(saved.chain_block) },
+      ]);
+      setChatInput('');
+      setStorageError(null);
+      setStatus('INR marked as paid. The seller has been notified in private trade chat.');
+    } catch (e) {
+      setStorageError(e instanceof Error ? e.message : 'Could not send the seller notification.');
+      setStatus('INR marked as paid. The seller note is ready in chat; send it when storage is available.');
+    }
   };
 
   const onConfirmReceived = async () => {
@@ -1380,9 +1398,13 @@ const P2PPage: React.FC = () => {
 
             {storedScreenshot && (
               <div className="p2p-tile mb-4">
-                <div className="p2p-tile__label">Payment screenshot on record</div>
+                <div className="p2p-tile__label">
+                  {storedScreenshot === NO_SCREENSHOT_PROVIDED
+                    ? 'Payment marked without screenshot'
+                    : 'Payment screenshot on record'}
+                </div>
                 <div className="p2p-tile__value p2p-tile__value--mono break-all">
-                  {storedScreenshot}
+                  {storedScreenshot === NO_SCREENSHOT_PROVIDED ? 'No screenshot provided' : storedScreenshot}
                 </div>
               </div>
             )}
@@ -1579,17 +1601,17 @@ const P2PPage: React.FC = () => {
             {sameWallet(activeTrade.buyer, account) && activeTrade.status === TradeStatus.OPEN && !fiatPaid && (
               <div className="mb-4">
                 <label className="p2p-label" htmlFor="p2p-shot">
-                  Payment screenshot — IPFS hash
+                  Payment screenshot — optional
                 </label>
                 <input
                   id="p2p-shot"
                   className="p2p-input mb-2"
-                  placeholder="Qm… or ipfs://…"
+                  placeholder="Optional IPFS CID"
                   value={screenshot}
                   onChange={(e) => setScreenshot(e.target.value)}
                 />
                 <button className="p2p-btn p2p-btn--block" disabled={actionBusy} onClick={onMarkPaid}>
-                  <span>I have sent the INR</span>
+                  <span>Mark INR paid &amp; notify seller</span>
                 </button>
               </div>
             )}
