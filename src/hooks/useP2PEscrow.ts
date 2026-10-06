@@ -5,7 +5,7 @@
 // Reads are plain view calls, no signature. Writes require a signer and
 // throw until the caller passes one.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
@@ -246,10 +246,62 @@ export async function getStoredKyc(
   };
 }
 
-/** Fetch all active ads, newest first. */
+/**
+ * Page through ads, newest first.
+ *
+ * Only the newest PAGE_SIZE ids are read on each poll, because one RPC call per
+ * ad on a large book will rate-limit a public node. Older pages are fetched once
+ * on demand and cached, so paging back is instant and polling stays at one page
+ * of calls no matter how far back the user has scrolled.
+ */
 export function useAds(adCounter: number, chainActive: boolean) {
   const [ads, setAds] = useState<AdRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [pages, setPages] = useState(1);
+  // id -> row, so a page is read once and survives re-renders and polls.
+  const cache = useRef(new Map<number, AdRow | null>());
+
+  const readIds = useCallback(async (ids: number[]) => {
+    const c = readContract();
+    const out: AdRow[] = [];
+    // Sequential on purpose: a burst of concurrent getAd calls is what makes
+    // the public node answer "could not coalesce error".
+    for (const id of ids) {
+      try {
+        const a = await c.getAd(id);
+        cache.current.set(id, {
+          id: id,
+          creator: a[0],
+          pairType: Number(a[1]),
+          isSellOrder: Boolean(a[2]),
+          originalCrypto: ethers.formatUnits(a[3], 18),
+          originalQuote: a[4].toString(),
+          remainingCrypto: ethers.formatUnits(a[5], 18),
+          paymentWindow: Number(a[6]),
+          active: Boolean(a[7]),
+          // remainingCrypto reaching 0 deactivates the ad; distinguish that
+          // from an explicit cancelAd.
+          exhausted: Boolean(a[7]) === false && a[5] === 0n,
+        } as AdRow);
+      } catch {
+        cache.current.set(id, null);
+      }
+    }
+    // getAd() returns zero values for ids that were never created rather than
+    // reverting, so ghost rows must be filtered out.
+    for (const id of ids) {
+      const row = cache.current.get(id);
+      if (
+        row &&
+        row.creator !== '0x0000000000000000000000000000000000000000' &&
+        row.active
+      ) {
+        out.push(row);
+      }
+    }
+    return out;
+  }, []);
 
   const load = useCallback(async () => {
     if (!chainActive || adCounter === 0) {
@@ -258,65 +310,96 @@ export function useAds(adCounter: number, chainActive: boolean) {
     }
     setLoading(true);
     try {
-      const c = readContract();
+      const newest = Math.min(PAGE_SIZE, adCounter);
+      const ids = Array.from({ length: newest }, (_, i) => adCounter - i);
+      await readIds(ids);
 
-      // Only the newest PAGE_SIZE ids are fetched. Reading every id on a large
-      // book means one RPC call per ad on every poll, which public nodes will
-      // rate-limit.
-      const first = Math.max(1, adCounter - PAGE_SIZE + 1);
-      const ids = Array.from({ length: adCounter - first + 1 }, (_, i) => adCounter - i);
-
-      // Batched so a large page does not fan out into concurrent requests.
-      const rows: (AdRow | null)[] = [];
-      for (const id of ids) {
-        try {
-          const a = await c.getAd(id);
-          rows.push({
-            id: id,
-            creator: a[0],
-            pairType: Number(a[1]),
-            isSellOrder: Boolean(a[2]),
-            originalCrypto: ethers.formatUnits(a[3], 18),
-            originalQuote: a[4].toString(),
-            remainingCrypto: ethers.formatUnits(a[5], 18),
-            paymentWindow: Number(a[6]),
-            active: Boolean(a[7]),
-            // remainingCrypto reaching 0 deactivates the ad; distinguish that
-            // from an explicit cancelAd.
-            exhausted: Boolean(a[7]) === false && a[5] === 0n,
-          } as AdRow);
-        } catch {
-          rows.push(null);
+      const visible: AdRow[] = [];
+      const total = pages * PAGE_SIZE;
+      for (let id = adCounter; id > Math.max(0, adCounter - total); id--) {
+        const row = cache.current.get(id);
+        if (row && row.active && row.creator !== '0x0000000000000000000000000000000000000000') {
+          visible.push(row);
         }
       }
-
-      // getAd() returns zero values for ids that were never created rather than
-      // reverting, so ghost rows must be filtered out here.
-      setAds(
-        (rows.filter(Boolean) as AdRow[]).filter(
-          (r) =>
-            r.creator !== '0x0000000000000000000000000000000000000000' &&
-            r.active,
-        ),
-      );
+      setAds(visible);
     } catch {
       setAds([]);
     } finally {
       setLoading(false);
     }
-  }, [adCounter, chainActive]);
+  }, [adCounter, chainActive, pages, readIds]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { ads, loading, refresh: load, hasMore: adCounter > PAGE_SIZE };
+  /** Fetch the next older page and keep it cached. */
+  const loadOlder = useCallback(async () => {
+    if (!chainActive || adCounter === 0) return;
+    const oldest = Math.max(1, adCounter - pages * PAGE_SIZE + 1);
+    const from = Math.max(1, oldest - PAGE_SIZE + 1);
+    const ids = Array.from({ length: oldest - from + 1 }, (_, i) => oldest - i);
+    setLoadingOlder(true);
+    try {
+      await readIds(ids);
+      setPages((p) => p + 1);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [adCounter, chainActive, pages, readIds]);
+
+  const loadedThrough = Math.max(0, adCounter - pages * PAGE_SIZE + 1);
+
+  return {
+    ads,
+    loading,
+    refresh: load,
+    loadOlder,
+    loadingOlder,
+    hasMore: loadedThrough > 1,
+    totalOnChain: adCounter,
+    loadedFrom: loadedThrough,
+    loadedTo: adCounter,
+  };
 }
 
-/** Fetch recent trades, newest first. */
+/**
+ * Page through trades, newest first.
+ *
+ * Same caching approach as useAds. Without it, trades older than the newest
+ * PAGE_SIZE ids were unreachable, which hid trades still holding escrow from
+ * the owner who needed to cancel or release them.
+ */
 export function useTrades(tradeCounter: number, chainActive: boolean) {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [pages, setPages] = useState(1);
+  const cache = useRef(new Map<number, TradeRow | null>());
+
+  const readIds = useCallback(async (ids: number[]) => {
+    const c = readContract();
+    for (const id of ids) {
+      try {
+        const t = await c.getTrade(id);
+        cache.current.set(id, {
+          id: id,
+          adId: Number(t[0]),
+          pairType: Number(t[1]),
+          isFiat: Boolean(t[2]),
+          seller: t[3],
+          buyer: t[4],
+          cryptoToken: t[5],
+          cryptoAmount: ethers.formatUnits(t[6], 18),
+          quoteAmount: t[7] as bigint,
+          status: Number(t[8]),
+        } as TradeRow);
+      } catch {
+        cache.current.set(id, null);
+      }
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (!chainActive || tradeCounter === 0) {
@@ -325,50 +408,56 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
     }
     setLoading(true);
     try {
-      const c = readContract();
-      const first = Math.max(1, tradeCounter - PAGE_SIZE + 1);
-      const ids = Array.from({ length: tradeCounter - first + 1 }, (_, i) => tradeCounter - i);
+      const newest = Math.min(PAGE_SIZE, tradeCounter);
+      await readIds(Array.from({ length: newest }, (_, i) => tradeCounter - i));
 
-      const rows: (TradeRow | null)[] = [];
-      for (const id of ids) {
-        try {
-          const t = await c.getTrade(id);
-          rows.push({
-            id: id,
-            adId: Number(t[0]),
-            pairType: Number(t[1]),
-            isFiat: Boolean(t[2]),
-            seller: t[3],
-            buyer: t[4],
-            cryptoToken: t[5],
-            cryptoAmount: ethers.formatUnits(t[6], 18),
-            quoteAmount: t[7] as bigint,
-            status: Number(t[8]),
-          } as TradeRow);
-        } catch {
-          rows.push(null);
-        }
+      const visible: TradeRow[] = [];
+      const total = pages * PAGE_SIZE;
+      for (let id = tradeCounter; id > Math.max(0, tradeCounter - total); id--) {
+        const row = cache.current.get(id);
+        // getTrade() yields zero values for unknown ids, and status 0 is
+        // TradeStatus.NONE, which no real trade can hold.
+        if (row && row.status !== TradeStatus.NONE) visible.push(row);
       }
-
-      // Same as ads: getTrade() yields zero values for unknown ids, and status 0
-      // is TradeStatus.NONE, which no real trade can hold.
-      setTrades(
-        (rows.filter(Boolean) as TradeRow[]).filter(
-          (r) => r.status !== TradeStatus.NONE,
-        ),
-      );
+      setTrades(visible);
     } catch {
       setTrades([]);
     } finally {
       setLoading(false);
     }
-  }, [tradeCounter, chainActive]);
+  }, [tradeCounter, chainActive, pages, readIds]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { trades, loading, refresh: load, hasMore: tradeCounter > PAGE_SIZE };
+  const loadOlder = useCallback(async () => {
+    if (!chainActive || tradeCounter === 0) return;
+    const oldest = Math.max(1, tradeCounter - pages * PAGE_SIZE + 1);
+    const from = Math.max(1, oldest - PAGE_SIZE + 1);
+    const ids = Array.from({ length: oldest - from + 1 }, (_, i) => oldest - i);
+    setLoadingOlder(true);
+    try {
+      await readIds(ids);
+      setPages((p) => p + 1);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [tradeCounter, chainActive, pages, readIds]);
+
+  const loadedThrough = Math.max(0, tradeCounter - pages * PAGE_SIZE + 1);
+
+  return {
+    trades,
+    loading,
+    refresh: load,
+    loadOlder,
+    loadingOlder,
+    hasMore: loadedThrough > 1,
+    totalOnChain: tradeCounter,
+    loadedFrom: loadedThrough,
+    loadedTo: tradeCounter,
+  };
 }
 
 /**

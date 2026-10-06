@@ -257,11 +257,26 @@ const P2PPage: React.FC = () => {
   const { connect: connectWallet } = useConnect();
   const { stats, loading: statsLoading, error: statsError, refresh } = useEscrowStats();
   const { status: kyc, refresh: refreshKyc } = useKycStatus(account);
-  const { ads, loading: adsLoading } = useAds(stats.adCounter, stats.chainActive);
+  const {
+    ads,
+    loading: adsLoading,
+    loadOlder: loadOlderAds,
+    loadingOlder: loadingOlderAds,
+    hasMore: moreAds,
+    totalOnChain: totalAds,
+    loadedFrom: adsFrom,
+    loadedTo: adsTo,
+  } = useAds(stats.adCounter, stats.chainActive);
   const {
     trades,
     loading: tradesLoading,
     refresh: refreshTrades,
+    loadOlder: loadOlderTrades,
+    loadingOlder: loadingOlderTrades,
+    hasMore: moreTrades,
+    totalOnChain: totalTrades,
+    loadedFrom: tradesFrom,
+    loadedTo: tradesTo,
   } = useTrades(stats.tradeCounter, stats.chainActive);
 
   const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
@@ -1091,6 +1106,27 @@ const P2PPage: React.FC = () => {
               </table>
             </div>
           )}
+
+          {moreAds && (
+            <div className="p2p-pager">
+              <p className="p2p-pager__note">
+                Showing orders #{adsFrom}–#{adsTo} of {totalAds} created. Older orders are
+                not loaded yet.
+              </p>
+              <button
+                type="button"
+                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                disabled={loadingOlderAds}
+                onClick={() => void loadOlderAds()}
+              >
+                <span>
+                  {loadingOlderAds
+                    ? 'Loading…'
+                    : `Load ${Math.min(25, Math.max(0, adsFrom - 1))} older orders`}
+                </span>
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="p2p-panel p-6 fx-reveal fx-reveal--delay-3">
@@ -1167,6 +1203,27 @@ const P2PPage: React.FC = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {moreTrades && (
+            <div className="p2p-pager">
+              <p className="p2p-pager__note">
+                Showing trades #{tradesFrom}–#{tradesTo} of {totalTrades} on-chain. Older
+                trades are not loaded yet.
+              </p>
+              <button
+                type="button"
+                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                disabled={loadingOlderTrades}
+                onClick={() => void loadOlderTrades()}
+              >
+                <span>
+                  {loadingOlderTrades
+                    ? 'Loading…'
+                    : `Load ${Math.min(25, Math.max(0, tradesFrom - 1))} older trades`}
+                </span>
+              </button>
             </div>
           )}
         </section>

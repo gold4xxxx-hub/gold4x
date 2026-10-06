@@ -911,6 +911,32 @@
   text-decoration: underline;
 }
 
+/* --------------------------------------------------------------------------
+   Pagination
+
+   Ads and trades are read from the contract one id at a time, so only the
+   newest page is fetched automatically. This makes the boundary explicit
+   rather than silently truncating the list.
+   -------------------------------------------------------------------------- */
+
+.p2p-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.p2p-pager__note {
+  margin: 0;
+  color: var(--fx-ink-subtle);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .p2p-storage-note {
   margin: 0 0 0.6rem;
   color: var(--fx-ink-subtle);
