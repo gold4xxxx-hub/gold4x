@@ -919,6 +919,54 @@
    rather than silently truncating the list.
    -------------------------------------------------------------------------- */
 
+/* Closed-orders toggle. A real checkbox so it is keyboard reachable and
+   announces its state, restyled to match the segmented filters beside it. */
+.p2p-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--fx-ink-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.p2p-toggle:hover {
+  border-color: rgba(212, 168, 67, 0.3);
+  color: var(--fx-ink-subtle);
+}
+
+.p2p-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--fx-gold, #d4a843);
+  cursor: pointer;
+}
+
+.p2p-toggle:has(input:checked) {
+  border-color: rgba(212, 168, 67, 0.45);
+  background: rgba(212, 168, 67, 0.08);
+  color: var(--fx-gold-text);
+}
+
+.p2p-toggle input:focus-visible {
+  outline: 2px solid rgba(212, 168, 67, 0.7);
+  outline-offset: 2px;
+}
+
+.p2p-panel__head-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .p2p-pager {
   display: flex;
   align-items: center;

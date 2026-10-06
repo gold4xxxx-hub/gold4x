@@ -282,6 +282,11 @@ const P2PPage: React.FC = () => {
   const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
   const [pairFilter, setPairFilter] = useState<PairFilter>('all');
   const [sideFilter, setSideFilter] = useState<SideFilter>('all');
+  // Closed orders and trades are hidden by default, but reachable. Without the
+  // toggle they disappeared for good the moment they closed, which left no way
+  // to confirm that a release or refund actually went through.
+  const [showClosedAds, setShowClosedAds] = useState(false);
+  const [showClosedTrades, setShowClosedTrades] = useState(false);
   const [activeAd, setActiveAd] = useState<AdRow | null>(null);
   const [activeTrade, setActiveTrade] = useState<TradeRow | null>(null);
   const [takeAmount, setTakeAmount] = useState('');
@@ -776,18 +781,25 @@ const P2PPage: React.FC = () => {
     return rows.sort((a, b) => a.at - b.at);
   }, [chat, shots]);
 
+  // Active-only by default, because a filled or cancelled order is noise on a
+  // trading desk. The toggle exists so the history is auditable rather than
+  // gone: without it an order or trade vanished the instant it closed.
   const marketAds = useMemo(
     () => ads.filter((ad) =>
+      (showClosedAds || ad.active) &&
       (pairFilter === 'all' || tokenForPairType(ad.pairType) === pairFilter) &&
       (sideFilter === 'all' || (ad.isSellOrder ? 'sell' : 'buy') === sideFilter),
     ),
-    [ads, pairFilter, sideFilter],
+    [ads, pairFilter, sideFilter, showClosedAds],
   );
+
   const activeTrades = useMemo(
-    () => trades.filter(
-      (trade) => trade.status === TradeStatus.OPEN || trade.status === TradeStatus.PAID,
+    () => trades.filter((trade) =>
+      showClosedTrades ||
+      trade.status === TradeStatus.OPEN ||
+      trade.status === TradeStatus.PAID,
     ),
-    [trades],
+    [trades, showClosedTrades],
   );
   const openTrades = activeTrades.length;
   const canSeeTradeContacts = Boolean(
@@ -1005,10 +1017,20 @@ const P2PPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              <label className="p2p-toggle">
+                <input
+                  type="checkbox"
+                  checked={showClosedAds}
+                  onChange={(e) => setShowClosedAds(e.target.checked)}
+                />
+                <span>Include filled</span>
+              </label>
             </div>
           </div>
 
-          <div className="p2p-market-count">{marketAds.length} active offers</div>
+          <div className="p2p-market-count">
+            {marketAds.length} {showClosedAds ? 'offers' : 'active offers'}
+          </div>
           <p className="p2p-table-hint">Scroll horizontally to view all offer details.</p>
 
           {adsLoading && <div className="p2p-bar my-4" />}
@@ -1132,9 +1154,21 @@ const P2PPage: React.FC = () => {
         <section className="p2p-panel p-6 fx-reveal fx-reveal--delay-3">
           <div className="p2p-panel__head">
             <h2 className="p2p-panel__title">Trades</h2>
-            <span className="p2p-panel__count">
-              {activeTrades.length} active
-            </span>
+            <div className="p2p-panel__head-tools">
+              <span className="p2p-panel__count">
+                {showClosedTrades
+                  ? `${activeTrades.length} shown`
+                  : `${activeTrades.length} active`}
+              </span>
+              <label className="p2p-toggle">
+                <input
+                  type="checkbox"
+                  checked={showClosedTrades}
+                  onChange={(e) => setShowClosedTrades(e.target.checked)}
+                />
+                <span>Include closed</span>
+              </label>
+            </div>
           </div>
 
           {tradesLoading && <div className="p2p-bar my-4" />}

@@ -290,13 +290,13 @@ export function useAds(adCounter: number, chainActive: boolean) {
     }
     // getAd() returns zero values for ids that were never created rather than
     // reverting, so ghost rows must be filtered out.
+    //
+    // Inactive ads are kept rather than dropped here. Filtering them in the hook
+    // meant a filled or cancelled order vanished with no way to look back, so
+    // whether to show them is now the view's decision.
     for (const id of ids) {
       const row = cache.current.get(id);
-      if (
-        row &&
-        row.creator !== '0x0000000000000000000000000000000000000000' &&
-        row.active
-      ) {
+      if (row && row.creator !== '0x0000000000000000000000000000000000000000') {
         out.push(row);
       }
     }
@@ -318,7 +318,7 @@ export function useAds(adCounter: number, chainActive: boolean) {
       const total = pages * PAGE_SIZE;
       for (let id = adCounter; id > Math.max(0, adCounter - total); id--) {
         const row = cache.current.get(id);
-        if (row && row.active && row.creator !== '0x0000000000000000000000000000000000000000') {
+        if (row && row.creator !== '0x0000000000000000000000000000000000000000') {
           visible.push(row);
         }
       }
