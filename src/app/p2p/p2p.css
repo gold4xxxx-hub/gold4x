@@ -1156,6 +1156,38 @@
   }
 }
 
+.p2p-escrow-ledger {
+  border-color: rgba(216, 76, 76, 0.22) !important;
+}
+
+.p2p-escrow-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.p2p-escrow-balance {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.p2p-escrow-balance__value {
+  margin: 0.25rem 0;
+  color: #e6c46b;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .p2p-escrow-balances {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 520px) {
   .p2p-profile-list {
     grid-template-columns: 1fr;

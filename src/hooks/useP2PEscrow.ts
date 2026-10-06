@@ -460,6 +460,106 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
   };
 }
 
+export type EscrowLedger = {
+  jsavBalance: string;
+  usdtBalance: string;
+  activeTrades: TradeRow[];
+  scannedTrades: number;
+  totalTrades: number;
+  failedTradeReads: number;
+  updatedAt: number;
+};
+
+/** Owner dashboard data: full contract token balances plus every unsettled trade. */
+export function useAdminEscrowLedger(
+  tradeCounter: number,
+  chainActive: boolean,
+  enabled: boolean,
+  pollMs = 60000,
+) {
+  const [ledger, setLedger] = useState<EscrowLedger | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [scannedTrades, setScannedTrades] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!enabled || !chainActive) {
+      setLedger(null);
+      setScannedTrades(0);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setScannedTrades(0);
+    setError(null);
+    try {
+      const c = readContract();
+      const tokenAbi = ['function balanceOf(address) view returns (uint256)'];
+      const [jsav, usdt] = await Promise.all([
+        new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, tokenAbi, c.runner).balanceOf(P2PESCROW_CONTRACT_ADDRESS),
+        new ethers.Contract(USDT_CONTRACT_ADDRESS, tokenAbi, c.runner).balanceOf(P2PESCROW_CONTRACT_ADDRESS),
+      ]);
+
+      const active: TradeRow[] = [];
+      let failedTradeReads = 0;
+      for (let first = 1; first <= tradeCounter; first += PAGE_SIZE) {
+        const last = Math.min(tradeCounter, first + PAGE_SIZE - 1);
+        const rows = await Promise.all(
+          Array.from({ length: last - first + 1 }, async (_, offset) => {
+            const id = first + offset;
+            try {
+              const t = await c.getTrade(id);
+              return {
+                id,
+                adId: Number(t[0]),
+                pairType: Number(t[1]),
+                isFiat: Boolean(t[2]),
+                seller: t[3],
+                buyer: t[4],
+                cryptoToken: t[5],
+                cryptoAmount: ethers.formatUnits(t[6], 18),
+                quoteAmount: t[7] as bigint,
+                status: Number(t[8]),
+              } satisfies TradeRow;
+            } catch {
+              failedTradeReads += 1;
+              return null;
+            }
+          }),
+        );
+        active.push(...rows.filter((row): row is TradeRow =>
+          row !== null && (row.status === TradeStatus.OPEN || row.status === TradeStatus.PAID),
+        ));
+        setScannedTrades(last);
+      }
+
+      setLedger({
+        jsavBalance: ethers.formatUnits(jsav, 18),
+        usdtBalance: ethers.formatUnits(usdt, 18),
+        activeTrades: active.sort((a, b) => b.id - a.id),
+        scannedTrades: tradeCounter,
+        totalTrades: tradeCounter,
+        failedTradeReads,
+        updatedAt: Date.now(),
+      });
+    } catch (e) {
+      setError(readableError(e) || 'Could not read the complete escrow ledger.');
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled, chainActive, tradeCounter]);
+
+  useEffect(() => {
+    void load();
+    if (!enabled) return;
+    const timer = setInterval(() => void load(), pollMs);
+    return () => clearInterval(timer);
+  }, [load, pollMs, enabled]);
+
+  return { ledger, loading, scannedTrades, error, refresh: load };
+}
+
 /**
  * Simulate the KYC submission against the public RPC before sending.
  *

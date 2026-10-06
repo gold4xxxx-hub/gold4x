@@ -13,7 +13,8 @@ import './p2p.css';
 import {
   P2PESCROW_CONTRACT_ADDRESS,
   BSC_CONFIG,
-  isP2pEscrowOwner,
+  JSAVIOR_CONTRACT_ADDRESS,
+  USDT_CONTRACT_ADDRESS,
 } from '@/config/web3Config';
 import {
   FIXED_INR_PRICES,
@@ -30,6 +31,7 @@ import {
   useKycStatus,
   useAds,
   useTrades,
+  useAdminEscrowLedger,
   createAd,
   startTrade,
   markFiatPaid,
@@ -278,6 +280,16 @@ const P2PPage: React.FC = () => {
     loadedFrom: tradesFrom,
     loadedTo: tradesTo,
   } = useTrades(stats.tradeCounter, stats.chainActive);
+  const isContractOwner = Boolean(
+    account && stats.owner && account.toLowerCase() === stats.owner.toLowerCase(),
+  );
+  const {
+    ledger: escrowLedger,
+    loading: escrowLedgerLoading,
+    scannedTrades: escrowTradesScanned,
+    error: escrowLedgerError,
+    refresh: refreshEscrowLedger,
+  } = useAdminEscrowLedger(stats.tradeCounter, stats.chainActive, isContractOwner);
 
   const [form, setForm] = useState({ token: 'JSAV' as P2PToken, type: 'sell' as 'buy' | 'sell', amount: '' });
   const [pairFilter, setPairFilter] = useState<PairFilter>('all');
@@ -522,7 +534,7 @@ const P2PPage: React.FC = () => {
       setStatus('Connect the contract owner wallet to force-release escrow.');
       return;
     }
-    if (!isP2pEscrowOwner(account)) {
+    if (!isContractOwner) {
       setStatus('Only the escrow contract owner can force-release a trade.');
       return;
     }
@@ -572,7 +584,7 @@ const P2PPage: React.FC = () => {
       setStatus('Connect the contract owner wallet to force-cancel a trade.');
       return;
     }
-    if (!isP2pEscrowOwner(account)) {
+    if (!isContractOwner) {
       setStatus('Only the escrow contract owner can force-cancel a trade.');
       return;
     }
@@ -801,6 +813,21 @@ const P2PPage: React.FC = () => {
     ),
     [trades, showClosedTrades],
   );
+  const escrowTradeTotals = useMemo(() => {
+    const totals = { JSAV: 0n, USDT: 0n };
+    for (const trade of escrowLedger?.activeTrades ?? []) {
+      const tokenAddress = trade.cryptoToken.toLowerCase();
+      if (tokenAddress === JSAVIOR_CONTRACT_ADDRESS.toLowerCase()) {
+        totals.JSAV += ethers.parseUnits(trade.cryptoAmount, 18);
+      } else if (tokenAddress === USDT_CONTRACT_ADDRESS.toLowerCase()) {
+        totals.USDT += ethers.parseUnits(trade.cryptoAmount, 18);
+      }
+    }
+    return {
+      JSAV: ethers.formatUnits(totals.JSAV, 18),
+      USDT: ethers.formatUnits(totals.USDT, 18),
+    };
+  }, [escrowLedger]);
   const openTrades = activeTrades.length;
   const canSeeTradeContacts = Boolean(
     activeTrade?.isFiat &&
@@ -933,6 +960,115 @@ const P2PPage: React.FC = () => {
               </a>
             </div>
           </div>
+        )}
+
+        {isContractOwner && (
+          <section className="p2p-panel p2p-escrow-ledger p-5 sm:p-6" aria-label="Escrow balances">
+            <div className="p2p-panel__head">
+              <div>
+                <h2 className="p2p-panel__title">Escrow monitor</h2>
+                <p className="p2p-storage-note mt-1">
+                  Contract-held token balances and every unsettled trade. Contract balances can include unassigned transfers or token dust.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="p2p-panel__count">
+                  {escrowLedger?.activeTrades.length ?? 0} unsettled
+                </span>
+                <button
+                  type="button"
+                  className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                  onClick={() => void refreshEscrowLedger()}
+                  disabled={escrowLedgerLoading}
+                >
+                  {escrowLedgerLoading ? 'Scanning…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {escrowLedgerError && <div className="p2p-alert p2p-alert--error mb-3">{escrowLedgerError}</div>}
+            {Boolean(escrowLedger?.failedTradeReads) && (
+              <div className="p2p-alert p2p-alert--warn mb-3">
+                {escrowLedger?.failedTradeReads} trade records could not be read. Contract token balances are exact, but the unsettled trade breakdown may be incomplete; refresh to retry.
+              </div>
+            )}
+
+            <div className="p2p-escrow-balances">
+              {(['JSAV', 'USDT'] as const).map((token) => (
+                <div className="p2p-escrow-balance" key={token}>
+                  <div className="p2p-stat__label">{token} held by contract</div>
+                  <div className="p2p-escrow-balance__value">
+                    {escrowLedgerLoading && !escrowLedger
+                      ? 'Scanning…'
+                      : `${token === 'JSAV' ? escrowLedger?.jsavBalance ?? '—' : escrowLedger?.usdtBalance ?? '—'} ${token}`}
+                  </div>
+                  <div className="p2p-stat__sub">
+                    {token === 'JSAV' ? escrowTradeTotals.JSAV : escrowTradeTotals.USDT} {token} in unsettled trades
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {escrowLedgerLoading && (
+              <p className="p2p-storage-note mt-3">
+                Scanned {escrowTradesScanned.toLocaleString()} of {stats.tradeCounter.toLocaleString()} trades…
+              </p>
+            )}
+
+            {escrowLedger && escrowLedger.activeTrades.length > 0 && (
+              <div className="p2p-table-wrap mt-4">
+                <table className="p2p-table">
+                  <thead>
+                    <tr>
+                      <th>Trade</th>
+                      <th>Escrowed</th>
+                      <th>INR value</th>
+                      <th>Status</th>
+                      <th>Seller</th>
+                      <th>Buyer</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {escrowLedger.activeTrades.map((trade) => {
+                      const tokenAddress = trade.cryptoToken.toLowerCase();
+                      const token = tokenAddress === JSAVIOR_CONTRACT_ADDRESS.toLowerCase()
+                        ? 'JSAV'
+                        : tokenAddress === USDT_CONTRACT_ADDRESS.toLowerCase()
+                          ? 'USDT'
+                          : shortAddress(trade.cryptoToken);
+                      return (
+                        <tr key={trade.id}>
+                          <td className="p2p-num">#{trade.id}</td>
+                          <td className="p2p-num">{trade.cryptoAmount} {token}</td>
+                          <td className="p2p-num">₹{paiseToInr(trade.quoteAmount)}</td>
+                          <td>
+                            <span className={tradeChipClass(trade.status)}>
+                              {TRADE_STATUS_LABEL[trade.status] ?? trade.status}
+                            </span>
+                          </td>
+                          <td className="p2p-addr">{shortAddress(trade.seller)}</td>
+                          <td className="p2p-addr">{shortAddress(trade.buyer)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                              onClick={() => void openTrade(trade)}
+                            >
+                              Review
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {escrowLedger && escrowLedger.activeTrades.length === 0 && !escrowLedgerError && (
+              <p className="p2p-storage-note mt-3">No unsettled trades are currently holding escrow.</p>
+            )}
+          </section>
         )}
 
         <form
@@ -1663,8 +1799,7 @@ const P2PPage: React.FC = () => {
               </button>
             )}
 
-            {isP2pEscrowOwner(account) &&
-              activeTrade.isFiat &&
+            {isContractOwner &&
               !sameWallet(activeTrade.seller, account) &&
               (activeTrade.status === TradeStatus.OPEN ||
                 activeTrade.status === TradeStatus.PAID) && (
