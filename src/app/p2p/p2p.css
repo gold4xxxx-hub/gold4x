@@ -918,76 +918,173 @@
   line-height: 1.45;
 }
 
-.p2p-private-files {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.018);
-}
-
-.p2p-private-file {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-  color: var(--fx-ink-muted);
-  font-size: 0.75rem;
-}
-
-.p2p-private-file__meta {
-  color: var(--fx-ink-subtle);
-  font-size: 0.68rem;
-}
-
-.p2p-private-file a {
-  color: #d8c17b;
-  font-size: 0.72rem;
-  text-decoration: none;
-}
-
-.p2p-private-file a:hover {
-  text-decoration: underline;
-}
-
 .p2p-contact-disclosure {
   color: #b6a878;
   font-size: 0.7rem;
   line-height: 1.45;
 }
 
-.p2p-admin-release {
-  padding: 0.8rem;
-  border: 1px solid rgba(216, 76, 76, 0.28);
-  border-radius: 8px;
-  background: rgba(216, 76, 76, 0.06);
+/* --------------------------------------------------------------------------
+   Escrow admin controls
+
+   Owner-only override surface. Deliberately reads as a distinct, elevated
+   surface rather than an ordinary button: these two actions bypass the
+   counterparty and cannot be undone, so they should not sit next to ordinary
+   trade actions looking equally routine.
+   -------------------------------------------------------------------------- */
+
+.p2p-admin {
+  position: relative;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 168, 67, 0.24);
+  background:
+    linear-gradient(180deg, rgba(212, 168, 67, 0.055), rgba(212, 168, 67, 0.015)),
+    rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: p2p-slide-in 0.3s ease;
 }
 
-.p2p-admin-release p {
-  margin: 0 0 0.65rem;
-  color: #e2b1a8;
+/* Gold hairline along the top edge, so the panel reads as elevated. */
+.p2p-admin::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 168, 67, 0.55),
+    transparent
+  );
+}
+
+.p2p-admin__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.p2p-admin__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.24rem 0.55rem;
+  border-radius: 100px;
+  border: 1px solid rgba(212, 168, 67, 0.32);
+  background: rgba(212, 168, 67, 0.1);
+  color: var(--fx-gold-text);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.p2p-admin__title {
+  font-family: var(--font-mono);
   font-size: 0.72rem;
+  color: var(--fx-ink-muted);
+}
+
+.p2p-admin__note {
+  margin: 0 0 0.85rem;
+  color: var(--fx-ink-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.p2p-admin__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.p2p-admin__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.72rem 0.9rem;
+  border-radius: 11px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.p2p-admin__btn svg {
+  flex-shrink: 0;
+}
+
+.p2p-admin__btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.p2p-admin__btn--release {
+  border: 1px solid rgba(45, 139, 120, 0.5);
+  background: linear-gradient(180deg, rgba(45, 139, 120, 0.26), rgba(45, 139, 120, 0.13));
+  color: var(--fx-emerald-bright);
+}
+
+.p2p-admin__btn--release:not(:disabled):hover {
+  border-color: rgba(45, 139, 120, 0.85);
+  background: linear-gradient(180deg, rgba(45, 139, 120, 0.38), rgba(45, 139, 120, 0.2));
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(45, 139, 120, 0.22);
+}
+
+.p2p-admin__btn--cancel {
+  border: 1px solid rgba(216, 76, 76, 0.42);
+  background: linear-gradient(180deg, rgba(216, 76, 76, 0.2), rgba(216, 76, 76, 0.09));
+  color: #e8b4b4;
+}
+
+.p2p-admin__btn--cancel:not(:disabled):hover {
+  border-color: rgba(216, 76, 76, 0.8);
+  background: linear-gradient(180deg, rgba(216, 76, 76, 0.32), rgba(216, 76, 76, 0.16));
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(216, 76, 76, 0.2);
+}
+
+.p2p-admin__btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.p2p-admin__btn:focus-visible {
+  outline: 2px solid rgba(212, 168, 67, 0.7);
+  outline-offset: 2px;
+}
+
+.p2p-admin__warn {
+  margin: 0.75rem 0 0;
+  color: var(--fx-ink-subtle);
+  font-size: 0.68rem;
   line-height: 1.45;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .p2p-admin__actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 520px) {
   .p2p-profile-list {
     grid-template-columns: 1fr;
-  }
-
-  .p2p-private-file {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .p2p-private-file__meta {
-    grid-column: 1;
-  }
-
-  .p2p-private-file a {
-    grid-column: 2;
-    grid-row: 1 / span 2;
   }
 }
 

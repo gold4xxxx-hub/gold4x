@@ -595,6 +595,18 @@ export async function adminForceCompleteTrade(signer: ethers.Signer, tradeId: nu
   return (await c.ownerForceComplete(tradeId)).wait();
 }
 
+/**
+ * Contract-owner override: cancels the trade and returns the escrowed crypto.
+ *
+ * The counterpart to adminForceCompleteTrade. Without it an OPEN trade can only
+ * be exited by the buyer once the payment window lapses, which leaves the owner
+ * no way out of a trade that is open but abandoned.
+ */
+export async function adminForceCancelTrade(signer: ethers.Signer, tradeId: number) {
+  const c = readContract(signer);
+  return (await c.ownerForceCancel(tradeId)).wait();
+}
+
 /** Crypto-to-crypto mutual confirmation. Not used by the INR desk. */
 export async function confirmTrade(signer: ethers.Signer, tradeId: number) {
   const c = readContract(signer);

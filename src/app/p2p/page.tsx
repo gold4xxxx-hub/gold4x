@@ -35,8 +35,11 @@ import {
   markFiatPaid,
   confirmFiatReceived,
   adminForceCompleteTrade,
+  adminForceCancelTrade,
   cancelAd,
   cancelExpiredFiatTrade,
+  sendMessage,
+  shareScreenshot,
   getTradeBankDetails,
   getWalletVerification,
   getWalletContactDetails,
@@ -51,13 +54,6 @@ import {
   type ScreenshotEntry,
 } from '@/lib/p2pLogs';
 import { ipfsUrl } from '@/lib/ipfs';
-import {
-  loadP2PStoredFiles,
-  loadP2PStoredMessages,
-  sendP2PStoredMessage,
-  uploadP2PStoredFile,
-  type P2PStoredFile,
-} from '@/lib/p2pStorageClient';
 
 /** Seconds remaining until `deadline`, floored at 0. */
 function secondsLeft(deadline: number, now: number): number {
@@ -65,9 +61,11 @@ function secondsLeft(deadline: number, now: number): number {
   return Math.max(0, deadline - now);
 }
 
-const MAX_PRIVATE_FILE_BYTES = 10 * 1024 * 1024;
-const PRIVATE_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const NO_SCREENSHOT_PROVIDED = 'no-screenshot-provided';
+
+// Client-side pre-check only. The upload route validates again and is the real
+// authority; this just avoids a pointless round trip on an oversized file.
+const MAX_SHOT_BYTES = 5 * 1024 * 1024;
 
 function formatCountdown(deadline: number, now: number): string | null {
   if (!deadline) return null;
@@ -274,13 +272,11 @@ const P2PPage: React.FC = () => {
   const [takeAmount, setTakeAmount] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chat, setChat] = useState<ChatEntry[]>([]);
-  const [privateFiles, setPrivateFiles] = useState<P2PStoredFile[]>([]);
-  const [storageError, setStorageError] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   // Screenshots are their own event stream, so they are tracked separately and
   // interleaved into the transcript by block number.
   const [shots, setShots] = useState<ScreenshotEntry[]>([]);
-  const [privateFileUploading, setPrivateFileUploading] = useState(false);
+  const [shotUploading, setShotUploading] = useState(false);
   const [shotOpen, setShotOpen] = useState<string | null>(null);
   const [profileVerification, setProfileVerification] = useState<Record<string, boolean | null>>({});
   const [profileContacts, setProfileContacts] = useState<Record<string, WalletContact>>({});
@@ -302,7 +298,10 @@ const P2PPage: React.FC = () => {
   // Drives the countdown. Only ticking while a trade is open keeps this cheap.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
-  const privateFileInputRef = useRef<HTMLInputElement>(null);
+  // Hidden file input for the screenshot picker. Driven by a label styled as a
+  // button so it lines up with Send, but still a real file input, which is what
+  // makes mobile browsers surface the camera.
+  const shotInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!activeTrade) {
@@ -468,19 +467,15 @@ const P2PPage: React.FC = () => {
     setChatInput(sellerNote);
     void refreshTradeDetail(trade.id, trade);
 
+    // Written on-chain via sendMessage, so the note is part of the trade record
+    // and readable from the contract's own event log.
     if (!signer) return;
     try {
-      const saved = await sendP2PStoredMessage(signer, trade.id, sellerNote);
-      setChat((current) => [
-        ...current,
-        { sender: saved.sender_wallet, text: saved.content, blockNumber: Number(saved.chain_block) },
-      ]);
+      await sendMessage(signer, trade.id, sellerNote);
       setChatInput('');
-      setStorageError(null);
-      setStatus('INR marked as paid. The seller has been notified in private trade chat.');
-    } catch (e) {
-      setStorageError(e instanceof Error ? e.message : 'Could not send the seller notification.');
-      setStatus('INR marked as paid. The seller note is ready in chat; send it when storage is available.');
+      setStatus('INR marked as paid. The seller has been notified in the trade chat.');
+    } catch {
+      setStatus('INR marked as paid. The seller note is ready in chat; send it when your wallet allows.');
     }
   };
 
@@ -545,54 +540,122 @@ const P2PPage: React.FC = () => {
     }
   };
 
-  const onSend = async () => {
-    if (!activeTrade || !chatInput.trim()) return;
-    const text = chatInput.trim();
-    if (!signer) {
-      setStatus('Connect the buyer or seller wallet to send a private trade message.');
+  /**
+   * Owner override that cancels the trade and returns the escrowed crypto.
+   *
+   * The counterpart to the release above. An OPEN trade otherwise has no exit
+   * for the owner: the buyer can only cancel once the payment window lapses, so
+   * an abandoned OPEN trade would sit in escrow indefinitely.
+   */
+  const onAdminForceCancel = async () => {
+    if (!activeTrade || !signer) {
+      setStatus('Connect the contract owner wallet to force-cancel a trade.');
       return;
     }
+    if (!isP2pEscrowOwner(account)) {
+      setStatus('Only the escrow contract owner can force-cancel a trade.');
+      return;
+    }
+    if (activeTrade.status !== TradeStatus.OPEN && activeTrade.status !== TradeStatus.PAID) {
+      setStatus('This trade is already closed, so there is nothing to cancel.');
+      return;
+    }
+    const trade = activeTrade;
+    const confirmed = window.confirm(
+      `Admin override for trade #${trade.id}: cancel and return ${trade.cryptoAmount} ${tokenForPairType(trade.pairType)} to the SELLER?\n\nOnly choose this if the INR was NOT received, or the buyer abandoned the trade. If the buyer already paid, use "Release to buyer" instead. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    if (!(await ensureBsc())) {
+      setStatus('Switch to Binance Smart Chain before cancelling.');
+      return;
+    }
+
     setActionBusy(true);
-    setStorageError(null);
+    setStatus(null);
     try {
-      const saved = await sendP2PStoredMessage(signer, activeTrade.id, text);
-      setChat((current) => [
-        ...current,
-        { sender: saved.sender_wallet, text: saved.content, blockNumber: Number(saved.chain_block) },
-      ]);
-      setChatInput('');
-      setStatus('Message saved to private trade history.');
+      await adminForceCancelTrade(signer, trade.id);
+      setActiveTrade((current) =>
+        current?.id === trade.id
+          ? { ...current, status: TradeStatus.CANCELLED }
+          : current,
+      );
+      setStatus('Admin force-cancel confirmed. Escrowed crypto was returned to the seller.');
+      await reload();
+      void refreshTradeDetail(trade.id, { ...trade, status: TradeStatus.CANCELLED });
     } catch (e) {
-      setStorageError(e instanceof Error ? e.message : 'Could not save the private message.');
+      const err = e as { shortMessage?: string; reason?: string; message?: string };
+      setStatus(`Admin force-cancel failed: ${explainTradeError(err)}`);
     } finally {
       setActionBusy(false);
     }
   };
 
-  const onSharePrivateFile = async (file: File) => {
-    if (!activeTrade || !signer) {
-      setStorageError('Connect a buyer or seller wallet to share a private file.');
+  const onSend = async () => {
+    if (!activeTrade || !chatInput.trim()) return;
+    const text = chatInput.trim();
+    if (!signer) {
+      setStatus('Connect the buyer or seller wallet to send a message.');
       return;
     }
-    if (!PRIVATE_FILE_TYPES.has(file.type)) {
-      setStorageError('Choose a JPG, PNG, WEBP or PDF file.');
+    setActionBusy(true);
+    try {
+      await sendMessage(signer, activeTrade.id, text);
+      setChatInput('');
+      setStatus('Message sent on-chain.');
+    } catch (e) {
+      const err = e as { shortMessage?: string; reason?: string; message?: string };
+      setStatus(`Message failed: ${explainTradeError(err)}`);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  /**
+   * Upload a screenshot and record its CID on the trade.
+   *
+   * The image goes to IPFS via Pinata; only the CID is written on-chain, which
+   * is what `shareScreenshot` expects. Both parties can do this at any point in
+   * a trade, independent of the payment state.
+   */
+  const onShareShot = async (file: File) => {
+    if (!activeTrade) return;
+
+    if (!file.type.startsWith('image/')) {
+      setStatus('That file is not an image.');
       return;
     }
-    if (file.size > MAX_PRIVATE_FILE_BYTES) {
-      setStorageError('Private files must be 10 MB or smaller.');
+    if (file.size > MAX_SHOT_BYTES) {
+      setStatus('Image is too large. Maximum size is 5 MB.');
       return;
     }
 
-    setPrivateFileUploading(true);
-    setStorageError(null);
+    setShotUploading(true);
+    setStatus(null);
+    let cid: string;
     try {
-      await uploadP2PStoredFile(signer, activeTrade.id, file);
-      setPrivateFiles(await loadP2PStoredFiles(signer, activeTrade.id));
-      setStatus('Private file shared with this trade.');
-    } catch (e) {
-      setStorageError(e instanceof Error ? e.message : 'Could not share the private file.');
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/p2p/screenshot', { method: 'POST', body });
+      const json = (await res.json()) as { cid?: string; error?: string };
+      if (!res.ok || !json.cid) {
+        setStatus(json.error || 'Upload failed. Please try again.');
+        return;
+      }
+      cid = json.cid;
+    } catch {
+      setStatus('Could not reach the upload service. Check your connection.');
+      return;
     } finally {
-      setPrivateFileUploading(false);
+      setShotUploading(false);
+    }
+
+    const ok = await guard(
+      (s) => shareScreenshot(s, activeTrade.id, cid),
+      'Screenshot shared',
+    );
+    if (ok) {
+      setShotOpen(cid);
+      void refreshTradeDetail(activeTrade.id, activeTrade);
     }
   };
 
@@ -624,30 +687,7 @@ const P2PPage: React.FC = () => {
     const isParticipant =
       tradeContext.id === tradeId &&
       (sameWallet(tradeContext.buyer, account) || sameWallet(tradeContext.seller, account));
-    if (signer && isParticipant) {
-      try {
-        const [storedMessages, files] = await Promise.all([
-          loadP2PStoredMessages(signer, tradeId),
-          loadP2PStoredFiles(signer, tradeId),
-        ]);
-        chainMessages = [
-          ...chainMessages,
-          ...storedMessages.map((message) => ({
-            sender: message.sender_wallet,
-            text: message.content,
-            blockNumber: Number(message.chain_block),
-          })),
-        ];
-        setPrivateFiles(files);
-        setStorageError(null);
-      } catch (e) {
-        setPrivateFiles([]);
-        setStorageError(e instanceof Error ? e.message : 'Private trade storage is unavailable.');
-      }
-    } else {
-      setPrivateFiles([]);
-      setStorageError(null);
-    }
+
     setChat(chainMessages);
     setChatLoading(false);
 
@@ -677,8 +717,6 @@ const P2PPage: React.FC = () => {
     setConfirmedBy([]);
     setStoredScreenshot('');
     setChat([]);
-    setPrivateFiles([]);
-    setStorageError(null);
     setShots([]);
     setShotOpen(null);
     setNow(Math.floor(Date.now() / 1000));
@@ -688,8 +726,6 @@ const P2PPage: React.FC = () => {
   const closeTrade = () => {
     setActiveTrade(null);
     setChat([]);
-    setPrivateFiles([]);
-    setStorageError(null);
     setShots([]);
     setShotOpen(null);
     setBank(null);
@@ -744,7 +780,9 @@ const P2PPage: React.FC = () => {
     (activeTrade.status === TradeStatus.OPEN || activeTrade.status === TradeStatus.PAID) &&
     (sameWallet(activeTrade.seller, account) || sameWallet(activeTrade.buyer, account)),
   );
-  const canUseTradeStorage = Boolean(
+  // Chat and screenshots are written on-chain, so a wallet signature is needed
+  // and only a trade party may write.
+  const canWriteToTrade = Boolean(
     activeTrade &&
     (activeTrade.status === TradeStatus.OPEN || activeTrade.status === TradeStatus.PAID) &&
     (sameWallet(activeTrade.seller, account) || sameWallet(activeTrade.buyer, account)),
@@ -1419,9 +1457,9 @@ const P2PPage: React.FC = () => {
 
             <div className="p2p-tile__label mb-1">Trade chat</div>
             <p className="p2p-storage-note">
-              New messages are stored privately off-chain. Legacy on-chain messages and payment images remain public.
+              Messages are written on-chain and are permanently public. Never include a
+              phone number, OTP or password here.
             </p>
-            {storageError && <div className="p2p-alert p2p-alert--warn mb-3">{storageError}</div>}
             <div className="p2p-chat mb-3">
               {chatLoading && <span className="p2p-chat__empty">Loading history…</span>}
               {!chatLoading && transcript.length === 0 && (
@@ -1464,38 +1502,18 @@ const P2PPage: React.FC = () => {
               )}
             </div>
 
-            {privateFiles.length > 0 && (
-              <section className="p2p-private-files mb-4" aria-label="Private trade files">
-                <div className="p2p-tile__label">Private files</div>
-                {privateFiles.map((file) => (
-                  <div className="p2p-private-file" key={file.id}>
-                    <span>{file.contentType === 'application/pdf' ? 'PDF attachment' : 'Image attachment'}</span>
-                    <span className="p2p-private-file__meta">
-                      {shortAddress(file.uploadedBy)} · {(file.sizeBytes / 1024 / 1024).toFixed(1)} MB
-                    </span>
-                    {file.url && (
-                      <a href={file.url} target="_blank" rel="noopener noreferrer">
-                        Open
-                      </a>
-                    )}
-                  </div>
-                ))}
-                <p className="p2p-storage-note">Links expire after five minutes. Reload the trade to get fresh links.</p>
-              </section>
-            )}
-
             <div className="flex gap-2 mb-4">
               <input
-                ref={privateFileInputRef}
+                ref={shotInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
+                accept="image/*"
                 className="p2p-shot-input"
                 tabIndex={-1}
                 aria-hidden="true"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = '';
-                  if (file) void onSharePrivateFile(file);
+                  if (file) void onShareShot(file);
                 }}
               />
               <input
@@ -1506,23 +1524,28 @@ const P2PPage: React.FC = () => {
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
               />
-              <button
-                type="button"
+              <label
                 className="p2p-btn p2p-btn--icon"
-                title="Share a private payment image or UPI QR"
-                aria-label="Share a private payment image or UPI QR"
-                onClick={() => privateFileInputRef.current?.click()}
-                disabled={!canUseTradeStorage || privateFileUploading}
+                title="Share a screenshot"
+                tabIndex={0}
+                role="button"
+                aria-label="Share a screenshot"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    shotInputRef.current?.click();
+                  }
+                }}
               >
-                {privateFileUploading ? (
+                {shotUploading ? (
                   <span className="p2p-btn__spin" aria-hidden="true" />
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-                    <path d="M12 15V3m0 0 4 4m-4-4L8 7" />
-                    <path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4" />
+                    <path d="M3 17l5-5 4 4 8-8" />
+                    <path d="M14 8h6v6" />
                   </svg>
                 )}
-              </button>
+              </label>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>
               </button>
@@ -1550,18 +1573,63 @@ const P2PPage: React.FC = () => {
             )}
 
             {isP2pEscrowOwner(account) &&
+              activeTrade.isFiat &&
               !sameWallet(activeTrade.seller, account) &&
-              activeTrade.isFiat && activeTrade.status === TradeStatus.PAID && (
-                <div className="p2p-admin-release mb-4">
-                  <p>Admin override: independently verify INR receipt before releasing escrow.</p>
-                  <button
-                    className="p2p-btn p2p-btn--block p2p-btn--ghost"
-                    disabled={actionBusy}
-                    onClick={() => void onAdminForceRelease()}
-                  >
-                    <span>Admin release crypto to buyer</span>
-                  </button>
-                </div>
+              (activeTrade.status === TradeStatus.OPEN ||
+                activeTrade.status === TradeStatus.PAID) && (
+                <section className="p2p-admin" aria-label="Escrow admin controls">
+                  <header className="p2p-admin__head">
+                    <span className="p2p-admin__badge">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+                      </svg>
+                      Escrow admin
+                    </span>
+                    <span className="p2p-admin__title">
+                      Trade #{activeTrade.id} · {activeTrade.cryptoAmount}{' '}
+                      {tokenForPairType(activeTrade.pairType)}
+                    </span>
+                  </header>
+
+                  <p className="p2p-admin__note">
+                    {activeTrade.status === TradeStatus.PAID
+                      ? 'The buyer marked this INR trade as paid. Release only after you have independently verified the money arrived.'
+                      : 'This trade is still open and holding escrow. Cancel to return the crypto to the seller, or wait for the buyer to mark payment.'}
+                  </p>
+
+                  <div className="p2p-admin__actions">
+                    <button
+                      type="button"
+                      className="p2p-admin__btn p2p-admin__btn--release"
+                      disabled={actionBusy || activeTrade.status !== TradeStatus.PAID}
+                      onClick={() => void onAdminForceRelease()}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M12 3v12" />
+                        <path d="m7 10 5 5 5-5" />
+                        <path d="M4 21h16" />
+                      </svg>
+                      Release to buyer
+                    </button>
+
+                    <button
+                      type="button"
+                      className="p2p-admin__btn p2p-admin__btn--cancel"
+                      disabled={actionBusy}
+                      onClick={() => void onAdminForceCancel()}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M3 12a9 9 0 1 0 3-6.7" />
+                        <path d="M3 4v5h5" />
+                      </svg>
+                      Cancel &amp; refund seller
+                    </button>
+                  </div>
+
+                  <p className="p2p-admin__warn">
+                    Owner override. These bypass the counterparty and cannot be undone.
+                  </p>
+                </section>
               )}
 
             {activeTrade.status === TradeStatus.OPEN && deadline > 0 &&
