@@ -11,12 +11,6 @@ const escrow = new ethers.Contract(
   ['function getTrade(uint256) view returns (uint256,uint8,bool,address,address,address,uint256,uint256,uint8)'],
   provider,
 );
-const escrowOwnerReader = new ethers.Contract(
-  ESCROW_ADDRESS,
-  ['function owner() view returns (address)'],
-  provider,
-);
-
 export class P2PStorageError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -50,18 +44,6 @@ export type StoredFile = {
   object_path: string;
   content_type: string;
   size_bytes: number;
-  created_at: string;
-};
-
-export type StoredKycDocument = {
-  id: string;
-  wallet: string;
-  document_side: 'front' | 'back';
-  request_id: string;
-  object_path: string;
-  content_type: string;
-  size_bytes: number;
-  sha256: string;
   created_at: string;
 };
 
@@ -239,71 +221,6 @@ async function deletePrivateObject(objectPath: string) {
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ prefixes: [objectPath] }),
   }).catch(() => undefined);
-}
-
-export async function storeKycDocument(input: {
-  wallet: string;
-  documentSide: 'front' | 'back';
-  requestId: string;
-  contentType: string;
-  bytes: Uint8Array;
-  sha256: string;
-}): Promise<{ reference: string; document: StoredKycDocument }> {
-  const extensions: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-  };
-  const extension = extensions[input.contentType];
-  if (!extension || input.bytes.byteLength === 0 || input.bytes.byteLength > 5 * 1024 * 1024) {
-    throw new P2PStorageError('Aadhaar image must be JPG, PNG or WEBP and no larger than 5 MB.', 400);
-  }
-  const wallet = ethers.getAddress(input.wallet).toLowerCase();
-  const objectPath = `kyc/${wallet}/${input.documentSide}/${input.requestId}.${extension}`;
-  await uploadPrivateObject(objectPath, input.contentType, input.bytes);
-
-  try {
-    const rows = await requestStorage<StoredKycDocument[]>('/rest/v1/kyc_documents', {
-      method: 'POST',
-      headers: { Prefer: 'return=representation' },
-      body: JSON.stringify([{
-        wallet,
-        document_side: input.documentSide,
-        request_id: input.requestId,
-        object_path: objectPath,
-        content_type: input.contentType,
-        size_bytes: input.bytes.byteLength,
-        sha256: input.sha256.replace(/^0x/, '').toLowerCase(),
-      }]),
-    });
-    if (!rows[0]) throw new Error('Missing KYC document metadata');
-    return {
-      reference: `private-kyc://${wallet}/${input.documentSide}/${input.requestId}`,
-      document: rows[0],
-    };
-  } catch {
-    await deletePrivateObject(objectPath);
-    throw new P2PStorageError('Aadhaar image uploaded but its private record could not be saved.', 502);
-  }
-}
-
-export async function getKycDocument(reference: string): Promise<StoredKycDocument> {
-  const match = reference.match(/^private-kyc:\/\/(0x[a-f0-9]{40})\/(front|back)\/([0-9a-f-]{36})$/i);
-  if (!match) throw new P2PStorageError('This is not a private KYC document reference.', 400);
-  const [, wallet, side, requestId] = match;
-  const rows = await requestStorage<StoredKycDocument[]>(
-    `/rest/v1/kyc_documents?select=*&wallet=eq.${wallet.toLowerCase()}&document_side=eq.${side.toLowerCase()}&request_id=eq.${requestId.toLowerCase()}&limit=1`,
-  );
-  if (!rows[0]) throw new P2PStorageError('Private Aadhaar document was not found.', 404);
-  return rows[0];
-}
-
-export async function getEscrowOwner(): Promise<string> {
-  try {
-    return ethers.getAddress(await escrowOwnerReader.owner());
-  } catch {
-    throw new P2PStorageError('Could not verify the escrow owner on BSC.', 502);
-  }
 }
 
 export async function uploadPrivateTradeFile(input: {

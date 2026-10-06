@@ -20,7 +20,6 @@ import {
 } from '@/config/web3Config';
 import { useEthersSigner } from '@/hooks/useEthersSigner';
 import { getKycApplicants, type KycApplicant } from '@/lib/p2pLogs';
-import { getPrivateKycDocumentUrl } from '@/lib/kycDocumentStorage';
 import { shortAddress } from '@/config/p2pEscrow';
 import '../../p2p/p2p.css';
 
@@ -54,8 +53,6 @@ export default function KycAdminPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, string> | null>(null);
   const [detailWallet, setDetailWallet] = useState<string | null>(null);
-  const [documentLinks, setDocumentLinks] = useState<Record<string, string>>({});
-  const [documentBusy, setDocumentBusy] = useState<string | null>(null);
   const [manualWallet, setManualWallet] = useState('');
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -137,7 +134,6 @@ export default function KycAdminPage() {
     }
     setBusyWallet(wallet);
     setDetail(null);
-    setDocumentLinks({});
     try {
       const c = new ethers.Contract(
         P2PESCROW_CONTRACT_ADDRESS,
@@ -175,24 +171,6 @@ export default function KycAdminPage() {
       );
     } finally {
       setBusyWallet(null);
-    }
-  };
-
-  const openPrivateDocument = async (label: string, reference: string) => {
-    if (!signer || !isOwner) {
-      setError('Connect the escrow owner wallet to view private Aadhaar documents.');
-      return;
-    }
-    setDocumentBusy(label);
-    setError(null);
-    try {
-      const url = await getPrivateKycDocumentUrl(signer, reference);
-      setDocumentLinks((current) => ({ ...current, [label]: url }));
-    } catch (e) {
-      const err = e as { message?: string };
-      setError(err.message || 'Could not create a private document link.');
-    } finally {
-      setDocumentBusy(null);
     }
   };
 
@@ -586,34 +564,14 @@ export default function KycAdminPage() {
                 return (
                   <div key={label} className="p2p-tile">
                     <div className="p2p-tile__label">{label}</div>
-                    {cid ? cid.startsWith('private-kyc://') ? (
-                      documentLinks[label] ? (
-                        <a
-                          className="p2p-tile__value p2p-tile__value--mono break-all underline"
-                          href={documentLinks[label]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Open private document (5 min)
-                        </a>
-                      ) : (
-                        <button
-                          type="button"
-                          className="p2p-btn p2p-btn--sm p2p-btn--ghost"
-                          disabled={documentBusy === label}
-                          onClick={() => void openPrivateDocument(label, cid)}
-                        >
-                          {documentBusy === label ? 'Preparing…' : 'Open private document'}
-                        </button>
-                      )
-                    ) : (
+                    {cid ? (
                       <a
                         className="p2p-tile__value p2p-tile__value--mono break-all underline"
-                        href={`https://gateway.pinata.cloud/ipfs/${cid.replace(/^ipfs:\/\//i, '')}`}
+                        href={`https://gateway.pinata.cloud/ipfs/${cid}`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        Legacy public IPFS document
+                        {cid}
                       </a>
                     ) : (
                       <div className="p2p-tile__value">not on record</div>
@@ -625,7 +583,9 @@ export default function KycAdminPage() {
 
             <div className="p2p-alert p2p-alert--warn mt-4">
               <span className="p2p-dot" style={{ marginTop: 6 }} />
-              KYC text fields and document references are public on-chain. New Aadhaar files use private storage and require an owner-signed temporary link; legacy IPFS files remain public.
+              These values are public. They are readable from contract storage by
+              anyone with no wallet and no key, permanently, regardless of this
+              admin page.
             </div>
           </section>
         )}

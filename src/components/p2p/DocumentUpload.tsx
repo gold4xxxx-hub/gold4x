@@ -6,16 +6,12 @@
 // CID. Only the CID is written to the contract — the image never goes on-chain.
 
 import React, { useEffect, useRef, useState } from 'react';
-import type { Signer } from 'ethers';
-import { uploadPrivateKycDocument, type KycDocumentSide } from '@/lib/kycDocumentStorage';
 
 type Props = {
   id: string;
   label: string;
-  side: KycDocumentSide;
-  signer: Signer | null;
   value: string;
-  onChange: (reference: string) => void;
+  onChange: (cid: string) => void;
 };
 
 // image/* rather than an explicit extension list. Mobile browsers use the
@@ -24,7 +20,8 @@ type Props = {
 const ACCEPT = 'image/*';
 const MAX_BYTES = 5 * 1024 * 1024;
 
-// Strip an ipfs:// prefix or gateway URL for legacy public document references.
+// Strip an ipfs:// prefix or a full gateway URL down to the bare CID, so a
+// pasted link still satisfies the contract's non-empty check.
 function normaliseCid(raw: string): string {
   let v = raw.trim();
   v = v.replace(/^ipfs:\/\//i, '');
@@ -33,7 +30,7 @@ function normaliseCid(raw: string): string {
   return v;
 }
 
-export default function DocumentUpload({ id, label, side, signer, value, onChange }: Props) {
+export default function DocumentUpload({ id, label, value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -71,11 +68,18 @@ export default function DocumentUpload({ id, label, side, signer, value, onChang
     setBusy(true);
     setImage(file);
     try {
-      if (!signer) throw new Error('Connect the wallet that owns this KYC application.');
-      const reference = await uploadPrivateKycDocument(signer, side, file);
-      onChange(reference);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Private Aadhaar upload failed.');
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/kyc/document', { method: 'POST', body });
+      const json = (await res.json()) as { cid?: string; error?: string };
+
+      if (!res.ok || !json.cid) {
+        setError(json.error || 'Upload failed. Please try again.');
+        return;
+      }
+      onChange(json.cid);
+    } catch {
+      setError('Could not reach the upload service. Check your connection.');
     } finally {
       setBusy(false);
     }
@@ -192,7 +196,7 @@ export default function DocumentUpload({ id, label, side, signer, value, onChang
           ) : value ? (
             <>
               <div style={{ fontSize: '0.8rem', color: 'var(--fx-emerald-bright)' }}>
-                Stored privately
+                Uploaded
               </div>
               <code
                 style={{
@@ -213,7 +217,7 @@ export default function DocumentUpload({ id, label, side, signer, value, onChang
                 Choose image
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--fx-ink-subtle)' }}>
-                Take a photo or pick a file · private · max 5 MB
+                Take a photo or pick a file · max 5 MB
               </div>
             </>
           )}
