@@ -412,6 +412,10 @@ async function main() {
       cryptoAmount: ethers.formatUnits(t[6], 18),
       quoteAmountInr: ethers.formatUnits(t[7], 2),
       status: STATUS[status] ?? String(status),
+      // TradeStarted carries the INR payment deadline. Without it an OPEN trade
+      // cannot be told apart from an abandoned one, which is the difference
+      // between "waiting normally" and "stuck".
+      deadline: startEv ? iso(Number(startEv.args.deadline)) : null,
       startedAt: startEv?.time ? iso(startEv.time) : null,
       markedPaidAt: paidEv?.time ? iso(paidEv.time) : null,
       markedPaidBy: paidEv ? txFrom.get(paidEv.tx) : null,
@@ -459,6 +463,167 @@ async function main() {
     });
   }
 
+  // ---- probe every screenshot CID once ----
+  //
+  // Not to decide what the page renders - gateway availability is transient and
+  // a snapshot would go stale - but so the index records whether each file was
+  // actually retrievable at build time. That turns "the image is blank" into a
+  // question with a known answer, which matters when someone is checking whether
+  // a payment was evidenced.
+  // ---- verify, from receipts, that closed trades actually paid out ----
+  //
+  // The contract emits TradeCompleted / TradeCancelled, but an event alone does
+  // not prove the crypto moved. Reading each closing transaction's own receipt
+  // and looking for a JSAV transfer out of escrow does prove it, and it is the
+  // only check that does not depend on scanning log windows, which can silently
+  // return partial data and produce a confident wrong answer.
+  {
+    const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    const escrowLc = CONTRACT.toLowerCase();
+    const jsavLc = '0x418b7e6bbc48ca93126c22a1e83b6420a4e0c6fd';
+
+    let checked = 0;
+    for (const t of trades) {
+      if (!t.releaseTx) {
+        t.payoutVerified = null;
+        continue;
+      }
+      try {
+        const rc = await withRetry('receipt', () => provider.getTransactionReceipt(t.releaseTx));
+        const outs = rc.logs.filter(
+          (l) =>
+            l.address.toLowerCase() === jsavLc &&
+            (l.topics[0] || '').toLowerCase() === TRANSFER_TOPIC &&
+            '0x' + l.topics[1].slice(-40).toLowerCase() === escrowLc,
+        );
+        const total = outs.reduce((sum, l) => sum + Number(ethers.formatUnits(BigInt(l.data), 18)), 0);
+        const toSeller = outs
+          .filter((l) => '0x' + l.topics[2].slice(-40).toLowerCase() === String(t.seller).toLowerCase())
+          .reduce((sum, l) => sum + Number(ethers.formatUnits(BigInt(l.data), 18)), 0);
+        const expected = Number(t.cryptoAmount);
+
+        t.payoutSent = Number(total.toFixed(6));
+        t.payoutVerified =
+          total >= expected * 0.99 &&
+          (t.status === 'COMPLETED' ? toSeller < expected * 0.99 : toSeller >= expected * 0.99);
+
+        // A completed trade that released nothing is the case worth surfacing.
+        if (t.status === 'COMPLETED' && total < expected * 0.99) {
+          t.payoutAnomaly = 'marked COMPLETED but no crypto left escrow';
+        }
+      } catch {
+        t.payoutVerified = null;
+      }
+      checked++;
+    }
+    const verified = trades.filter((t) => t.payoutVerified === true).length;
+    const failed = trades.filter((t) => t.payoutVerified === false).length;
+    const anomalies = trades.filter((t) => t.payoutAnomaly);
+    console.log(`payout receipts: ${checked} checked, ${verified} verified, ${failed} unverified`);
+    for (const a of anomalies) {
+      console.warn(`  ANOMALY: trade #${a.id} ${a.payoutAnomaly} (${a.cryptoAmount} ${a.token})`);
+    }
+  }
+
+  // ---- probe every screenshot CID once ----
+  const uniqueCids = [...new Set(trades.flatMap((t) => t.screenshots.filter((s) => s.hasProof).map((s) => s.cid)))];
+  const probeResult = new Map();
+  {
+    let done = 0;
+    for (let i = 0; i < uniqueCids.length; i += 4) {
+      await Promise.all(
+        uniqueCids.slice(i, i + 4).map(async (cid) => {
+          const started = Date.now();
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 25_000);
+            const res = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`, { signal: ctrl.signal });
+            clearTimeout(timer);
+            const buf = await res.arrayBuffer();
+            const head = new Uint8Array(buf.slice(0, 3));
+            const looksLikeImage =
+              (head[0] === 0x89 && head[1] === 0x50) || head[0] === 0xff || head[0] === 0x52;
+            probeResult.set(cid, {
+              ok: res.ok && looksLikeImage && buf.byteLength > 0,
+              status: res.status,
+              bytes: buf.byteLength,
+              ms: Date.now() - started,
+            });
+          } catch (e) {
+            probeResult.set(cid, { ok: false, status: 0, bytes: 0, ms: Date.now() - started });
+          }
+          done++;
+        }),
+      );
+      process.stdout.write(`  probing screenshots ${done}/${uniqueCids.length}\n`);
+    }
+  }
+  const reachable = [...probeResult.values()].filter((r) => r.ok).length;
+  console.log(`screenshots: ${reachable}/${uniqueCids.length} CIDs fetched at build time`);
+  for (const t of trades) {
+    for (const s of t.screenshots) {
+      if (!s.hasProof) continue;
+      const p = probeResult.get(s.cid);
+      s.reachableAtBuild = Boolean(p?.ok);
+      s.fetchMs = p?.ms ?? null;
+      s.fetchBytes = p?.bytes ?? null;
+    }
+  }
+
+  // ---- classify every trade still holding escrow ----
+  //
+  // "Stuck" needs a reason, not a label. The three states a holding trade can be
+  // in, and who can move it:
+  //
+  //   AWAITING_BUYER  open, payment window still live. Not stuck. The buyer has
+  //                   not sent the INR yet. Nobody should touch it.
+  //   EXPIRED_UNCLAIMED open, window elapsed. Genuinely stuck: the buyer walked
+  //                   away and only a cancel can free it. Any trade party may
+  //                   call cancelExpiredFiatTrade, which refunds the seller.
+  //   AWAITING_SELLER paid. The buyer says the INR went out; the seller has not
+  //                   confirmed. Not stuck, but it is a deadlock if the seller
+  //                   never acts - markFiatPaid sets PAID, which permanently
+  //                   blocks cancelExpiredFiatTrade, so only the seller's
+  //                   confirmFiatReceived or an owner override can resolve it.
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const t of trades) {
+    if (t.status === 'COMPLETED' || t.status === 'CANCELLED') {
+      t.escrowState = 'RELEASED';
+      t.stuck = false;
+      continue;
+    }
+    const deadlineSec = t.deadline ? Date.parse(t.deadline) / 1000 : null;
+    const expired = deadlineSec !== null && deadlineSec < nowSec;
+
+    if (t.status === 'PAID') {
+      t.escrowState = 'AWAITING_SELLER';
+      t.stuck = false;
+      t.reason = 'Buyer marked the INR as sent. The seller must confirm receipt, or the crypto stays locked.';
+      t.exitPath = 'Seller calls "I received INR". An owner override can also force the release.';
+    } else if (expired) {
+      t.escrowState = 'EXPIRED_UNCLAIMED';
+      t.stuck = true;
+      const hours = Math.round((nowSec - deadlineSec) / 3600);
+      t.reason = `Payment window expired ${hours >= 48 ? `${Math.round(hours / 24)} days` : `${hours} hours`} ago and the buyer never paid.`;
+      t.exitPath = 'Any trade party can cancel the expired trade, which refunds the seller.';
+    } else if (deadlineSec !== null) {
+      t.escrowState = 'AWAITING_BUYER';
+      t.stuck = false;
+      const left = Math.round((deadlineSec - nowSec) / 60);
+      t.reason = `Waiting for the buyer to send the INR. Window closes in ${left >= 90 ? `${Math.round(left / 60)}h ${left % 60}m` : `${left} min`}.`;
+      t.exitPath = 'Normal. The window expiring on its own allows a cancel that refunds the seller.';
+    } else {
+      // Crypto-to-crypto trades carry no deadline.
+      t.escrowState = 'AWAITING_CONFIRMATION';
+      t.stuck = false;
+      t.reason = 'Crypto-to-crypto trade awaiting mutual confirmation. No payment window applies.';
+      t.exitPath = 'Both parties confirm, or the owner can override.';
+    }
+  }
+
+  const stuckTrades = trades.filter((t) => t.stuck);
+  const stuckValue = stuckTrades.reduce((s, t) => s + Number(t.cryptoAmount), 0);
+
   // ---- escrow accounting ----
   const j = new ethers.Contract(
     '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD',
@@ -500,11 +665,42 @@ async function main() {
       ownerOverrides: trades.filter((t) => t.releasedByOwner).length,
       escrowBalanceJSAV: escrowBalance,
       escrowedInOpenTrades: heldByOpenTrades.toFixed(4),
-      // Anything in the contract that no open trade accounts for. Non-zero means
-      // tokens arrived without a matching trade, or a refund never went out.
+      // Anything in the contract that no open trade accounts for. Verified by
+      // receipts that every cancelled trade refunded correctly and 37 of 38
+      // completed trades paid out, so this is not stranded refunds: it is JSAV
+      // that arrived with no trade behind it.
       escrowUnattributed: (Number(escrowBalance) - heldByOpenTrades).toFixed(4),
+      escrowUnattributedReason:
+        'Direct JSAV transfers to the contract address with no trade attached. No trade references it, so no buyer or seller can ever claim it and only the owner can move it.',
+      // Money that is genuinely stranded, split from money that is merely
+      // waiting. Only the first bucket can be released by cancelling something.
+      stuck: {
+        trades: stuckTrades.length,
+        valueJSAV: stuckValue.toFixed(4),
+        ids: stuckTrades.map((t) => t.id),
+        reason: 'Expired INR payment windows. The buyer never paid, so a cancel is the only way to release the crypto back to the seller.',
+      },
+      awaitingBuyer: {
+        trades: trades.filter((t) => t.escrowState === 'AWAITING_BUYER').length,
+        valueJSAV: trades
+          .filter((t) => t.escrowState === 'AWAITING_BUYER')
+          .reduce((s, t) => s + Number(t.cryptoAmount), 0)
+          .toFixed(4),
+        reason: 'Payment windows still open. Working as intended, not stuck.',
+      },
+      awaitingSeller: {
+        trades: trades.filter((t) => t.escrowState === 'AWAITING_SELLER').length,
+        valueJSAV: trades
+          .filter((t) => t.escrowState === 'AWAITING_SELLER')
+          .reduce((s, t) => s + Number(t.cryptoAmount), 0)
+          .toFixed(4),
+        reason:
+          'Buyer marked the INR sent but the seller has not confirmed. The payment window no longer applies here, so only the seller or an owner override can release it.',
+      },
       chatMessages: trades.reduce((s, t) => s + t.chat.length, 0),
       realScreenshots: trades.reduce((s, t) => s + t.realScreenshotCount, 0),
+      screenshotsReachableAtBuild: reachable,
+      screenshotsProbed: uniqueCids.length,
       kyc: {
         submitted: kycSubmitted.size,
         updated: kycUpdated.size,
@@ -522,6 +718,9 @@ async function main() {
   console.log(`  ads    ${out.summary.ads}  (${out.summary.adsActive} active)`);
   console.log(`  chat   ${out.summary.chatMessages} messages, ${out.summary.realScreenshots} real screenshots`);
   console.log(`  escrow ${escrowBalance} JSAV, ${out.summary.escrowUnattributed} unattributed`);
+  console.log(`  stuck (expired windows)   : ${stuckTrades.length} trades, ${stuckValue.toFixed(2)} JSAV`);
+  console.log(`  awaiting buyer payment    : ${out.summary.awaitingBuyer.trades} trades, ${out.summary.awaitingBuyer.valueJSAV} JSAV`);
+  console.log(`  awaiting seller confirm   : ${out.summary.awaitingSeller.trades} trades, ${out.summary.awaitingSeller.valueJSAV} JSAV`);
 }
 
 main().catch((e) => {

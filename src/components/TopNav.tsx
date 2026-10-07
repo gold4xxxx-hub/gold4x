@@ -12,6 +12,13 @@ const navItems = [
   { href: '/kyc', label: 'KYC' },
 ];
 
+// Local-only. The audit page exposes every trade party, chat message and
+// payment screenshot, so the link is compiled out of production builds entirely
+// rather than merely hidden. The route itself also refuses to serve unless
+// AUDIT_PAGE_ENABLED=1.
+const devNavItems =
+  process.env.NODE_ENV === 'development' ? [{ href: '/audit', label: 'Audit' }] : [];
+
 export function TopNav() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -24,7 +31,7 @@ export function TopNav() {
             JSAVIOR
           </Link>
           <div className="fx-navlinks">
-            {navItems.map((item) => {
+            {[...navItems, ...devNavItems].map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
