@@ -37,3 +37,8 @@ deep.log
 p2p-audit.json
 audit-srv.log
 audit-srv.err
+
+# The single-file offline build for phones. Same data as the index above, but
+# self-contained, so it is even easier to email or upload by accident. Build with
+# `npm run audit:offline`. The template is committed; only its output is ignored.
+audit/gold4x-audit-offline.html

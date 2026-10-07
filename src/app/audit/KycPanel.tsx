@@ -3,27 +3,21 @@
 // KYC lookup for a single address, opened by clicking any address on the audit
 // page.
 //
-// The contract's KYC details are only readable through getKYCForAdmin and
-// getKYCForAdmin2, and both revert with "Not owner" unless msg.sender is the
-// escrow owner. That is the right design for identity documents, so this panel
-// asks for the owner's wallet rather than routing around the gate. Verified: a
-// plain eth_call from an unowned key reverts on both getters.
+// No wallet is required, and that is a correction rather than a shortcut.
 //
-// The KYC events only carry the wallet address, so there is no way to read this
-// from the event log instead.
+// submitKYC and updateKYC take the whole KYC struct as a single tuple argument,
+// so every field - name, bank account, IFSC, PAN, mobile, email and both Aadhaar
+// CIDs - is written into the transaction input, which is public to everyone. The
+// owner-only getters getKYCForAdmin and getKYCForAdmin2 are a second route to the
+// same data, not the only one, and requiring the owner wallet to see a record that
+// is already on-chain bought nothing.
+//
+// The index decodes those calls at build time. This panel only reads the result.
 
-import { useCallback, useEffect, useState } from 'react';
-import { ethers } from 'ethers';
-import { useAccount } from 'wagmi';
+import { useEffect, useState, type ReactNode } from 'react';
 
-import { useEthersSigner } from '@/hooks/useEthersSigner';
-import {
-  P2PESCROW_CONTRACT_ADDRESS,
-  P2PESCROW_CONTRACT_ABI,
-  isP2pEscrowOwner,
-} from '@/config/web3Config';
-
-type Detail = {
+export type KycRecord = {
+  wallet: string;
   bankHolderName: string;
   bankAccountNumber: string;
   ifscCode: string;
@@ -33,8 +27,22 @@ type Detail = {
   mobile: string;
   email: string;
   pan: string;
-  submitted: boolean;
+  submittedAt: string | null;
+  updatedAt: string | null;
+  lastCall: string;
+  timesSubmitted: number;
+  viaRouter: boolean;
+  tx: string;
+  block: number;
   verified: boolean;
+  verifiedAt: string | null;
+  firstVerifiedAt: string | null;
+  verificationChanges: number;
+  verifiedTx: string | null;
+  tradesAsSeller: number[];
+  tradesAsBuyer: number[];
+  ordersCreated: number[];
+  chatMessages: number;
 };
 
 const GATEWAYS = [
@@ -44,16 +52,27 @@ const GATEWAYS = [
 
 const isCid = (v: string) => /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58,})$/.test(v);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const when = (iso?: string | null) => (iso ? `${iso.replace('T', ' ').slice(0, 19)} UTC` : '—');
+
+/** How long it took to approve someone, in words rather than milliseconds. */
+function gap(from?: string | null, to?: string | null) {
+  if (!from || !to) return null;
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} min later`;
+  const hours = Math.round(ms / 3600000);
+  if (hours < 48) return `${hours} h later`;
+  return `${Math.round(ms / 86400000)} days later`;
+}
 
 /** One Aadhaar side. Falls back across gateways, then shows an explicit state. */
 function DocImage({ hash, label }: { hash: string; label: string }) {
+  // Remounting on a new hash is what resets the retry state, rather than an
+  // effect: keying the element by CID gives a genuinely fresh component, which
+  // also avoids a render pass showing the previous document's failure.
   const [stage, setStage] = useState(0);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setStage(0);
-    setFailed(false);
-  }, [hash]);
 
   if (!hash) {
     return (
@@ -90,12 +109,22 @@ function DocImage({ hash, label }: { hash: string; label: string }) {
   }
   return (
     <div className="adoc">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={GATEWAYS[stage](hash)}
-        alt={`${label} Aadhaar document`}
-        onError={() => (stage + 1 < GATEWAYS.length ? setStage((s) => s + 1) : setFailed(true))}
-      />
+      {/* A button, not the image itself, so it is keyboard reachable and can
+          carry an accessible name. The 12-digit Aadhaar number is the smallest
+          text on the card, so the thumbnail cannot be the only way to read it. */}
+      <button
+        type="button"
+        className="adoc__zoom"
+        onClick={() => window.open(GATEWAYS[0](hash), '_blank', 'noopener,noreferrer')}
+        aria-label={`Open the ${label} Aadhaar document full size in a new tab`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={GATEWAYS[stage](hash)}
+          alt={`${label} Aadhaar document`}
+          onError={() => (stage + 1 < GATEWAYS.length ? setStage((s) => s + 1) : setFailed(true))}
+        />
+      </button>
       <span className="adoc__cap">
         {label} · <a href={GATEWAYS[0](hash)} target="_blank" rel="noopener noreferrer">{short(hash)}</a>
       </span>
@@ -103,67 +132,77 @@ function DocImage({ hash, label }: { hash: string; label: string }) {
   );
 }
 
+/**
+ * Optional extra section rendered under the KYC fields. Passed in rather than
+ * imported, because the activity tables need the trade and order lists that the
+ * page already holds, and re-fetching them here would duplicate that data.
+ */
+/**
+ * One labelled field with a copy button.
+ *
+ * Declared outside the panel rather than inside it: a component defined during
+ * render is a new type on every pass, so React unmounts and remounts it and
+ * throws away its state each time.
+ */
+function Cell({
+  k,
+  label,
+  detail,
+  mono,
+  copied,
+  onCopy,
+}: {
+  k: keyof KycRecord;
+  label: string;
+  detail: KycRecord | null;
+  mono?: boolean;
+  copied: string | null;
+  onCopy: (key: string, value: string) => void;
+}) {
+  return (
+    <div>
+      <dt>
+        {label}
+        <button
+          type="button"
+          className="adrawer__copy"
+          onClick={() => onCopy(String(k), String(detail?.[k] ?? ''))}
+          title="Copy"
+        >
+          {copied === String(k) ? 'copied' : 'copy'}
+        </button>
+      </dt>
+      <dd className={mono ? 'admono' : undefined}>{detail?.[k] || '—'}</dd>
+    </div>
+  );
+}
+
 export function KycPanel({
   address,
+  record,
   onClose,
+  extra,
 }: {
   address: string;
+  record?: KycRecord;
   onClose: () => void;
+  extra?: ReactNode;
 }) {
-  const { signer } = useEthersSigner();
-  const { address: connected, isConnected } = useAccount();
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // The getters are onlyOwner, so the read only succeeds from the owner wallet.
-  const ownerOk = isP2pEscrowOwner(connected);
-
-  const load = useCallback(async () => {
-    if (!signer) return;
-    setBusy(true);
-    setError(null);
-    setDetail(null);
-    try {
-      const c = new ethers.Contract(
-        P2PESCROW_CONTRACT_ADDRESS,
-        P2PESCROW_CONTRACT_ABI,
-        signer,
-      );
-      const [a, b] = await Promise.all([
-        c.getKYCForAdmin(address),
-        c.getKYCForAdmin2(address),
-      ]);
-      setDetail({
-        bankHolderName: String(a[0]),
-        bankAccountNumber: String(a[1]),
-        ifscCode: String(a[2]),
-        bankName: String(a[3]),
-        aadharFrontHash: String(a[4]),
-        aadharBackHash: String(b[0]),
-        mobile: String(b[1]),
-        email: String(b[2]),
-        pan: String(b[3]),
-        submitted: Boolean(b[4]),
-        verified: Boolean(b[5]),
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(
-        /not owner/i.test(msg)
-          ? 'The contract refused this read. Only the escrow owner wallet can view KYC records.'
-          : /no kyc|empty/i.test(msg)
-            ? 'This address has no KYC record on-chain.'
-            : `Could not read KYC: ${msg.slice(0, 140)}`,
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [signer, address]);
+  const detail = record ?? null;
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownerOk) void load();
-  }, [ownerOk, load]);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const copy = (label: string, value: string) => {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1400);
+    });
+  };
 
   return (
     <div className="adrawer" role="dialog" aria-modal="true" aria-label="KYC record">
@@ -186,49 +225,102 @@ export function KycPanel({
           </button>
         </header>
 
-        {!isConnected && (
-          <p className="adrawer__msg">
-            Connect the escrow owner wallet to read this record. The contract
-            rejects KYC reads from any other address.
-          </p>
-        )}
-        {isConnected && !ownerOk && (
+        {!detail && (
           <p className="adrawer__msg adrawer__msg--warn">
-            Connected as <code>{connected ? short(connected) : 'unknown'}</code>, which is not
-            the escrow owner. The contract will refuse this read.
+            No KYC submission found for this address. Either they never applied,
+            or the transaction could not be read when the index was built.
           </p>
         )}
-        {error && <p className="adrawer__msg adrawer__msg--warn">{error}</p>}
-        {busy && <p className="adrawer__msg">Reading from BSC…</p>}
 
         {detail && (
           <>
             <div className="adrawer__badges">
               <span className={`achip ${detail.verified ? 'achip--is-done' : 'achip--is-closed'}`}>
-                {detail.verified ? 'VERIFIED' : detail.submitted ? 'SUBMITTED — NOT VERIFIED' : 'NO RECORD'}
+                {detail.verified ? 'VERIFIED' : 'SUBMITTED — NOT VERIFIED'}
               </span>
+              {detail.timesSubmitted > 1 && (
+                <span className="achip">
+                  RESUBMITTED ×{detail.timesSubmitted}
+                </span>
+              )}
+              {detail.viaRouter && <span className="achip">VIA ROUTER</span>}
             </div>
 
             <dl className="adgrid">
-              <div><dt>Name</dt><dd>{detail.bankHolderName || '—'}</dd></div>
-              <div><dt>Mobile</dt><dd>{detail.mobile || '—'}</dd></div>
-              <div><dt>Email</dt><dd>{detail.email || '—'}</dd></div>
-              <div><dt>PAN</dt><dd>{detail.pan || '—'}</dd></div>
-              <div><dt>Bank</dt><dd>{detail.bankName || '—'}</dd></div>
-              <div><dt>Account</dt><dd>{detail.bankAccountNumber || '—'}</dd></div>
-              <div><dt>IFSC</dt><dd>{detail.ifscCode || '—'}</dd></div>
+              <Cell k="bankHolderName" label="Name" detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="mobile" label="Mobile" mono detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="email" label="Email" detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="pan" label="PAN" mono detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="bankName" label="Bank" detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="bankAccountNumber" label="Account" mono detail={detail} copied={copied} onCopy={copy} />
+              <Cell k="ifscCode" label="IFSC" mono detail={detail} copied={copied} onCopy={copy} />
+              <div>
+                <dt>Submitted</dt>
+                <dd>{when(detail.submittedAt)}</dd>
+              </div>
+              <div>
+                <dt>Last updated</dt>
+                <dd>{detail.updatedAt ? when(detail.updatedAt) : 'never'}</dd>
+              </div>
+              <div>
+                <dt>Verified</dt>
+                <dd>
+                  {detail.verifiedAt ? (
+                    <>
+                      {when(detail.verifiedAt)}
+                      {detail.verified && detail.submittedAt && (
+                        <span className="adimplied">
+                          {' '}
+                          ({gap(detail.submittedAt, detail.firstVerifiedAt ?? detail.verifiedAt)})
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    'never'
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Times submitted</dt>
+                <dd>{detail.timesSubmitted}</dd>
+              </div>
+            </dl>
+
+            <h3 className="adrawer__h3">Activity</h3>
+            <dl className="adgrid">
+              <div>
+                <dt>Sold in</dt>
+                <dd>{detail.tradesAsSeller.length ? detail.tradesAsSeller.map((t) => `#${t}`).join(', ') : '—'}</dd>
+              </div>
+              <div>
+                <dt>Bought in</dt>
+                <dd>{detail.tradesAsBuyer.length ? detail.tradesAsBuyer.map((t) => `#${t}`).join(', ') : '—'}</dd>
+              </div>
+              <div>
+                <dt>Orders created</dt>
+                <dd>{detail.ordersCreated.length ? detail.ordersCreated.map((o) => `#${o}`).join(', ') : '—'}</dd>
+              </div>
+              <div>
+                <dt>Chat messages</dt>
+                <dd>{detail.chatMessages}</dd>
+              </div>
             </dl>
 
             <h3 className="adrawer__h3">Aadhaar documents</h3>
             <div className="adrawer__docs">
-              <DocImage hash={detail.aadharFrontHash} label="Front" />
-              <DocImage hash={detail.aadharBackHash} label="Back" />
+              <DocImage key={`front-${detail.aadharFrontHash}`} hash={detail.aadharFrontHash} label="Front" />
+              <DocImage key={`back-${detail.aadharBackHash}`} hash={detail.aadharBackHash} label="Back" />
             </div>
             <p className="adrawer__note">
-              These fields are stored as plaintext in a public BSC transaction and
-              are permanently readable by anyone. Only the document CID goes to
-              IPFS.
+              Read from{' '}
+              <a href={`https://bscscan.com/tx/${detail.tx}`} target="_blank" rel="noopener noreferrer">
+                tx {detail.tx.slice(0, 10)}…
+              </a>{' '}
+              at block {detail.block}. No wallet needed: the fields sit in public
+              transaction calldata, and only the document CIDs go to IPFS.
             </p>
+
+            {extra}
           </>
         )}
       </div>

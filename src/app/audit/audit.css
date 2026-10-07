@@ -56,6 +56,107 @@
   text-decoration: underline;
 }
 
+/* ---------- signature gate ---------- */
+
+.agate {
+  display: flex;
+  justify-content: center;
+  padding: 3rem 1rem;
+}
+
+.agate__box {
+  width: 100%;
+  max-width: 30rem;
+  padding: 1.6rem 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.agate__box h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.agate__box p {
+  margin: 0 0 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--fx-ink-muted);
+}
+
+.agate__box code {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--fx-gold-text);
+  overflow-wrap: anywhere;
+}
+
+/* The exact text that will be signed, shown in the page as well as in the
+   wallet prompt. If these two ever differ, do not sign. */
+.agate__sig {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.agate__sigk {
+  margin-bottom: 0.45rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fx-ink-subtle);
+}
+
+.agate__sig pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--fx-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.abtn--gate {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-size: 0.84rem;
+  border-color: rgba(212, 168, 67, 0.4);
+  background: rgba(212, 168, 67, 0.08);
+  color: var(--fx-gold-text);
+}
+
+.abtn--gate:hover:not(:disabled) {
+  border-color: var(--fx-gold-text);
+  background: rgba(212, 168, 67, 0.14);
+}
+
+.abtn--gate:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.agate__note {
+  margin: 0.85rem 0 0 !important;
+  font-size: 0.7rem !important;
+  line-height: 1.55;
+  color: var(--fx-ink-subtle) !important;
+}
+
+.agate__err {
+  margin: 0.9rem 0 0 !important;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(216, 76, 76, 0.35);
+  background: rgba(216, 76, 76, 0.06);
+  color: #eec4c4;
+  font-size: 0.76rem;
+}
+
 /* Clickable address. Styled as a link but a real button, so it is keyboard
    reachable and announces what activating it does. */
 .alink--addr {
@@ -101,10 +202,14 @@
 
 .adrawer__panel {
   position: relative;
-  width: min(520px, 100%);
+  /* Wider than the original 520px. Aadhaar cards are landscape documents, and
+     at 520px two side by side left each one around 230px wide, which cropped
+     the photo and the printed edges and made the number unreadable. */
+  width: min(760px, 100%);
   height: 100%;
   overflow-y: auto;
-  padding: 1.25rem;
+  /* Space for the scrollbar, so the content is not tucked under it. */
+  padding: 1.4rem 1.5rem 4rem;
   background: #0b0c10;
   border-left: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: -18px 0 50px rgba(0, 0, 0, 0.6);
@@ -181,7 +286,211 @@
   font-size: 0.72rem;
 }
 
-.adrawer__badges { margin-bottom: 0.9rem; }
+.adrawer__badges {
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Copy control sits in the term slot so it cannot widen the label column. */
+.adrawer__copy {
+  margin-left: 0.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fx-ink-subtle);
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.adgrid > div:hover .adrawer__copy,
+.adrawer__copy:focus-visible { opacity: 1; }
+
+.admono {
+  font-family: var(--fx-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+/* Secondary text inside a field value: the "(11 min later)" approval lag. */
+.adimplied {
+  color: var(--fx-ink-subtle);
+  font-size: 0.68rem;
+}
+
+.acount {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--fx-ink-subtle);
+  font-size: 0.6rem;
+  letter-spacing: 0;
+}
+
+.amono {
+  font-family: var(--fx-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  opacity: 0.72;
+}
+
+/* Buyer and seller need to be distinguishable at a glance: the same trade
+   number means opposite things depending on which side you were on. */
+.achip--sell {
+  border-color: rgba(120, 200, 255, 0.5);
+  color: #9ad4ff;
+}
+
+.achip--buy {
+  border-color: rgba(255, 200, 120, 0.5);
+  color: #ffcf8a;
+}
+
+.arow__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+}
+
+/* ---- per-person activity tables ---- */
+
+.apersonactivity {
+  margin-top: 1.1rem;
+}
+
+.atable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+}
+
+.atable td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  line-height: 1.5;
+}
+
+.atable th {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--fx-ink-subtle);
+}
+
+.atable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.atable .anum {
+  text-align: right;
+  font-family: var(--fx-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+}
+
+.atable .anow {
+  white-space: nowrap;
+  font-size: 0.64rem;
+  color: var(--fx-ink-subtle);
+}
+
+/* ---- per-person chat transcript ---- */
+
+.atranscript {
+  max-height: 21rem;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+}
+
+.aline {
+  display: grid;
+  /* Roomier columns and row padding. The timestamp, the SOLD/BOUGHT tag and the
+     trade number were jammed against the message at 0.5rem. */
+  grid-template-columns: 9.5rem 4rem 3rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  .aline {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .aline__when { order: -1; }
+}
+
+.aline:last-child {
+  border-bottom: 0;
+}
+
+.aline__when {
+  font-family: var(--fx-mono, ui-monospace, monospace);
+  font-size: 0.62rem;
+  color: var(--fx-ink-subtle);
+  white-space: nowrap;
+}
+
+.aline__role {
+  padding: 0.18rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  align-self: center;
+}
+
+.aline__role--sold {
+  background: rgba(120, 200, 255, 0.14);
+  color: #9ad4ff;
+}
+
+.aline__role--bought {
+  background: rgba(255, 200, 120, 0.14);
+  color: #ffcf8a;
+}
+
+.aline__trade {
+  font-size: 0.66rem;
+}
+
+.aline__body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aline__placeholder {
+  color: var(--fx-ink-subtle);
+  font-size: 0.7rem;
+}
+
+/* Screenshots inside the transcript render at thumb size. The full image is
+   still available, but a transcript with 30 payments in it cannot show them
+   all at full width. */
+.aline__body img {
+  max-width: 15rem;
+  max-height: 9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  cursor: zoom-in;
+}
 
 .adrawer__h3 {
   margin: 1.2rem 0 0.6rem;
@@ -193,8 +502,51 @@
 
 .adrawer__docs {
   display: grid;
+  /* Side by side now that there is room for both to be legible. */
   grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  gap: 0.75rem;
+}
+
+@media (max-width: 620px) {
+  .adrawer__docs { grid-template-columns: 1fr; }
+}
+
+/* Clicking a card opens it full size. An Aadhaar number is 12 digits and the
+   smallest thing on the document, so the thumbnail cannot be the only view. */
+/* A flex frame rather than a fixed box, so it takes the image's height without
+   a hard-coded ratio and stays centred when the image is capped. */
+.adoc__zoom {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 3rem;
+  border: 0;
+  padding: 0;
+  background: #000;
+  cursor: zoom-in;
+}
+
+.adoc__zoom::after {
+  content: 'click to enlarge';
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.adoc__zoom:hover::after,
+.adoc__zoom:focus-visible::after {
+  opacity: 1;
 }
 
 .adrawer__note {
@@ -207,19 +559,33 @@
 .adgrid > div {
   display: flex;
   justify-content: space-between;
-  gap: 0.8rem;
-  padding: 0.32rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  align-items: baseline;
+  /* Vertical breathing room. 0.32rem put the label and the value on nearly the
+     same line, which is what made the words look like they were touching. */
+  gap: 1.1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.8rem;
+  line-height: 1.5;
 }
 
-.adgrid dt { color: var(--fx-ink-subtle); flex-shrink: 0; }
+.adgrid dt {
+  color: var(--fx-ink-subtle);
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
 .adgrid dd {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
   text-align: right;
-  word-break: break-all;
+  /* Break only when a run genuinely cannot fit. break-all split ordinary words
+     mid-character, which is what read as colliding text. */
+  overflow-wrap: anywhere;
+  word-break: normal;
+  min-width: 0;
 }
 
 .adoc {
@@ -229,11 +595,23 @@
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* No fixed aspect ratio, because the uploads are not one shape.
+   Measured across 12 sampled documents: 6 were landscape scans around 1.5:1,
+   which matches the printed card's 85.6 x 54mm, and 6 were portrait phone
+   photos around 0.45:1, some 1080x2408. A single ratio cannot fit both, and
+   the 3:4 + cover that was here before cropped the landscape cards by 58% of
+   their width and cut 40% off the tall photos - in both cases hiding the photo,
+   the number and the printed edges.
+
+   So the frame grows to the image's own proportions and caps at a height,
+   which keeps a very tall photo from pushing everything else off screen. */
 .adoc img {
   display: block;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
+  height: auto;
+  max-height: 26rem;
+  object-fit: contain;
+  background: #000;
 }
 
 .adoc__cap {
@@ -567,6 +945,19 @@ input.ainput {
   color: var(--fx-ink-subtle);
 }
 
+/* Banner shown while the trade list is pinned to one person's trades. */
+.ajump {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid rgba(212, 168, 67, 0.35);
+  background: rgba(212, 168, 67, 0.07);
+  color: var(--fx-gold-text);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 /* ---------- rows ---------- */
 
 .arow {
@@ -579,11 +970,13 @@ input.ainput {
 
 .arow__head {
   display: grid;
-  grid-template-columns: 3.5rem 1fr auto auto 1.2rem;
-  gap: 0.8rem;
+  /* Wider gap and a dedicated column. At 0.8rem the pair, the amount and the
+     badges ran into each other on a narrow window. */
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto auto 1.2rem;
+  gap: 1.4rem;
   align-items: center;
   width: 100%;
-  padding: 0.7rem 0.9rem;
+  padding: 0.85rem 1rem;
   background: none;
   border: 0;
   color: inherit;
@@ -605,13 +998,25 @@ input.ainput {
 
 .arow__pair {
   font-size: 0.82rem;
+  line-height: 1.6;
   color: var(--fx-ink-muted);
+  /* Without this a long wallet address forces the grid column wider and shoves
+     the badges off the row. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.arow__pair b {
+  color: var(--fx-ink, #ece8e1);
+  font-weight: 600;
 }
 
 .arow__amt {
   font-family: var(--font-mono);
   font-size: 0.82rem;
+  line-height: 1.6;
   text-align: right;
+  white-space: nowrap;
 }
 
 .arow__badges {
@@ -823,12 +1228,16 @@ input.ainput {
   overflow: hidden;
 }
 
+/* Payment screenshots are bank apps and UPI receipts of unknown proportion, so
+   cover would slice off the transaction amount and reference number - the two
+   things being checked. contain shows the whole receipt inside the same frame
+   size, which is why the frame rather than the image carries the aspect ratio. */
 .ashot-frame img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   opacity: 0;
   transition: opacity 0.25s ease;

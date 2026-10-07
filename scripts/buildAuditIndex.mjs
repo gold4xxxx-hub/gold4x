@@ -96,6 +96,16 @@ function iso(secs) {
   return new Date(secs * 1000).toISOString();
 }
 
+/**
+ * A CID the contract actually stored, rather than the sentinel it demands when
+ * no image was supplied. Applied to both payment screenshots and Aadhaar hashes,
+ * because the same placeholder problem affects both.
+ */
+function isRealCid(value) {
+  const s = String(value ?? '').trim();
+  return s !== '' && s !== NO_PROOF && /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58,})$/.test(s);
+}
+
 async function withRetry(label, fn, attempts = 5) {
   for (let i = 0; i < attempts; i++) {
     try {
@@ -153,6 +163,32 @@ async function probeWindow(head) {
  */
 const MIN_TS = 1600000000; // Sep 2020, comfortably before any BSC block
 const MAX_TS = 2000000000; // 2033
+
+/**
+ * Raw transaction calldata by hash, for the same reason rawBlockTimestamp exists:
+ * ethers' own accessors have proved unreliable against this endpoint. Returns the
+ * input hex, or null on any failure so callers can report a gap rather than
+ * treating a missing read as an absent record.
+ */
+async function rawTxInput(hash) {
+  try {
+    const res = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getTransactionByHash',
+        params: [hash],
+      }),
+    });
+    const json = JSON.parse(await res.text());
+    if (json.error || !json.result?.input) return null;
+    return json.result.input;
+  } catch {
+    return null;
+  }
+}
 
 async function rawBlockTimestamp(n) {
   const res = await fetch(RPC_URL, {
@@ -365,7 +401,7 @@ async function main() {
       .filter((e) => e.name === 'ScreenshotShared')
       .map((e) => {
         const cid = String(e.args.hash);
-        const isReal = cid !== NO_PROOF && /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58,})$/.test(cid);
+        const isReal = isRealCid(cid);
         return {
           sender: e.args.sender,
           cid,
@@ -570,6 +606,184 @@ async function main() {
     }
   }
 
+  // ---- KYC records, decoded from public transaction calldata ----
+  //
+  // The owner-only getters are not the only route, and treating them as the only
+  // route was wrong. submitKYC/updateKYC take the whole KYC struct as a tuple,
+  // so every field - name, bank account, IFSC, PAN, mobile, email and both
+  // Aadhaar CIDs - is written into the transaction input, which is public to
+  // everyone. No wallet and no Pinata login are required.
+  //
+  // The blocks are not supplied by hand: KYCSubmitted and KYCUpdated events name
+  // the block each submission landed in, so only those blocks need fetching.
+  // That is a few hundred blocks rather than the full chain.
+  const kycRecords = new Map();
+  {
+    // Derived from the verified ABI rather than hand-copied. Hand-written
+    // selector tables have already been wrong three times on this contract.
+    const SUBMIT = iface.getFunction('submitKYC').selector;
+    const UPDATE = iface.getFunction('updateKYC').selector;
+
+    // Each event already carries the transaction hash that produced it, so the
+    // transaction is fetched directly by hash. Scanning whole blocks was the
+    // obvious approach and it silently decoded nothing: ethers' getBlock(n, true)
+    // returned objects missing fields against this endpoint, which is the same
+    // failure already documented for timestamps. A raw JSON-RPC fetch avoids it.
+    const kycTxs = [
+      ...new Map(
+        allEvents
+          .filter((e) => e.name === 'KYCSubmitted' || e.name === 'KYCUpdated')
+          .map((e) => [e.tx, e]),
+      ).values(),
+    ].sort((a, b) => a.block - b.block);
+
+    let found = 0;
+    let unreadable = 0;
+    let viaRouterCount = 0;
+    for (let i = 0; i < kycTxs.length; i += 8) {
+      await Promise.all(
+        kycTxs.slice(i, i + 8).map(async (ev) => {
+          const input = await rawTxInput(ev.tx);
+          if (!input) {
+            unreadable++;
+            return;
+          }
+          const sel = input.slice(0, 10);
+          let parsed = null;
+          let viaRouter = false;
+
+          if (sel === SUBMIT || sel === UPDATE) {
+            try {
+              parsed = iface.parseTransaction({ data: input });
+            } catch {
+              parsed = null;
+            }
+          } else {
+            // Some submissions were bundled by another contract, so the escrow's
+            // selector is not at position zero. Slicing from where it appears
+            // reconstructs valid calldata, because a nested call is the same
+            // selector followed by the same ABI encoding. The first such
+            // occurrence is the KYC call, since one bundle carries one KYC event.
+            for (const [selector, name] of [[SUBMIT, 'submitKYC'], [UPDATE, 'updateKYC']]) {
+              const at = input.indexOf(selector.slice(2));
+              if (at <= 0) continue;
+              try {
+                parsed = iface.parseTransaction({ data: '0x' + input.slice(at) });
+                viaRouter = true;
+                break;
+              } catch {
+                /* try the other selector */
+              }
+            }
+          }
+          if (!parsed) {
+            unreadable++;
+            return;
+          }
+          const comps = parsed.fragment.inputs[0]?.components ?? [];
+          const rec = {};
+          parsed.args[0].forEach((v, k) => {
+            rec[comps[k]?.name ?? `field${k}`] = String(v);
+          });
+          const wallet = ev.args?.user ? String(ev.args.user).toLowerCase() : null;
+          if (!wallet) {
+            unreadable++;
+            return;
+          }
+          const prev = kycRecords.get(wallet);
+          const at = iso(blockTime.get(ev.block) ?? null);
+          // Iterated in block order, so the last write per wallet is the newest.
+          kycRecords.set(wallet, {
+            wallet,
+            ...rec,
+            submittedAt: parsed.fragment.name === 'submitKYC' ? at : (prev?.submittedAt ?? at),
+            updatedAt: parsed.fragment.name === 'updateKYC' ? at : (prev?.updatedAt ?? null),
+            lastCall: parsed.fragment.name,
+            timesSubmitted: (prev?.timesSubmitted ?? 0) + 1,
+            superseded: Boolean(prev),
+            viaRouter,
+            tx: ev.tx,
+            block: ev.block,
+          });
+          found++;
+          if (viaRouter) viaRouterCount++;
+        }),
+      );
+      if (i % 160 === 0) process.stdout.write(`  kyc txs ${i}/${kycTxs.length}\n`);
+    }
+    console.log(
+      `kyc records: ${found} submissions decoded from ${kycTxs.length} KYC transactions` +
+        (viaRouterCount ? ` (${viaRouterCount} bundled by another contract)` : '') +
+        (unreadable ? ` (${unreadable} unreadable)` : ''),
+    );
+    if (unreadable) {
+      console.warn(
+        `WARNING: ${unreadable} KYC transaction(s) could not be read. Those wallets will\n` +
+          `         show no record. Re-run to retry. Do not assume they never submitted.`,
+      );
+    }
+  }
+
+  // Verification state comes from the events, which is separate from the record.
+  // The timestamp matters as much as the boolean: "verified 3 days after
+  // submitting" and "verified a year later" are different operational facts, and
+  // only the latter tells you verification is being attended to.
+  const kycVerifiedAt = new Map();
+  for (const ev of allEvents) {
+    if (ev.name !== 'KYCVerified' || !ev.args?.user) continue;
+    const w = String(ev.args.user).toLowerCase();
+    const prev = kycVerifiedAt.get(w);
+    // Events arrive in block order, so the last one wins. A wallet verified then
+    // later revoked ends up unverified, which is the correct reading.
+    if (prev && prev.time && ev.time && prev.time > ev.time) continue;
+    kycVerifiedAt.set(w, {
+      verified: Boolean(ev.args.status),
+      time: ev.time ? iso(ev.time) : null,
+      block: ev.block,
+      tx: ev.tx,
+      // Keep the first verification time even if status later flipped, so the
+      // page can show when the owner first approved this person.
+      firstVerifiedAt: prev?.firstVerifiedAt ?? (ev.args.status ? iso(ev.time ?? null) : null),
+      timesChanged: (prev?.timesChanged ?? 0) + 1,
+    });
+  }
+
+  const kycList = [...kycRecords.values()].map((r) => {
+    const v = kycVerifiedAt.get(r.wallet);
+    return {
+      ...r,
+      verified: v?.verified ?? false,
+      verifiedAt: v?.time ?? null,
+      firstVerifiedAt: v?.firstVerifiedAt ?? null,
+      verificationChanges: v?.timesChanged ?? 0,
+      verifiedTx: v?.tx ?? null,
+      aadharFrontHash: r.aadharFrontHash ?? '',
+      aadharBackHash: r.aadharBackHash ?? '',
+      // Per-person activity, resolved here so the page can sort and filter on it
+      // without re-walking every trade on each render.
+      tradesAsSeller: trades
+        .filter((t) => t.seller.toLowerCase() === r.wallet)
+        .map((t) => t.id)
+        .sort((a, b) => a - b),
+      tradesAsBuyer: trades
+        .filter((t) => t.buyer.toLowerCase() === r.wallet)
+        .map((t) => t.id)
+        .sort((a, b) => a - b),
+      ordersCreated: ads
+        .filter((ad) => ad.creator.toLowerCase() === r.wallet)
+        .map((ad) => ad.id)
+        .sort((a, b) => a - b),
+      chatMessages: trades.reduce(
+        (n, t) =>
+          n +
+          (t.seller.toLowerCase() === r.wallet || t.buyer.toLowerCase() === r.wallet
+            ? t.chat.length
+            : 0),
+        0,
+      ),
+    };
+  });
+
   // ---- classify every trade still holding escrow ----
   //
   // "Stuck" needs a reason, not a label. The three states a holding trade can be
@@ -705,11 +919,19 @@ async function main() {
         submitted: kycSubmitted.size,
         updated: kycUpdated.size,
         verified: kycVerified.size,
+        // Records actually decoded from calldata, and how many carry both
+        // Aadhaar images rather than the contract's placeholder string.
+        decoded: kycList.length,
+        withAadhaarFront: kycList.filter((r) => isRealCid(r.aadharFrontHash)).length,
+        withAadhaarBack: kycList.filter((r) => isRealCid(r.aadharBackHash)).length,
+        withPan: kycList.filter((r) => r.pan).length,
       },
     },
     trades,
     ads,
+    kyc: kycList,
   };
+
 
   fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
 
