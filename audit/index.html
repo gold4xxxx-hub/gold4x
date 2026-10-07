@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>P2P Escrow — Audit</title>
+<style>
+  /* Standalone: no build step, no external fonts, no CDN. Runs from file://
+     through the local server and keeps working offline. */
+  :root {
+    --bg: #08090c;
+    --panel: rgba(255, 255, 255, 0.022);
+    --line: rgba(255, 255, 255, 0.075);
+    --line-soft: rgba(255, 255, 255, 0.045);
+    --ink: #ece8e1;
+    --muted: #9c968b;
+    --subtle: #6f6a61;
+    --gold: #d4a843;
+    --gold-dim: rgba(212, 168, 67, 0.16);
+    --emerald: #2d8b78;
+    --emerald-bright: #5fd3b8;
+    --red: #d84c4c;
+    --red-bright: #f0a0a0;
+    --blue: #4a7fb5;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Ambient wash so the page does not read as a plain data dump. */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(212,168,67,0.10), transparent 60%),
+      radial-gradient(800px 460px at 88% 4%, rgba(45,139,120,0.10), transparent 60%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1500px; margin: 0 auto; padding: 28px 22px 80px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+  h1 { margin: 0 0 4px; font-size: 1.4rem; letter-spacing: -0.01em; font-weight: 650; }
+  .sub { color: var(--subtle); font-size: 0.78rem; font-family: var(--mono); }
+  .sub b { color: var(--muted); font-weight: 500; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin-bottom: 22px; }
+  .stat { padding: 13px 15px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+  .stat__k { color: var(--subtle); font-size: 0.66rem; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 5px; }
+  .stat__v { font-family: var(--mono); font-size: 1.22rem; font-weight: 600; letter-spacing: -0.02em; }
+  .stat__d { font-size: 0.68rem; color: var(--subtle); margin-top: 2px; }
+  .stat--alert { border-color: rgba(216,76,76,0.34); background: rgba(216,76,76,0.06); }
+  .stat--alert .stat__v { color: var(--red-bright); }
+  .stat--good .stat__v { color: var(--emerald-bright); }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .tab {
+    appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+    padding: 9px 15px; color: var(--subtle); font: inherit; font-size: 0.83rem; cursor: pointer;
+    transition: color .18s ease, border-color .18s ease;
+  }
+  .tab:hover { color: var(--muted); }
+  .tab.is-active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab .n { font-family: var(--mono); font-size: 0.72rem; opacity: .75; margin-left: 5px; }
+
+  .controls { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  input[type=search], select {
+    background: rgba(0,0,0,.34); border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 11px; color: var(--ink); font: inherit; font-size: 0.82rem;
+  }
+  input[type=search] { min-width: 260px; flex: 1 1 260px; }
+  input[type=search]:focus, select:focus { outline: none; border-color: rgba(212,168,67,.45); }
+  .hint { color: var(--subtle); font-size: 0.74rem; margin-left: auto; font-family: var(--mono); }
+
+  .row { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); margin-bottom: 8px; overflow: hidden; }
+  .row__head { display: grid; grid-template-columns: 58px 1.5fr 1fr 1fr 118px 92px 30px; gap: 12px; align-items: center; padding: 11px 14px; cursor: pointer; }
+  .row__head:hover { background: rgba(255,255,255,0.022); }
+  .id { font-family: var(--mono); font-weight: 600; color: var(--gold); }
+  .pair { font-size: 0.83rem; }
+  .mono { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+  .num { font-family: var(--mono); font-size: 0.82rem; text-align: right; }
+  .caret { color: var(--subtle); text-align: center; transition: transform .18s ease; font-size: 0.7rem; }
+  .row.is-open .caret { transform: rotate(90deg); }
+  .who { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  .who i { color: var(--subtle); font-style: normal; }
+
+  .chip { display: inline-block; padding: 2px 9px; border-radius: 100px; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+  .chip--OPEN      { background: rgba(212,168,67,.14); color: var(--gold); border: 1px solid rgba(212,168,67,.32); }
+  .chip--PAID      { background: rgba(74,127,181,.16); color: #8fbde8; border: 1px solid rgba(74,127,181,.4); }
+  .chip--COMPLETED { background: rgba(45,139,120,.16); color: var(--emerald-bright); border: 1px solid rgba(45,139,120,.4); }
+  .chip--CANCELLED { background: rgba(255,255,255,.05); color: var(--subtle); border: 1px solid var(--line); }
+  .chip--ACTIVE    { background: rgba(45,139,120,.16); color: var(--emerald-bright); border: 1px solid rgba(45,139,120,.4); }
+  .chip--FILLED    { background: rgba(74,127,181,.14); color: #8fbde8; border: 1px solid rgba(74,127,181,.34); }
+  .chip--CANCELLED2{ background: rgba(255,255,255,.05); color: var(--subtle); border: 1px solid var(--line); }
+  .chip--override  { background: rgba(216,76,76,.16); color: var(--red-bright); border: 1px solid rgba(216,76,76,.42); }
+
+  .row__body { display: none; padding: 4px 16px 18px; border-top: 1px solid var(--line-soft); }
+  .row.is-open .row__body { display: block; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 14px; }
+  .blk { border: 1px solid var(--line-soft); border-radius: 11px; padding: 12px 14px; background: rgba(0,0,0,.2); }
+  .blk__t { color: var(--subtle); font-size: 0.65rem; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 8px; }
+  .kv { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 0.78rem; }
+  .kv dt { color: var(--subtle); flex-shrink: 0; }
+  .kv dd { margin: 0; font-family: var(--mono); font-size: 0.75rem; text-align: right; word-break: break-all; }
+
+  .tl { display: grid; gap: 9px; }
+  .ev { display: grid; grid-template-columns: 132px 1fr; gap: 11px; align-items: start; font-size: 0.78rem; }
+  .ev__t { font-family: var(--mono); font-size: 0.71rem; color: var(--subtle); padding-top: 2px; }
+  .ev__b { min-width: 0; }
+  .ev__n { color: var(--gold); font-family: var(--mono); font-size: 0.73rem; }
+  .ev__m { color: var(--muted); word-break: break-word; }
+
+  .msg { padding: 7px 10px; border-radius: 9px; background: rgba(255,255,255,.03); border: 1px solid var(--line-soft); }
+  .msg__h { display: flex; justify-content: space-between; gap: 10px; font-family: var(--mono); font-size: 0.68rem; color: var(--subtle); margin-bottom: 3px; }
+  .msg__x { font-size: 0.8rem; word-break: break-word; }
+  .shot { display: flex; flex-direction: column; gap: 5px; }
+  .shot img { width: 100%; max-width: 260px; border-radius: 9px; border: 1px solid var(--line); display: block; }
+  .shot a { color: var(--blue); font-family: var(--mono); font-size: 0.68rem; word-break: break-all; }
+  .empty { color: var(--subtle); font-size: 0.78rem; font-style: italic; }
+  .banner { padding: 11px 14px; border-radius: 11px; border: 1px solid rgba(216,76,76,.34); background: rgba(216,76,76,.07); color: #f0c0c0; font-size: 0.8rem; margin-bottom: 16px; line-height: 1.5; }
+  .banner b { color: var(--red-bright); }
+  a { color: var(--blue); }
+  @media (max-width: 900px) {
+    .row__head { grid-template-columns: 48px 1fr 92px 30px; }
+    .row__head .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>P2P Escrow — Audit</h1>
+      <div class="sub" id="meta">loading…</div>
+    </div>
+    <div class="sub" id="contract"></div>
+  </header>
+
+  <div id="alert"></div>
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <button class="tab is-active" data-tab="trades">Trades <span class="n" id="n-trades"></span></button>
+    <button class="tab" data-tab="ads">Orders <span class="n" id="n-ads"></span></button>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search id, wallet, chat text, CID…" />
+    <select id="f-status">
+      <option value="">All statuses</option>
+      <option>OPEN</option><option>PAID</option><option>COMPLETED</option><option>CANCELLED</option>
+    </select>
+    <select id="f-owner">
+      <option value="">All releases</option>
+      <option value="override">Owner override only</option>
+      <option value="normal">Normal confirmation only</option>
+    </select>
+    <select id="f-shot">
+      <option value="">Any payment proof</option>
+      <option value="yes">Has a real screenshot</option>
+      <option value="no">No screenshot</option>
+    </select>
+    <span class="hint" id="count"></span>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const sh = (a) => (a ? `${String(a).slice(0, 6)}…${String(a).slice(-4)}` : '—');
+const dt = (iso) => (iso ? String(iso).replace('T', ' ').slice(0, 19) + ' UTC' : '—');
+const bsc = (h) => (h ? `https://bscscan.com/tx/${h}` : null);
+
+let DATA = null;
+let tab = 'trades';
+const open = new Set();
+
+// Chronological event names per trade, used to build the timeline.
+const TIMELINE = [
+  ['TradeStarted', 'trade started'],
+  ['ChatMessage', 'message'],
+  ['ScreenshotShared', 'screenshot shared'],
+  ['FiatMarkedPaid', 'marked INR paid'],
+  ['TradeConfirmed', 'confirmed'],
+  ['TradeCompleted', 'COMPLETED'],
+  ['TradeCancelled', 'CANCELLED'],
+];
+
+function statsBlock(s) {
+  const cards = [
+    ['Trades', s.trades, `${s.tradesByStatus.OPEN || 0} open · ${s.tradesByStatus.PAID || 0} paid`],
+    ['Completed', s.tradesByStatus.COMPLETED || 0, `${s.tradesByStatus.CANCELLED || 0} cancelled`],
+    ['Orders', s.ads, `${s.adsActive} still active`],
+    ['Owner overrides', s.ownerOverrides, 'forced release or refund'],
+    ['Escrow balance', s.escrowBalanceJSAV + ' JSAV', `${s.escrowedInOpenTrades} backs open trades`, s.escrowBalanceJSAV > 0 ? '' : 'good'],
+    ['Unattributed', s.escrowUnattributed + ' JSAV', 'held by no open trade', Number(s.escrowUnattributed) > 0.0001 ? 'alert' : 'good'],
+    ['Chat messages', s.chatMessages, 'on-chain'],
+    ['Payment screenshots', s.realScreenshots, 'real images'],
+    ['KYC verified', s.kyc.verified, `${s.kyc.submitted} submitted`],
+  ];
+  return cards.map(([k, v, d, mod]) =>
+    `<div class="stat ${mod ? 'stat--' + mod : ''}"><div class="stat__k">${esc(k)}</div><div class="stat__v">${esc(v)}</div><div class="stat__d">${esc(d)}</div></div>`
+  ).join('');
+}
+
+function tradeRow(t) {
+  const chipCls = t.status === 'COMPLETED' ? 'COMPLETED' : t.status;
+  const shotBadge = t.realScreenshotCount > 0
+    ? `<span class="chip chip--COMPLETED" style="margin-left:6px">${t.realScreenshotCount} shot</span>` : '';
+  return `<div class="row" data-id="${t.id}">
+    <div class="row__head">
+      <div class="id">#${t.id}</div>
+      <div class="pair hide-sm">${esc(t.pair)} · ${esc(t.side || (t.isFiat ? 'INR' : 'CRYPTO'))}</div>
+      <div class="who hide-sm"><i>buy</i> ${sh(t.buyer)}</div>
+      <div class="who hide-sm"><i>sell</i> ${sh(t.seller)}</div>
+      <div class="num">${esc(t.cryptoAmount)} ${esc(t.token)}</div>
+      <div style="text-align:right"><span class="chip chip--${chipCls}">${esc(t.status)}</span>${shotBadge}</div>
+      <div class="caret">▶</div>
+    </div>
+    <div class="row__body">${tradeBody(t)}</div>
+  </div>`;
+}
+
+function tradeBody(t) {
+  const rows = [];
+  const kv = (k, v) => rows.push(`<div class="kv"><dt>${esc(k)}</dt><dd>${v}</dd></div>`);
+
+  kv('Status', `<span class="chip chip--${t.status === 'COMPLETED' ? 'COMPLETED' : t.status}">${esc(t.status)}</span>`);
+  kv('Started', esc(dt(t.startedAt)));
+  kv('Seller', `<a href="https://bscscan.com/address/${t.seller}" target="_blank" rel="noopener">${sh(t.seller)}</a>`);
+  kv('Buyer', `<a href="https://bscscan.com/address/${t.buyer}" target="_blank" rel="noopener">${sh(t.buyer)}</a>`);
+  kv('Crypto', `${esc(t.cryptoAmount)} ${esc(t.token)}`);
+  kv('INR value', `₹${esc(t.quoteAmountInr)}`);
+
+  if (t.markedPaidAt) {
+    kv('INR marked paid', `${esc(dt(t.markedPaidAt))}<br>${sh(t.markedPaidBy)}`);
+  }
+  if (t.closedAt) {
+    const fn = t.releaseFunction ? esc(t.releaseFunction) : 'unknown';
+    const over = t.releasedByOwner ? ' <span class="chip chip--override">OWNER OVERRIDE</span>' : '';
+    rows.push(`<div class="kv"><dt>Released / refunded</dt><dd>${esc(dt(t.closedAt))}<br>${sh(t.releasedBy)} · ${fn}${over}</dd></div>`);
+  } else {
+    rows.push(`<div class="kv"><dt>Released / refunded</dt><dd class="empty">still in escrow</dd></div>`);
+  }
+
+  if (t.releaseTx) {
+    rows.push(`<div class="kv"><dt>Tx</dt><dd><a href="${bsc(t.releaseTx)}" target="_blank" rel="noopener">${esc(t.releaseTx.slice(0, 12))}…</a></dd></div>`);
+  }
+
+  const chat = t.chat.length
+    ? t.chat.map(c => `<div class="msg"><div class="msg__h"><span>${sh(c.sender)}</span><span>${esc(dt(c.time))}</span></div><div class="msg__x">${esc(c.text)}</div></div>`).join('')
+    : '<div class="empty">No messages.</div>';
+
+  const real = t.screenshots.filter(s => s.hasProof);
+  const shots = t.screenshots.length
+    ? t.screenshots.map(s => s.hasProof
+        ? `<div class="shot"><img src="${esc(s.gatewayUrl)}" alt="payment screenshot" loading="lazy" /><a href="${esc(s.gatewayUrl)}" target="_blank" rel="noopener">${esc(s.cid)}</a><span class="ev__t">${esc(dt(s.time))} · ${sh(s.sender)}</span></div>`
+        : `<div class="shot"><span class="empty">No proof provided — the contract requires a non-empty string, so <code>${esc(s.cid)}</code> was written instead of an image.</span></div>`
+      ).join('')
+    : '<div class="empty">None shared.</div>';
+
+  // Rebuild a timeline from the fields we hold, ordered by time where known.
+  const tl = [];
+  if (t.startedAt) tl.push([t.startedAt, 'TradeStarted', `trade opened on ad #${t.adId}`]);
+  for (const c of t.chat) tl.push([c.time, 'ChatMessage', `${sh(c.sender)}: ${c.text}`]);
+  for (const s of t.screenshots) if (s.hasProof) tl.push([s.time, 'ScreenshotShared', `${sh(s.sender)} shared a payment screenshot`]);
+  if (t.markedPaidAt) tl.push([t.markedPaidAt, 'FiatMarkedPaid', `${sh(t.markedPaidBy)} marked the INR as sent`]);
+  for (const c of t.confirmations) tl.push([c.time, 'TradeConfirmed', `${sh(c.wallet)} confirmed`]);
+  if (t.closedAt) {
+    tl.push([t.closedAt, t.status === 'COMPLETED' ? 'TradeCompleted' : 'TradeCancelled',
+      `${t.status === 'COMPLETED' ? 'crypto released to buyer' : 'escrow returned'} by ${sh(t.releasedBy)} via ${esc(t.releaseFunction || '?')}`]);
+  }
+  tl.sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
+  const timeline = tl.map(([time, name, msg]) =>
+    `<div class="ev"><div class="ev__t">${esc(dt(time))}</div><div class="ev__b"><span class="ev__n">${esc(name)}</span><div class="ev__m">${esc(msg)}</div></div></div>`
+  ).join('') || '<div class="empty">No events.</div>';
+
+  return `
+    <div class="grid">
+      <div class="blk"><div class="blk__t">Escrow</div><dl style="margin:0">${rows.join('')}</dl></div>
+      <div class="blk"><div class="blk__t">Chat (${t.chat.length})</div><div class="tl">${chat}</div></div>
+      <div class="blk"><div class="blk__t">Payment proof (${real.length}/${t.screenshots.length} real)</div><div class="tl">${shots}</div></div>
+      <div class="blk"><div class="blk__t">Timeline</div><div class="tl">${timeline}</div></div>
+    </div>`;
+}
+
+function adRow(a) {
+  return `<div class="row" data-id="ad-${a.id}">
+    <div class="row__head">
+      <div class="id">#${a.id}</div>
+      <div class="pair hide-sm">${esc(a.pair)} · ${esc(a.side)}</div>
+      <div class="who hide-sm"><i>by</i> ${sh(a.creator)}</div>
+      <div class="who hide-sm"><i>trades</i> ${a.tradesTaken.length ? a.tradesTaken.map(x => '#' + x).join(' ') : '—'}</div>
+      <div class="num">${esc(a.remainingCrypto)} left</div>
+      <div style="text-align:right"><span class="chip chip--${a.outcome === 'ACTIVE' ? 'ACTIVE' : a.outcome === 'FILLED' ? 'FILLED' : 'CANCELLED2'}">${esc(a.outcome)}</span></div>
+      <div class="caret">▶</div>
+    </div>
+    <div class="row__body">${adBody(a)}</div>
+  </div>`;
+}
+
+function adBody(a) {
+  const kv = (k, v) => `<div class="kv"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+  return `<div class="grid">
+    <div class="blk"><div class="blk__t">Order</div><dl style="margin:0">
+      ${kv('Outcome', esc(a.outcome))}
+      ${kv('Creator', `<a href="https://bscscan.com/address/${a.creator}" target="_blank" rel="noopener">${sh(a.creator)}</a>`)}
+      ${kv('Side / pair', `${esc(a.side)} ${esc(a.pair)}`)}
+      ${kv('Original', `${esc(a.originalCrypto)} for ₹${esc(a.originalQuoteInr)}`)}
+      ${kv('Remaining', esc(a.remainingCrypto))}
+      ${kv('Created', esc(dt(a.createdAt)))}
+      ${a.cancelledAt ? kv('Cancelled', esc(dt(a.cancelledAt))) : ''}
+      ${kv('Trades taken', a.tradesTaken.length ? a.tradesTaken.map(x => '#' + x).join(', ') : 'none')}
+    </dl></div>
+  </div>`;
+}
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase();
+  const st = $('#f-status').value;
+  const ow = $('#f-owner').value;
+  const sh_ = $('#f-shot').value;
+
+  let rows;
+  if (tab === 'trades') {
+    rows = DATA.trades.filter(t => {
+      if (st && t.status !== st) return false;
+      if (ow === 'override' && !t.releasedByOwner) return false;
+      if (ow === 'normal' && t.releasedByOwner) return false;
+      if (sh_ === 'yes' && t.realScreenshotCount === 0) return false;
+      if (sh_ === 'no' && t.realScreenshotCount > 0) return false;
+      if (!q) return true;
+      return [t.id, t.seller, t.buyer, t.pair, t.status, t.releaseFunction, t.adId,
+        ...t.chat.map(c => c.text), ...t.screenshots.map(s => s.cid)]
+        .join(' ').toLowerCase().includes(q);
+    });
+    rows = rows.map(tradeRow).join('');
+  } else {
+    rows = DATA.ads.filter(a => {
+      if (!q) return true;
+      return [a.id, a.creator, a.pair, a.side, a.outcome].join(' ').toLowerCase().includes(q);
+    }).map(adRow).join('');
+  }
+
+  $('#list').innerHTML = rows || '<div class="empty" style="padding:30px;text-align:center">Nothing matches those filters.</div>';
+  $('#count').textContent = `${rows ? rows.split('<div class="row"').length - 1 : 0} shown`;
+
+  document.querySelectorAll('.row__head').forEach(h => {
+    h.onclick = () => {
+      const r = h.parentElement;
+      r.classList.toggle('is-open');
+      const id = r.dataset.id;
+      if (r.classList.contains('is-open')) open.add(id); else open.delete(id);
+    };
+  });
+}
+
+fetch('/api/audit')
+  .then(r => r.json())
+  .then(d => {
+    DATA = d;
+    $('#meta').innerHTML =
+      `generated <b>${esc(d.generatedAt.replace('T', ' ').slice(0, 19))} UTC</b> · ` +
+      `blocks <b>${d.blockRange.deployBlock.toLocaleString()}</b> → <b>${d.blockRange.head.toLocaleString()}</b>`;
+    $('#contract').innerHTML = `contract <b>${esc(d.contract)}</b><br>owner <b>${esc(d.escrowOwner)}</b>`;
+    $('#stats').innerHTML = statsBlock(d.summary);
+    $('#n-trades').textContent = d.summary.trades;
+    $('#n-ads').textContent = d.summary.ads;
+
+    const un = Number(d.summary.escrowUnattributed);
+    if (un > 0.0001) {
+      $('#alert').innerHTML =
+        `<div class="banner"><b>${esc(d.summary.escrowUnattributed)} JSAV</b> is held by the escrow ` +
+        `contract but is not backing any open trade. Only ${esc(d.summary.escrowedInOpenTrades)} JSAV ` +
+        `is attributable to trades still in progress. The remainder arrived without a matching ` +
+        `trade, or a cancellation did not return the crypto. Filter Trades by status ` +
+        `<b>CANCELLED</b> to review those.</div>`;
+    }
+
+    ['#q', '#f-status', '#f-owner', '#f-shot'].forEach(s => {
+      $(s).addEventListener('input', render);
+      $(s).addEventListener('change', render);
+    });
+    document.querySelectorAll('.tab').forEach(t => {
+      t.onclick = () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('is-active'));
+        t.classList.add('is-active');
+        tab = t.dataset.tab;
+        render();
+      };
+    });
+    render();
+  })
+  .catch(e => {
+    $('#meta').textContent = 'Failed to load index: ' + e.message;
+  });
+</script>
+</body>
+</html>

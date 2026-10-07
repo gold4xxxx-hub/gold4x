@@ -1,0 +1,530 @@
+#!/usr/bin/env node
+/**
+ * Builds a complete, fully decoded index of every ad and trade the P2PEscrow
+ * contract has ever seen, for local auditing.
+ *
+ * Writes p2p-audit.json. Pair it with scripts/auditServer.mjs to browse it.
+ *
+ * Why this exists
+ * ---------------
+ * The desk UI reads live contract state, which is the right thing for trading
+ * but a poor audit surface: it only ever shows what is currently open, it hides
+ * anything past the first page of ids, and the contract's view getters do not
+ * expose who did what. Reading a block explorer means paging by hand and
+ * correlating transactions with events.
+ *
+ * Everything here is derived from the chain, so it can be regenerated and
+ * checked against reality at any time.
+ *
+ * What it captures
+ * ----------------
+ *   - every ad, with creator, amounts, active flag, and cancel history
+ *   - every trade, with both parties, amounts, and a full event timeline
+ *   - who marked INR paid, and which proof reference was attached
+ *   - every screenshot shared, separated from the "not provided" sentinel
+ *   - the entire on-chain chat transcript with message text and timestamps
+ *   - every confirmation, with the confirming wallet
+ *   - who released or refunded each trade, and through which function, so an
+ *     owner override is distinguishable from the seller confirming normally
+ *   - escrow token accounting, including any balance not tied to an open trade
+ *
+ * Requirements
+ * ------------
+ * An archive RPC. BSC_DEPLOY_BLOCK is located by binary search, so it does not
+ * need to be hard-coded, but eth_getCode on historical blocks requires archive
+ * state. Public endpoints reject it and this fails loudly rather than silently
+ * scanning a truncated range.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ethers } from 'ethers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+
+const CONTRACT = '0x8578Aaf3bA423e62A5e6ea04b69fe91B8545c2C0';
+const ESCROW_OWNER = '0xb32fccf4723fc19b8a097006f59437c15e88bbce';
+const OUT = path.join(ROOT, 'p2p-audit.json');
+
+// The escrow writes this literal when the buyer marks INR paid without proof,
+// because markFiatPaid requires a non-empty string. It is not a CID and must
+// never be rendered as an image.
+const NO_PROOF = 'no-screenshot-provided';
+
+const STATUS = ['NONE', 'OPEN', 'PAID', 'COMPLETED', 'CANCELLED'];
+const PAIR = ['JSAV/USDT', 'JSAV/INR', 'USDT/INR'];
+const SYMBOL = ['JSAV', 'JSAV', 'USDT'];
+
+// ---------------------------------------------------------------------------
+// RPC
+// ---------------------------------------------------------------------------
+
+const envFile = path.join(ROOT, '.env.local');
+let ankrKey = '';
+if (fs.existsSync(envFile)) {
+  const m = fs.readFileSync(envFile, 'utf8').match(/ANKR_API_KEY\s*=\s*"?([^"\r\n]+)"?/);
+  if (m) ankrKey = m[1].trim();
+}
+const RPC_URL = process.env.BSC_RPC_URL || (ankrKey ? `https://rpc.ankr.com/bsc/${ankrKey}` : '');
+
+if (!RPC_URL) {
+  console.error(
+    'No archive RPC configured.\n' +
+      'Set BSC_RPC_URL, or add ANKR_API_KEY to .env.local.\n' +
+      'An archive endpoint is required: this script reads eth_getCode on old\n' +
+      'blocks to find the deploy point, which public endpoints refuse.',
+  );
+  process.exit(1);
+}
+
+const provider = new ethers.JsonRpcProvider(RPC_URL, 56, { staticNetwork: true });
+const abi = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'config', 'p2pEscrowAbi.json'), 'utf8'));
+const iface = new ethers.Interface(abi);
+const contract = new ethers.Contract(CONTRACT, abi, provider);
+
+/**
+ * ISO timestamp, or null when the value is unusable.
+ *
+ * Deliberately refuses to stringify anything implausible. An earlier version
+ * produced dates in the year 5177 from a malformed node response and wrote them
+ * into the audit trail as fact.
+ */
+function iso(secs) {
+  if (!Number.isFinite(secs) || secs < MIN_TS || secs > MAX_TS) return null;
+  return new Date(secs * 1000).toISOString();
+}
+
+async function withRetry(label, fn, attempts = 5) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === attempts - 1) throw new Error(`${label} failed: ${e.message}`);
+      await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+    }
+  }
+}
+
+async function getLogs(from, to) {
+  return withRetry(`getLogs ${from}-${to}`, () => provider.getLogs({ address: CONTRACT, fromBlock: from, toBlock: to }));
+}
+
+/** Archive-only. Binary search the first block where the contract has code. */
+async function findDeployBlock(head) {
+  let lo = 1;
+  let hi = head;
+  for (let i = 0; i < 32 && hi - lo > 1; i++) {
+    const mid = Math.floor((lo + hi) / 2);
+    const code = await withRetry('getCode', () => provider.getCode(CONTRACT, mid));
+    if (code === '0x') lo = mid + 1;
+    else hi = mid;
+  }
+  return hi;
+}
+
+/** Largest window this endpoint accepts, so the scan is not serialised pointlessly. */
+async function probeWindow(head) {
+  for (const size of [50000, 20000, 5000, 1000, 200]) {
+    try {
+      await provider.getLogs({ address: CONTRACT, fromBlock: head - size, toBlock: head });
+      return size;
+    } catch {
+      /* try smaller */
+    }
+  }
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Block timestamps
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw JSON-RPC rather than ethers' getBlock.
+ *
+ * ethers.getBlock returned objects with no timestamp under fan-out load against
+ * this endpoint, which silently produced dates in the year 5177 for 159 events.
+ * A wrong timestamp in an audit trail is worse than a missing one, so the value
+ * is parsed from the raw response and validated before it is accepted. Anything
+ * outside a sane window is treated as a failure and retried, then recorded as
+ * null so the UI shows a dash instead of a lie.
+ */
+const MIN_TS = 1600000000; // Sep 2020, comfortably before any BSC block
+const MAX_TS = 2000000000; // 2033
+
+async function rawBlockTimestamp(n) {
+  const res = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_getBlockByNumber',
+      params: ['0x' + n.toString(16), false],
+    }),
+  });
+  const json = JSON.parse(await res.text());
+  if (json.error || !json.result) return null;
+  const ts = parseInt(json.result.timestamp, 16);
+  if (!Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS) return null;
+  return ts;
+}
+
+async function resolveBlockTimestamps(numbers) {
+  const map = new Map();
+  const CONCURRENCY = 8;
+  let done = 0;
+  for (let i = 0; i < numbers.length; i += CONCURRENCY) {
+    const slice = numbers.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      slice.map(async (n) => {
+        let ts = null;
+        for (let attempt = 0; attempt < 4 && ts === null; attempt++) {
+          try {
+            ts = await rawBlockTimestamp(n);
+          } catch {
+            ts = null;
+          }
+          if (ts === null) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        }
+        if (ts !== null) map.set(n, ts);
+        done++;
+      }),
+    );
+    if (done % 200 < CONCURRENCY) {
+      process.stdout.write(`  timestamps ${done}/${numbers.length}\n`);
+    }
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Build
+// ---------------------------------------------------------------------------
+
+async function main() {
+  const started = Date.now();
+  const head = await withRetry('blockNumber', () => provider.getBlockNumber());
+  console.log(`chain head ${head}`);
+
+  const deployBlock = await findDeployBlock(head);
+  console.log(`deploy block ${deployBlock} (${head - deployBlock} blocks of history)`);
+
+  const window = await probeWindow(head);
+  if (window === 0) {
+    console.error('This endpoint refuses eth_getLogs at every window size. An archive key is required.');
+    process.exit(1);
+  }
+  console.log(`log window ${window} blocks`);
+
+  // ---- events ----
+  const rawLogs = [];
+  for (let f = deployBlock; f <= head; f += window) {
+    const t = Math.min(f + window - 1, head);
+    rawLogs.push(...(await getLogs(f, t)));
+  }
+  console.log(`fetched ${rawLogs.length} escrow events`);
+
+  // ---- block timestamps ----
+  const logBlocks = [...new Set(rawLogs.map((l) => l.blockNumber))].sort((a, b) => a - b);
+  const blockTime = await resolveBlockTimestamps(logBlocks);
+  const missing = logBlocks.length - blockTime.size;
+  console.log(`resolved ${blockTime.size}/${logBlocks.length} block timestamps`);
+  if (missing > 0) {
+    console.warn(
+      `WARNING: ${missing} block timestamp(s) could not be read and will show as "-".\n` +
+        `         Re-run to retry. Do not rely on ordering for those events.`,
+    );
+  }
+
+  // ---- decode events, grouped by trade and by ad ----
+  const eventsByTrade = new Map();
+  const eventsByAd = new Map();
+  const allEvents = [];
+
+  for (const log of rawLogs) {
+    let parsed;
+    try {
+      parsed = iface.parseLog({ topics: log.topics, data: log.data });
+    } catch {
+      // An unknown topic means the ABI is out of date, not that the log is junk.
+      // Recorded so a gap is visible instead of silently dropping history.
+      allEvents.push({
+        block: log.blockNumber,
+        name: `UNKNOWN 0x${log.topics[0].slice(2, 12)}`,
+        tx: log.transactionHash,
+      });
+      continue;
+    }
+    const name = parsed.name;
+    const args = {};
+    parsed.fragment.inputs.forEach((inp, i) => {
+      args[inp.name] = parsed.args[i];
+    });
+
+    const ev = {
+      block: log.blockNumber,
+      time: blockTime.get(log.blockNumber) ?? null,
+      name,
+      args,
+      tx: log.transactionHash,
+      txIndex: log.index,
+    };
+    allEvents.push(ev);
+
+    const tradeId = args.tradeId !== undefined ? Number(args.tradeId) : null;
+    if (tradeId !== null) {
+      if (!eventsByTrade.has(tradeId)) eventsByTrade.set(tradeId, []);
+      eventsByTrade.get(tradeId).push(ev);
+    }
+    const adId = args.adId !== undefined ? Number(args.adId) : null;
+    if (adId !== null) {
+      if (!eventsByAd.has(adId)) eventsByAd.set(adId, []);
+      eventsByAd.get(adId).push(ev);
+    }
+  }
+
+  // ---- transaction senders, for attribution ----
+  // Only for trades that actually closed: "who released this" is the question
+  // this index exists to answer, and completed trades are a small set.
+  const closingTxHashes = new Set();
+  for (const evs of eventsByTrade.values()) {
+    for (const ev of evs) {
+      if (ev.name === 'TradeCompleted' || ev.name === 'TradeCancelled') closingTxHashes.add(ev.tx);
+    }
+  }
+  const payingTxHashes = new Set();
+  for (const evs of eventsByTrade.values()) {
+    for (const ev of evs) {
+      if (ev.name === 'FiatMarkedPaid') payingTxHashes.add(ev.tx);
+    }
+  }
+  const txFrom = new Map();
+  const txFn = new Map();
+  const txVia = new Map();
+  for (const hash of [...closingTxHashes, ...payingTxHashes]) {
+    const tx = await withRetry('getTransaction', () => provider.getTransaction(hash));
+    if (!tx) continue;
+    txFrom.set(hash, tx.from);
+    txVia.set(hash, (tx.to || '').toLowerCase());
+
+    let fn = tx.data.slice(2, 10);
+    let resolved = null;
+    try {
+      resolved = iface.getFunction('0x' + fn)?.name ?? null;
+    } catch {
+      /* selector not in the verified ABI */
+    }
+
+    if (!resolved && (tx.to || '').toLowerCase() !== CONTRACT.toLowerCase()) {
+      // Sent to some other contract that then called into the escrow. The real
+      // escrow selector is embedded in the calldata, so recover it rather than
+      // reporting an opaque hex that resolves to nothing.
+      const data = tx.data.slice(2).toLowerCase();
+      for (const f of iface.fragments.filter((x) => x.type === 'function')) {
+        try {
+          if (data.includes(iface.getFunction(f.name).selector.slice(2))) {
+            resolved = `${f.name} (via router)`;
+            break;
+          }
+        } catch {
+          /* ignore malformed fragment */
+        }
+      }
+      if (!resolved) resolved = `unknown 0x${fn} (via router)`;
+    }
+    txFn.set(hash, resolved ?? `unknown 0x${fn}`);
+  }
+  console.log(`attributed ${txFrom.size} closing/payment transactions`);
+
+  // ---- current state for every trade and ad ----
+  const tradeCounter = Number(await contract.tradeCounter());
+  const adCounter = Number(await contract.adCounter());
+  console.log(`tradeCounter ${tradeCounter}  adCounter ${adCounter}`);
+
+  const trades = [];
+  for (let id = 1; id <= tradeCounter; id++) {
+    const t = await withRetry(`getTrade ${id}`, () => contract.getTrade(id));
+    const status = Number(t[8]);
+    if (status === 0) continue; // getTrade returns zeroes for unknown ids
+
+    const evs = (eventsByTrade.get(id) ?? []).sort((a, b) => a.block - b.block || a.txIndex - b.txIndex);
+    const chat = evs
+      .filter((e) => e.name === 'ChatMessage')
+      .map((e) => ({
+        sender: e.args.sender,
+        text: String(e.args.message),
+        time: e.time ? iso(e.time) : null,
+        block: e.block,
+        tx: e.tx,
+      }));
+
+    const shots = evs
+      .filter((e) => e.name === 'ScreenshotShared')
+      .map((e) => {
+        const cid = String(e.args.hash);
+        const isReal = cid !== NO_PROOF && /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58,})$/.test(cid);
+        return {
+          sender: e.args.sender,
+          cid,
+          // The sentinel is a placeholder the contract requires, not evidence.
+          hasProof: isReal,
+          gatewayUrl: isReal ? `https://gateway.pinata.cloud/ipfs/${cid}` : null,
+          time: e.time ? iso(e.time) : null,
+          block: e.block,
+          tx: e.tx,
+        };
+      });
+
+    const confirmations = evs
+      .filter((e) => e.name === 'TradeConfirmed')
+      .map((e) => ({
+        wallet: e.args.confirmer,
+        time: e.time ? iso(e.time) : null,
+        block: e.block,
+        tx: e.tx,
+      }));
+
+    const paidEv = evs.find((e) => e.name === 'FiatMarkedPaid');
+    const doneEv = evs.find((e) => e.name === 'TradeCompleted');
+    const cancelEv = evs.find((e) => e.name === 'TradeCancelled');
+    const startEv = evs.find((e) => e.name === 'TradeStarted');
+
+    const closingTx = doneEv?.tx ?? cancelEv?.tx;
+    const releaseFn = closingTx ? txFn.get(closingTx) : null;
+    const releaseBy = closingTx ? txFrom.get(closingTx) : null;
+    const releaseVia = closingTx ? txVia.get(closingTx) : null;
+    // Match on the function name, not the exact string, so "ownerForceCancel
+    // (via router)" still counts as an override. Comparing the whole string
+    // reported zero overrides while an owner cancel was plainly on-chain.
+    const isOwnerOverride = /^ownerForce(Complete|Cancel)/.test(String(releaseFn));
+
+    trades.push({
+      id,
+      adId: Number(t[0]),
+      pair: PAIR[Number(t[1])] ?? `pair${t[1]}`,
+      token: SYMBOL[Number(t[1])] ?? '?',
+      isFiat: Boolean(t[2]),
+      seller: t[3],
+      buyer: t[4],
+      cryptoAmount: ethers.formatUnits(t[6], 18),
+      quoteAmountInr: ethers.formatUnits(t[7], 2),
+      status: STATUS[status] ?? String(status),
+      startedAt: startEv?.time ? iso(startEv.time) : null,
+      markedPaidAt: paidEv?.time ? iso(paidEv.time) : null,
+      markedPaidBy: paidEv ? txFrom.get(paidEv.tx) : null,
+      paymentProofReference: paidEv ? String(paidEv.args.screenshotHash ?? '') : null,
+      screenshots: shots,
+      realScreenshotCount: shots.filter((s) => s.hasProof).length,
+      chat,
+      confirmations,
+      closedAt: doneEv?.time ? iso(doneEv.time) : cancelEv?.time ? iso(cancelEv.time) : null,
+      // This is the field the owner asked for: who moved the escrow, and
+      // whether they did it as the counterparty or as contract owner.
+      releasedBy: releaseBy,
+      releaseFunction: releaseFn,
+      releasedByOwner: isOwnerOverride,
+      // Not the escrow when the owner went through a router, so the audit trail
+      // records that the call was indirect rather than implying a direct call.
+      releaseSentTo: releaseVia,
+      releaseWasIndirect: Boolean(releaseVia) && releaseVia !== CONTRACT.toLowerCase(),
+      releaseTx: closingTx,
+      outcome: doneEv ? 'COMPLETED' : cancelEv ? 'CANCELLED' : 'IN PROGRESS',
+    });
+  }
+
+  const ads = [];
+  for (let id = 1; id <= adCounter; id++) {
+    const a = await withRetry(`getAd ${id}`, () => contract.getAd(id));
+    if (a[0] === '0x0000000000000000000000000000000000000000') continue;
+    const evs = (eventsByAd.get(id) ?? []).sort((x, y) => x.block - y.block);
+    const created = evs.find((e) => e.name === 'AdCreated');
+    const cancelled = evs.find((e) => e.name === 'AdCancelled');
+    ads.push({
+      id,
+      creator: a[0],
+      pair: PAIR[Number(a[1])] ?? `pair${a[1]}`,
+      side: a[2] ? 'SELL' : 'BUY',
+      originalCrypto: ethers.formatUnits(a[3], 18),
+      originalQuoteInr: ethers.formatUnits(a[4], 2),
+      remainingCrypto: ethers.formatUnits(a[5], 18),
+      active: Boolean(a[7]),
+      createdAt: created?.time ? iso(created.time) : null,
+      createdTx: created?.tx,
+      cancelledAt: cancelled?.time ? iso(cancelled.time) : null,
+      outcome: a[7] ? 'ACTIVE' : cancelled ? 'CANCELLED' : 'FILLED',
+      tradesTaken: trades.filter((t) => t.adId === id).map((t) => t.id),
+    });
+  }
+
+  // ---- escrow accounting ----
+  const j = new ethers.Contract(
+    '0x418B7e6BBc48Ca93126c22A1e83b6420A4E0C6fD',
+    ['function balanceOf(address) view returns (uint256)'],
+    provider,
+  );
+  const escrowBalance = ethers.formatUnits(await j.balanceOf(CONTRACT), 18);
+  const heldByOpenTrades = trades
+    .filter((t) => t.status === 'OPEN' || t.status === 'PAID')
+    .reduce((s, t) => s + Number(t.cryptoAmount), 0);
+
+  // ---- KYC roll-up ----
+  const kycSubmitted = new Set();
+  const kycVerified = new Set();
+  const kycUpdated = new Set();
+  for (const ev of allEvents) {
+    const w = ev.args?.user;
+    if (!w) continue;
+    if (ev.name === 'KYCSubmitted') kycSubmitted.add(String(w).toLowerCase());
+    if (ev.name === 'KYCUpdated') kycUpdated.add(String(w).toLowerCase());
+    if (ev.name === 'KYCVerified' && Boolean(ev.args.status)) kycVerified.add(String(w).toLowerCase());
+  }
+
+  const out = {
+    generatedAt: new Date().toISOString(),
+    chain: 'BSC',
+    contract: CONTRACT,
+    escrowOwner: ESCROW_OWNER,
+    note: NO_PROOF,
+    blockRange: { deployBlock, head },
+    summary: {
+      ads: ads.length,
+      adsActive: ads.filter((a) => a.active).length,
+      trades: trades.length,
+      tradesByStatus: STATUS.slice(1).reduce((acc, s) => {
+        acc[s] = trades.filter((t) => t.status === s).length;
+        return acc;
+      }, {}),
+      ownerOverrides: trades.filter((t) => t.releasedByOwner).length,
+      escrowBalanceJSAV: escrowBalance,
+      escrowedInOpenTrades: heldByOpenTrades.toFixed(4),
+      // Anything in the contract that no open trade accounts for. Non-zero means
+      // tokens arrived without a matching trade, or a refund never went out.
+      escrowUnattributed: (Number(escrowBalance) - heldByOpenTrades).toFixed(4),
+      chatMessages: trades.reduce((s, t) => s + t.chat.length, 0),
+      realScreenshots: trades.reduce((s, t) => s + t.realScreenshotCount, 0),
+      kyc: {
+        submitted: kycSubmitted.size,
+        updated: kycUpdated.size,
+        verified: kycVerified.size,
+      },
+    },
+    trades,
+    ads,
+  };
+
+  fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
+
+  console.log(`\nwrote ${path.relative(ROOT, OUT)} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  console.log(`  trades ${out.summary.trades}  (${JSON.stringify(out.summary.tradesByStatus)})`);
+  console.log(`  ads    ${out.summary.ads}  (${out.summary.adsActive} active)`);
+  console.log(`  chat   ${out.summary.chatMessages} messages, ${out.summary.realScreenshots} real screenshots`);
+  console.log(`  escrow ${escrowBalance} JSAV, ${out.summary.escrowUnattributed} unattributed`);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

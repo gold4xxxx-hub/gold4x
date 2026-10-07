@@ -30,3 +30,10 @@ p2p-ledger*.json
 p2p-ledger*.md
 .ledger-checkpoint*.json
 deep.log
+
+# Local audit index. Never commit this: it contains every trade party address,
+# every on-chain chat message and every payment screenshot CID. Regenerate with
+# `npm run audit:build`.
+p2p-audit.json
+audit-srv.log
+audit-srv.err
