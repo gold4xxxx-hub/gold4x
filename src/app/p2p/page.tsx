@@ -64,6 +64,7 @@ function secondsLeft(deadline: number, now: number): number {
 }
 
 const NO_SCREENSHOT_PROVIDED = 'no-screenshot-provided';
+const SCREENSHOT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // Client-side pre-check only. The upload route validates again and is the real
 // authority; this just avoids a pointless round trip on an oversized file.
@@ -653,8 +654,8 @@ const P2PPage: React.FC = () => {
   const onShareShot = async (file: File) => {
     if (!activeTrade) return;
 
-    if (!file.type.startsWith('image/')) {
-      setStatus('That file is not an image.');
+    if (!SCREENSHOT_TYPES.has(file.type)) {
+      setStatus('Only JPG, PNG, and WEBP screenshots are accepted.');
       return;
     }
     if (file.size > MAX_SHOT_BYTES) {
@@ -1734,7 +1735,7 @@ const P2PPage: React.FC = () => {
               <input
                 ref={shotInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="p2p-shot-input"
                 tabIndex={-1}
                 aria-hidden="true"
@@ -1752,18 +1753,13 @@ const P2PPage: React.FC = () => {
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
               />
-              <label
+              <button
+                type="button"
                 className="p2p-btn p2p-btn--icon"
                 title="Share a screenshot"
-                tabIndex={0}
-                role="button"
                 aria-label="Share a screenshot"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    shotInputRef.current?.click();
-                  }
-                }}
+                disabled={shotUploading}
+                onClick={() => shotInputRef.current?.click()}
               >
                 {shotUploading ? (
                   <span className="p2p-btn__spin" aria-hidden="true" />
@@ -1773,7 +1769,7 @@ const P2PPage: React.FC = () => {
                     <path d="M14 8h6v6" />
                   </svg>
                 )}
-              </label>
+              </button>
               <button className="p2p-btn" onClick={onSend} disabled={actionBusy}>
                 <span>Send</span>
               </button>

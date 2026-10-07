@@ -20,6 +20,12 @@ import { pinImage, readUpload, PinError } from '@/lib/pinata';
 export async function POST(request: Request) {
   try {
     const file = await readUpload(request);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      return NextResponse.json(
+        { error: 'Only JPG, PNG, and WEBP screenshots are accepted.' },
+        { status: 415 },
+      );
+    }
     const result = await pinImage(file, 'p2p-shot', 'gold4x-p2p-shots');
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
