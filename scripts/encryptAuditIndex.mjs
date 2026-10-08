@@ -26,17 +26,39 @@ const IN = path.join(root, 'p2p-audit.json');
 const OUT = path.join(root, 'p2p-audit.enc');
 const VERSION = 'gold4x-audit-index:v1';
 
+/**
+ * The key, from the environment or from a gitignored file beside this script's
+ * project root.
+ *
+ * It is deliberately not read from .env.local. That file is committed to a
+ * public repository, which is how ANKR_API_KEY and BSCSCAN_API_KEY were exposed
+ * in the first place. .audit.key is gitignored and never staged.
+ */
 function readKey() {
-  const raw = (process.env.AUDIT_INDEX_KEY ?? '').trim();
+  const fromEnv = (process.env.AUDIT_INDEX_KEY ?? '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return fs.readFileSync(path.join(root, '.audit.key'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+function loadKey() {
+  const raw = readKey();
   if (!raw) {
-    console.error('AUDIT_INDEX_KEY is not set.');
+    console.error('No encryption key found.');
     console.error('');
-    console.error('Generate one:');
-    console.error('  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+    console.error('Either set it for this shell:');
+    console.error('  $env:AUDIT_INDEX_KEY = "<64 hex characters>"');
+    console.error('or save it once to .audit.key, which is gitignored:');
+    console.error('  "<key>" | Out-File -NoNewline -Encoding ascii .audit.key');
+    console.error('');
+    console.error('Not in .env.local. That file is committed to a public repository.');
     return null;
   }
   if (!/^[0-9a-f]{64}$/i.test(raw)) {
-    console.error('AUDIT_INDEX_KEY must be 64 hex characters (32 bytes).');
+    console.error('The key must be 64 hex characters (32 bytes).');
     return null;
   }
   return Buffer.from(raw, 'hex');
@@ -47,7 +69,7 @@ if (!fs.existsSync(IN)) {
   process.exit(1);
 }
 
-const key = readKey();
+const key = loadKey();
 if (!key) process.exit(1);
 
 const plaintext = fs.readFileSync(IN);
@@ -84,7 +106,11 @@ const out = packed.toString('base64');
   }
 }
 
-fs.writeFileSync(OUT, out, 'utf8');
+// Same atomic rename as the index itself, so an interrupted write cannot leave
+// an undecryptable ciphertext committed.
+const tmpOut = OUT + '.tmp';
+fs.writeFileSync(tmpOut, out, 'utf8');
+fs.renameSync(tmpOut, OUT);
 
 const pct = ((out.length / plaintext.length) * 100).toFixed(0);
 console.log('wrote ' + path.relative(root, OUT));

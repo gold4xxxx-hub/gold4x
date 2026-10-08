@@ -23,9 +23,26 @@ const INDEX = path.join(root, 'p2p-audit.json');
 const ENC = path.join(root, 'p2p-audit.enc');
 const VERSION = 'gold4x-audit-index:v1';
 
-const key = (process.env.AUDIT_INDEX_KEY ?? '').trim();
+/**
+ * The key from the environment, or from a gitignored .audit.key beside the
+ * project root so a local run does not need it pasted in every time.
+ *
+ * Never from .env.local. That file is tracked in a public repository, which is
+ * how ANKR_API_KEY and BSCSCAN_API_KEY ended up readable by anyone.
+ */
+function readKey() {
+  const fromEnv = (process.env.AUDIT_INDEX_KEY ?? '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return fs.readFileSync(path.join(root, '.audit.key'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+const key = readKey();
 if (!/^[0-9a-f]{64}$/i.test(key)) {
-  console.error('AUDIT_INDEX_KEY must be set to 64 hex characters.');
+  console.error('No usable AUDIT_INDEX_KEY. Set it, or save it to the gitignored .audit.key.');
   process.exit(1);
 }
 const keyBuf = Buffer.from(key, 'hex');
@@ -86,12 +103,24 @@ let oldPlain;
 try {
   oldPlain = decrypt(previous);
 } catch {
-  // A wrong key, or ciphertext from a rotated one. Treat as changed so a fresh
-  // one is written rather than leaving the deployment serving nothing.
-  console.log('existing ciphertext could not be decrypted with this key, rewriting');
-  fs.writeFileSync(ENC, encrypt(fresh), 'utf8');
-  report('true');
-  process.exit(0);
+  // Refuse rather than rewrite. An earlier version treated this as "changed"
+  // and wrote a fresh ciphertext, which is exactly wrong: if the key here is not
+  // the key the deployment uses, that new file is unreadable in production and
+  // the page goes blank. Two different situations produce this error - a local
+  // key that does not match, or a key that was rotated everywhere - and only a
+  // human can tell which. So stop, and say what to check.
+  console.error('');
+  console.error('The committed p2p-audit.enc cannot be decrypted with this key.');
+  console.error('Nothing has been written. Nothing will be pushed.');
+  console.error('');
+  console.error('Either:');
+  console.error('  - the key here is wrong. Check .audit.key, or the AUDIT_INDEX_KEY');
+  console.error('    environment variable, against the one on Vercel and in the GitHub');
+  console.error('    Actions secret.');
+  console.error('  - or the key was rotated everywhere and this file predates it. In that');
+  console.error('    case re-encrypt deliberately with:  npm run audit:encrypt');
+  console.error('');
+  process.exit(1);
 }
 
 if (oldPlain === fresh) {

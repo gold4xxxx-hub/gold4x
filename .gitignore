@@ -42,3 +42,8 @@ audit-srv.err
 # self-contained, so it is even easier to email or upload by accident. Build with
 # `npm run audit:offline`. The template is committed; only its output is ignored.
 audit/gold4x-audit-offline.html
+
+# The key that decrypts p2p-audit.enc. Deliberately kept out of .env.local, which
+# is tracked in a public repository - that is how the Ankr and BscScan keys were
+# exposed. This file is gitignored and must never be committed.
+.audit.key

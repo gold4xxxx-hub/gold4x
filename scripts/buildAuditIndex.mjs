@@ -933,7 +933,15 @@ async function main() {
   };
 
 
-  fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
+  // Written to a temporary file and renamed into place, because a plain
+  // writeFileSync truncates the target before it writes. A build interrupted by a
+  // dropped connection or a killed terminal would otherwise leave half a JSON
+  // file behind, and the next run would encrypt that and push it. Rename is
+  // atomic within a filesystem, so the output is either the old complete file
+  // or the new complete one.
+  const tmp = OUT + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
+  fs.renameSync(tmp, OUT);
 
   console.log(`\nwrote ${path.relative(ROOT, OUT)} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   console.log(`  trades ${out.summary.trades}  (${JSON.stringify(out.summary.tradesByStatus)})`);

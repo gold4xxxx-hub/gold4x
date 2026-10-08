@@ -10,6 +10,8 @@
     "deploy:ftp": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1",
     "audit:build": "node scripts/buildAuditIndex.mjs",
     "audit:offline": "node scripts/buildOfflineAudit.mjs",
+    "audit:refresh": "node scripts/auditRefresh.mjs",
+    "audit:encrypt": "node scripts/encryptAuditIndex.mjs",
     "audit:serve": "node scripts/auditServer.mjs"
   },
   "dependencies": {
