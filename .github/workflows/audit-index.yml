@@ -1,0 +1,108 @@
+# Keeps the deployed audit index current.
+#
+# The index is a snapshot: it is produced by walking the escrow contract's event
+# history and decoding it. Nothing recomputes it on its own, so without this job
+# the page would show the same data forever no matter how many trades happened.
+#
+# The data never enters the repository in the clear. p2p-audit.json is gitignored
+# and is written to p2p-audit.enc, which is what gets committed. The encryption
+# key lives in this repository's secrets and in the deployment's environment, and
+# appears in neither the code nor the history.
+#
+# Commits only when the decrypted data actually differs. The ciphertext carries a
+# random IV and would differ every run regardless, which would mean a commit and
+# a Vercel deploy every six hours for no change at all.
+
+name: Refresh the audit index
+
+on:
+  schedule:
+    # 02:11 UTC, every six hours. Off the hour on purpose: scheduled workflows are
+    # queued at :00 and GitHub's own load makes those the busiest minutes.
+    - cron: '11 2,8,14,20 * * *'
+  # A manual run, for when you want fresh data now instead of waiting.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Never let two builds race. A manual run while a scheduled one is going would
+  # otherwise produce two commits from two different chain heads.
+  group: audit-index
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Cron workflows are skipped on repositories with no activity for 60 days, so
+    # this runs for free on a public repository and cannot quietly start costing
+    # money. The job is cheap regardless.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Only ethers is needed to walk the chain. Installing the full dependency
+      # tree would pull in Next and React for a script that never touches either,
+      # which is several minutes of CI for nothing.
+      - name: Install the one dependency the indexer needs
+        run: npm install --no-save --no-audit --no-fund ethers@^6.16.0
+
+      - name: Build the index from chain
+        env:
+          ANKR_API_KEY: ${{ secrets.ANKR_API_KEY }}
+        run: node scripts/buildAuditIndex.mjs
+
+      # Fails the job if the build produced nothing usable, rather than committing
+      # an index that silently lost records.
+      - name: Confirm the build produced a usable index
+        run: |
+          node -e "
+            const fs = require('fs');
+            if (!fs.existsSync('p2p-audit.json')) { console.error('no index written'); process.exit(1); }
+            const d = JSON.parse(fs.readFileSync('p2p-audit.json', 'utf8'));
+            const missing = !d.trades?.length || !d.kyc?.length || !d.summary;
+            if (missing) { console.error('index is incomplete', { trades: d.trades?.length, kyc: d.kyc?.length }); process.exit(1); }
+            console.log('trades', d.trades.length, '| kyc', d.kyc.length, '| head', d.blockRange.head);
+          "
+
+      - name: Refresh the ciphertext only if the data changed
+        id: check
+        env:
+          AUDIT_INDEX_KEY: ${{ secrets.AUDIT_INDEX_KEY }}
+          GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
+        run: node scripts/auditUpdateIfChanged.mjs
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  'audit-index-bot'
+          git config user.email 'audit-index-bot@users.noreply.github.com'
+          git add p2p-audit.enc
+          # The plaintext index is gitignored, but a stray `git add -A` would
+          # override that. Adding one file explicitly is the safeguard.
+          if git diff --cached --name-only | grep -qvx 'p2p-audit.enc'; then
+            echo 'refusing to commit anything other than p2p-audit.enc'
+            git diff --cached --name-only
+            exit 1
+          fi
+          head=$(node -e "console.log(JSON.parse(require('fs').readFileSync('p2p-audit.json','utf8')).blockRange.head)")
+          git commit -m "Refresh the audit index to block $head"
+          # Someone may have pushed since the checkout. Rebase and try once more
+          # rather than losing the run to a non-fast-forward.
+          for attempt in 1 2; do
+            if git push; then exit 0; fi
+            echo "push attempt $attempt failed, rebasing onto origin/main"
+            git pull --rebase origin main
+          done
+          echo 'could not push after rebasing; the next scheduled run will retry'
+          exit 0
+
+      - name: Nothing changed
+        if: steps.check.outputs.changed == 'false'
+        run: echo 'No new trades, orders or KYC records since the last run. No deploy.'
