@@ -1,44 +1,104 @@
 /* Audit page. Scoped under .audit-root so nothing here can leak into the
    trading desk or the marketing pages. Colours reuse the fx-* design tokens the
    rest of the app already defines, so it reads as part of the same product
-   rather than a bolted-on tool. */
+   rather than a bolted-on tool.
 
+   Two constraints shape nearly everything below:
+
+   1. It is read on a phone. Every row here carries a wallet, an amount and a
+      set of status chips, which is more than 390px can hold in one line. The
+      mobile layout is therefore a deliberate stack, not a squeezed desktop
+      grid, because a squeezed grid does not reflow - it clips, and clipped
+      text with no visible cause reads as a bug.
+   2. Almost every value is an unbreakable token: a 42-character address, a 59
+      character CID, a base64 signature. These get `overflow-wrap: anywhere` so
+      they wrap only when they truly have to, rather than `break-all`, which
+      splits ordinary words mid-character and reads as collision. */
+
+/* ---------- motion, shared by everything that animates ---------- */
+
+/* One easing curve for the whole page, so transitions feel like one surface
+   rather than a set of independently tuned widgets. */
 .audit-root {
+  --a-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --a-fast: 130ms;
+  --a-mid: 200ms;
+  --a-slow: 320ms;
+
+  /* Hairlines and fills, so a colour change never means editing a component. */
+  --a-line: rgba(255, 255, 255, 0.075);
+  --a-line-soft: rgba(255, 255, 255, 0.045);
+  --a-line-strong: rgba(255, 255, 255, 0.13);
+  --a-fill: rgba(255, 255, 255, 0.022);
+  --a-fill-hi: rgba(255, 255, 255, 0.045);
+  --a-gold-line: rgba(212, 168, 67, 0.3);
+  --a-red: #d84c4c;
+  --a-red-text: #f0a0a0;
+  --a-red-soft: #eec4c4;
+  --a-blue: #4a7fb5;
+  --a-blue-text: #8fbde8;
+  --a-blue-soft: #7fb0dd;
+  --a-ink-blue: #9ad4ff;
+
   min-height: 100vh;
-  padding: 2rem 0 5rem;
+  padding: clamp(1.1rem, 3.2vw, 2rem) 0 clamp(3rem, 8vw, 5rem);
+}
+
+/* Smooth in-page scrolling is deliberately NOT set on <html> here.
+   Next.js 16 no longer overrides scroll-behavior during route transitions (see
+   the version-16 upgrade guide), so a global rule would make navigating away
+   from this page animate a scroll to the top, and Next warns about it in dev.
+   The one place it is wanted - jumping to a person's trade - asks for it
+   directly at the call site instead, where it cannot leak. */
+
+/* Numeric columns only line up if the digits are the same width. JetBrains
+   Mono is monospaced, but the fallback stacks may not be, and the fallback is
+   what renders on a phone with the webfont still loading. */
+.audit-root .amono,
+.audit-root .admono,
+.audit-root .acode,
+.audit-root .ahead__s,
+.audit-root .ahead__m,
+.audit-root .aline__when,
+.audit-root .aline__trade,
+.audit-root .aev__t,
+.audit-root .aev__b b,
+.audit-root .aev__b,
+.audit-root .amono--dim,
+.audit-root .aslow,
+.audit-root .awarn,
+.audit-root .aunverified,
+.audit-root .averified,
+.audit-root .atab__n,
+.audit-root .ahint,
+.audit-root .ashot figcaption a,
+.audit-root .ashot-missing__cid,
+.audit-root .atranscript,
+.audit-root .agate__sig pre,
+.audit-root .agate__box code {
+  font-variant-numeric: tabular-nums;
 }
 
 .audit-wrap {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding: 0 clamp(0.85rem, 3vw, 1.25rem);
 }
 
-/* ---------- header ---------- */
+/* ---------- links, buttons ---------- */
 
-.ahead {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+.alink {
+  color: var(--fx-gold-text);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-color: rgba(201, 168, 76, 0.4);
+  transition: color var(--a-fast) var(--a-ease),
+    text-decoration-color var(--a-fast) var(--a-ease);
 }
 
-.ahead__t {
-  margin: 0 0 0.3rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.ahead__s,
-.ahead__m {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--fx-ink-subtle);
-  line-height: 1.7;
+.alink:hover {
+  color: var(--fx-gold-highlight);
+  text-decoration-color: currentColor;
 }
 
 .acode {
@@ -49,11 +109,133 @@
   border: 1px solid rgba(212, 168, 67, 0.16);
   border-radius: 5px;
   padding: 0.05rem 0.35rem;
+  /* An address has no break opportunities, so without this a 42-character
+     contract address is one unbreakable token wider than a phone. */
+  overflow-wrap: anywhere;
 }
 
-.alink {
+.abtn {
+  appearance: none;
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-fill);
+  color: var(--fx-ink-muted);
+  font-size: 0.78rem;
+  font-family: inherit;
+  padding: 0.5rem 0.9rem;
+  white-space: nowrap;
+  transition: border-color var(--a-fast) var(--a-ease),
+    color var(--a-fast) var(--a-ease), background var(--a-fast) var(--a-ease),
+    transform var(--a-fast) var(--a-ease);
+}
+
+.abtn:hover {
+  border-color: var(--a-gold-line);
   color: var(--fx-gold-text);
-  text-decoration: underline;
+  background: rgba(212, 168, 67, 0.06);
+}
+
+/* A pressed state, because on a phone there is no hover to confirm a tap. */
+.abtn:active {
+  transform: scale(0.975);
+}
+
+.abtn--sm {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+:where(.abtn, .atab, .arow__head, .ainput, .alink--addr, .adoc__zoom, .adrawer__x):focus-visible {
+  outline: 2px solid rgba(212, 168, 67, 0.75);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---------- header ---------- */
+
+.ahead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.15rem;
+  /* A gold hairline that fades at both ends, rather than a full-width rule. */
+  border-bottom: 1px solid var(--a-line-soft);
+  position: relative;
+}
+
+.ahead::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: min(180px, 40%);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.55), transparent);
+}
+
+.ahead__t {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.3rem, 4.4vw, 1.65rem);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.ahead__s {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fx-ink-subtle);
+  line-height: 1.6;
+  /* "blocks 125,202,884 -> 126,320,461" is one long mono run. Wrap it rather
+     than letting it push the header wider than the screen. */
+  overflow-wrap: anywhere;
+}
+
+.ahead__m {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fx-ink-subtle);
+  line-height: 1.7;
+}
+
+.ahead__m p {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  /* Wrap, so on a 320px screen the address drops below its label instead of
+     pushing the header wider than the screen. */
+  flex-wrap: wrap;
+  gap: 0.15rem 0.4rem;
+  min-width: 0;
+}
+
+/* Sized explicitly rather than via `:first-child`. The label is a bare text node
+   and the address is the only element child, so :first-child was selecting the
+   address and giving it `flex: none` - i.e. pinning the one item that has to be
+   allowed to shrink. As a flex item it also defaults to min-width:auto, so a
+   42-character address held its full width and pushed the header 28px past a
+   320px screen. */
+.ahead__m .acode {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Keeps "125,202,884 -> 126,320,461" on one line. The arrow is a single
+   character, so without this it is free to end a line on its own, which reads
+   as a stray glyph rather than as a range. */
+.anowrap {
+  white-space: nowrap;
 }
 
 /* ---------- signature gate ---------- */
@@ -61,22 +243,24 @@
 .agate {
   display: flex;
   justify-content: center;
-  padding: 3rem 1rem;
+  padding: clamp(1.5rem, 6vw, 3rem) 1rem;
 }
 
 .agate__box {
   width: 100%;
   max-width: 30rem;
-  padding: 1.6rem 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.022);
+  padding: clamp(1.25rem, 5vw, 1.6rem) clamp(1.1rem, 4.5vw, 1.5rem);
+  border: 1px solid var(--a-line-strong);
+  border-radius: 16px;
+  background: var(--a-fill);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
 
 .agate__box h2 {
   margin: 0 0 0.8rem;
   font-size: 1.05rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .agate__box p {
@@ -84,6 +268,7 @@
   font-size: 0.82rem;
   line-height: 1.65;
   color: var(--fx-ink-muted);
+  overflow-wrap: anywhere;
 }
 
 .agate__box code {
@@ -98,8 +283,8 @@
 .agate__sig {
   margin: 0 0 1rem;
   padding: 0.75rem 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9px;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 10px;
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -114,7 +299,7 @@
 .agate__sig pre {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.6;
   color: var(--fx-ink);
   white-space: pre-wrap;
@@ -153,8 +338,9 @@
   border-radius: 8px;
   border: 1px solid rgba(216, 76, 76, 0.35);
   background: rgba(216, 76, 76, 0.06);
-  color: #eec4c4;
+  color: var(--a-red-soft);
   font-size: 0.76rem;
+  overflow-wrap: anywhere;
 }
 
 /* Clickable address. Styled as a link but a real button, so it is keyboard
@@ -167,9 +353,11 @@
   margin: 0;
   font: inherit;
   font-family: var(--font-mono);
-  color: #7fb0dd;
+  color: var(--a-blue-soft);
   cursor: pointer;
   border-bottom: 1px dotted rgba(127, 176, 221, 0.5);
+  transition: color var(--a-fast) var(--a-ease),
+    border-color var(--a-fast) var(--a-ease);
 }
 
 .alink--addr:hover {
@@ -177,9 +365,27 @@
   border-bottom-color: var(--fx-gold-text);
 }
 
-.alink--addr:focus-visible {
-  outline: 2px solid rgba(212, 168, 67, 0.7);
-  outline-offset: 2px;
+/* ---------- nested scrollers ---------- */
+
+/* The chat, the screenshots, the timeline and the transcript are all capped in
+   height so a trade's four panels fit together. On a phone that leaves a row
+   ending in a half-height line of text, which reads as broken layout rather
+   than as "there is more below" - the reader has no other cue, since the
+   drawer around it is scrollable too.
+
+   Two pairs of layered gradients fix it. The `scroll`-attached shadows are
+   pinned to the box; the `local`-attached covers sit on the content and travel
+   with it, so a shadow is only exposed when there is genuinely more to scroll
+   to in that direction. No JS, and both vanish once the content fits. */
+.achat,
+.ashots,
+.atl,
+.atranscript {
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0)) bottom / 100% 18px no-repeat local,
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0)) top / 100% 18px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0)) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0)) bottom / 100% 10px no-repeat scroll;
 }
 
 /* ---------- KYC drawer ---------- */
@@ -197,7 +403,8 @@
   inset: 0;
   background: rgba(0, 0, 0, 0.66);
   backdrop-filter: blur(3px);
-  animation: afade 0.18s ease;
+  -webkit-backdrop-filter: blur(3px);
+  animation: afade var(--a-slow) var(--a-ease);
 }
 
 .adrawer__panel {
@@ -206,14 +413,25 @@
      at 520px two side by side left each one around 230px wide, which cropped
      the photo and the printed edges and made the number unreadable. */
   width: min(760px, 100%);
+  /* A flex item defaults to min-width:auto, which refuses to shrink below its
+     min-content width. The address, the signature pre and the status chips
+     between them push that above the panel width on a 320px phone, so the
+     declared width above would be quietly ignored and the panel would spill
+     past the screen edge. */
+  min-width: 0;
   height: 100%;
   overflow-y: auto;
-  /* Space for the scrollbar, so the content is not tucked under it. */
-  padding: 1.4rem 1.5rem 4rem;
+  /* Momentum scrolling, so the transcript and the long tables glide on iOS
+     instead of snapping row to row. */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 1.4rem clamp(1rem, 4vw, 1.5rem) 4rem;
   background: #0b0c10;
-  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 1px solid var(--a-line-strong);
   box-shadow: -18px 0 50px rgba(0, 0, 0, 0.6);
-  animation: aslidein 0.22s ease;
+  animation: aslidein var(--a-slow) var(--a-ease);
+  /* Room for the iPhone home indicator, so the last row is not under it. */
+  padding-bottom: max(4rem, env(safe-area-inset-bottom, 0px) + 1.5rem);
 }
 
 @keyframes aslidein {
@@ -221,69 +439,90 @@
   to { transform: translateX(0); opacity: 1; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .adrawer__panel, .adrawer__scrim { animation: none; }
-}
-
 .adrawer__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  /* Bleed to the panel edges so the blurred bar spans the full drawer instead
+     of stopping short and leaving content visible above it. The margin is the
+     exact negation of the panel's own horizontal padding (same clamp, times
+     -1) so the two cannot drift apart at any width - writing the mirrored
+     clamp by hand is how they ended up 8px out at desktop before. */
+  margin: -1.4rem calc(clamp(1rem, 4vw, 1.5rem) * -1) 1rem;
+  padding: 1.4rem clamp(1rem, 4vw, 1.5rem) 0.9rem;
+  background: rgba(11, 12, 16, 0.94);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--a-line-soft);
+}
+
+.adrawer__head > div {
+  min-width: 0;
 }
 
 .adrawer__head h2 {
   margin: 0 0 0.25rem;
   font-size: 1.05rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .adrawer__addr {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: #7fb0dd;
-  word-break: break-all;
+  color: var(--a-blue-soft);
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
 
 .adrawer__x {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-fill-hi);
   color: var(--fx-ink-muted);
   border-radius: 8px;
-  width: 30px;
-  height: 30px;
+  /* 32px rather than 30: the extra 2px is what keeps it a comfortable tap
+     target without making the header taller. */
+  width: 32px;
+  height: 32px;
   cursor: pointer;
   flex-shrink: 0;
+  transition: border-color var(--a-fast) var(--a-ease),
+    color var(--a-fast) var(--a-ease), background var(--a-fast) var(--a-ease);
 }
 
 .adrawer__x:hover {
   border-color: rgba(216, 76, 76, 0.5);
   color: #f0a0a0;
+  background: rgba(216, 76, 76, 0.08);
 }
 
 .adrawer__msg {
   margin: 0 0 0.8rem;
   padding: 0.6rem 0.75rem;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--a-line);
+  background: var(--a-fill-hi);
   font-size: 0.78rem;
   line-height: 1.55;
   color: var(--fx-ink-muted);
+  overflow-wrap: anywhere;
 }
 
 .adrawer__msg--warn {
   border-color: rgba(216, 76, 76, 0.35);
   background: rgba(216, 76, 76, 0.06);
-  color: #eec4c4;
+  color: var(--a-red-soft);
 }
 
 .adrawer__msg code {
   font-family: var(--font-mono);
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 
 .adrawer__badges {
@@ -296,26 +535,44 @@
 /* Copy control sits in the term slot so it cannot widen the label column. */
 .adrawer__copy {
   margin-left: 0.4rem;
-  padding: 0 0.3rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 4px;
   background: transparent;
   color: var(--fx-ink-subtle);
   font-size: 0.55rem;
+  font-family: inherit;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--a-fast) var(--a-ease),
+    color var(--a-fast) var(--a-ease), border-color var(--a-fast) var(--a-ease);
 }
 
 .adgrid > div:hover .adrawer__copy,
-.adrawer__copy:focus-visible { opacity: 1; }
+.adrawer__copy:focus-visible {
+  opacity: 1;
+}
+
+.adrawer__copy:hover {
+  color: var(--fx-gold-text);
+  border-color: var(--a-gold-line);
+}
+
+/* A hover-revealed control is invisible on a touch screen, where there is no
+   hover at all. Always visible there. */
+@media (hover: none) {
+  .adrawer__copy {
+    opacity: 0.7;
+  }
+}
 
 .admono {
   font-family: var(--fx-mono, ui-monospace, monospace);
   font-size: 0.75rem;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 /* Secondary text inside a field value: the "(11 min later)" approval lag. */
@@ -333,19 +590,22 @@
   color: var(--fx-ink-subtle);
   font-size: 0.6rem;
   letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .amono {
   font-family: var(--fx-mono, ui-monospace, monospace);
   font-size: 0.68rem;
   opacity: 0.72;
+  /* Wallet addresses are shown in full on person rows. */
+  overflow-wrap: anywhere;
 }
 
 /* Buyer and seller need to be distinguishable at a glance: the same trade
    number means opposite things depending on which side you were on. */
 .achip--sell {
   border-color: rgba(120, 200, 255, 0.5);
-  color: #9ad4ff;
+  color: var(--a-ink-blue);
 }
 
 .achip--buy {
@@ -356,8 +616,9 @@
 .arow__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.7rem;
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
 }
 
 /* ---- per-person activity tables ---- */
@@ -366,32 +627,91 @@
   margin-top: 1.1rem;
 }
 
+/* The trades and orders tables carry seven or eight columns. There is no
+   honest way to fit that in 390px without either dropping columns - which on
+   an audit page means hiding the thing being audited - or scrolling. So it
+   scrolls, and the first column stays pinned so a row never loses its
+   identity while being read sideways. */
+.asheet {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  /* Bleed to the panel edge so a wide table reaches the screen edge instead of
+     stopping short and looking like it was cut off. */
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem;
+  /* Fade on the right edge: a hint that there is more to scroll to, which is
+     the part a phone user cannot otherwise discover. */
+  background:
+    linear-gradient(to left, rgba(11, 12, 16, 0.95), rgba(11, 12, 16, 0)) right center / 28px 100% no-repeat local,
+    linear-gradient(to left, rgba(11, 12, 16, 0.6), rgba(11, 12, 16, 0)) right center / 12px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.5), transparent) left center / 12px 100% no-repeat scroll;
+}
+
 .atable {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.74rem;
+  /* Wider than the panel on purpose: the wrapper scrolls, and `width: 100%`
+     alone would compress eight columns into 350px until they collided. */
+  min-width: 34rem;
 }
 
 .atable td {
-  padding: 0.45rem 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 0.45rem 0.6rem 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--a-line-soft);
   vertical-align: middle;
   line-height: 1.5;
+  white-space: nowrap;
 }
 
 .atable th {
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  padding: 0.45rem 0.6rem 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--a-line);
+  background: #0b0c10;
   font-size: 0.56rem;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   text-align: left;
   color: var(--fx-ink-subtle);
+  white-space: nowrap;
 }
 
-.atable tbody tr:hover {
+.atable th:first-child,
+.atable td:first-child {
+  /* Pinned to the left edge of the scroller, so the trade or order id stays
+     readable while the rest of the row moves. */
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #0b0c10;
+}
+
+.atable th:first-child {
+  z-index: 2;
+}
+
+/* The seam where a pinned cell meets the scrolled row behind it. */
+.atable th:first-child::after,
+.atable td:first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--a-line);
+}
+
+.atable tbody tr:hover td {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.atable tbody tr:hover td:first-child {
+  background: #14151a;
 }
 
 .atable .anum {
@@ -411,8 +731,11 @@
 .atranscript {
   max-height: 21rem;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 5px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border: 1px solid var(--a-line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .aline {
@@ -423,17 +746,36 @@
   gap: 0.8rem;
   align-items: start;
   padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--a-line-soft);
   font-size: 0.76rem;
   line-height: 1.6;
 }
 
+/* On a phone the four columns cannot coexist, so each field becomes its own
+   line rather than competing for width. */
 @media (max-width: 700px) {
   .aline {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 0.6rem;
+    padding: 0.6rem 0.7rem;
   }
-  .aline__when { order: -1; }
+  .aline__when {
+    grid-column: 1;
+    order: -1;
+  }
+  .aline__role {
+    grid-column: 2;
+    justify-self: start;
+    order: -1;
+    align-self: center;
+  }
+  .aline__trade {
+    grid-column: 1 / -1;
+  }
+  .aline__body {
+    grid-column: 1 / -1;
+    margin-top: 0.15rem;
+  }
 }
 
 .aline:last-child {
@@ -459,7 +801,7 @@
 
 .aline__role--sold {
   background: rgba(120, 200, 255, 0.14);
-  color: #9ad4ff;
+  color: var(--a-ink-blue);
 }
 
 .aline__role--bought {
@@ -485,15 +827,15 @@
    still available, but a transcript with 30 payments in it cannot show them
    all at full width. */
 .aline__body img {
-  max-width: 15rem;
+  max-width: 100%;
   max-height: 9rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--a-line-strong);
   border-radius: 4px;
   cursor: zoom-in;
 }
 
 .adrawer__h3 {
-  margin: 1.2rem 0 0.6rem;
+  margin: 1.4rem 0 0.6rem;
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -526,6 +868,7 @@
   padding: 0;
   background: #000;
   cursor: zoom-in;
+  transition: opacity var(--a-fast) var(--a-ease);
 }
 
 .adoc__zoom::after {
@@ -541,7 +884,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--a-mid) var(--a-ease);
 }
 
 .adoc__zoom:hover::after,
@@ -549,11 +892,34 @@
   opacity: 1;
 }
 
+/* Same reasoning as the copy button: no hover on a phone, so the affordance
+   is always shown rather than never. */
+@media (hover: none) {
+  .adoc__zoom::after {
+    opacity: 0.75;
+  }
+}
+
 .adrawer__note {
   margin: 0.8rem 0 0;
   font-size: 0.68rem;
   line-height: 1.5;
   color: var(--fx-ink-subtle);
+  overflow-wrap: anywhere;
+}
+
+/* ---- label / value rows ---- */
+
+/* Grouped into columns rather than one full-width list. As a single column on
+   a 1200px row, "Submitted" sat at the far left and its timestamp at the far
+   right, with 900px of nothing between them - legible, but the eye has to
+   travel to pair them up, which is the opposite of what a field list is for.
+   The 17rem floor puts two or four pairs side by side on desktop and collapses
+   to one column on a phone. */
+.adgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0 1.75rem;
 }
 
 .adgrid > div {
@@ -563,10 +929,13 @@
   /* Vertical breathing room. 0.32rem put the label and the value on nearly the
      same line, which is what made the words look like they were touching. */
   gap: 1.1rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--a-line-soft);
   font-size: 0.8rem;
   line-height: 1.5;
+  /* A grid item defaults to min-width:auto and will not shrink below its
+     content, which for a long email is wider than the track. */
+  min-width: 0;
 }
 
 .adgrid dt {
@@ -589,7 +958,7 @@
 }
 
 .adoc {
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--a-line);
   border-radius: 9px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.3);
@@ -619,9 +988,10 @@
   padding: 0.35rem 0.5rem;
   font-size: 0.66rem;
   color: var(--fx-ink-subtle);
+  overflow-wrap: anywhere;
 }
 
-.adoc__cap a { color: #7fb0dd; text-decoration: none; }
+.adoc__cap a { color: var(--a-blue-soft); text-decoration: none; }
 .adoc__cap a:hover { text-decoration: underline; }
 
 .adoc--empty {
@@ -642,20 +1012,21 @@
   font-size: 0.7rem;
   line-height: 1.45;
   color: var(--fx-ink-muted);
+  overflow-wrap: anywhere;
 }
 
 .adoc__d code {
   font-family: var(--font-mono);
   font-size: 0.66rem;
   color: var(--fx-gold-text);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .adoc--empty a {
   font-family: var(--font-mono);
   font-size: 0.64rem;
-  color: #7fb0dd;
-  word-break: break-all;
+  color: var(--a-blue-soft);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- alert ---------- */
@@ -666,9 +1037,10 @@
   border-radius: 12px;
   border: 1px solid rgba(216, 76, 76, 0.32);
   background: rgba(216, 76, 76, 0.06);
-  color: #eec4c4;
+  color: var(--a-red-soft);
   font-size: 0.84rem;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .abanner b {
@@ -681,6 +1053,10 @@
 
 .abanner p:first-of-type {
   margin-top: 0.35rem;
+}
+
+.abanner code {
+  overflow-wrap: anywhere;
 }
 
 /* ---------- escrow funds breakdown ---------- */
@@ -696,38 +1072,59 @@
   text-transform: uppercase;
   color: var(--fx-ink-subtle);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .afunds__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  /* 15rem rather than 230px: the previous floor forced a single column below
+     480px, wasting half the width of a large phone in landscape. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: 0.65rem;
 }
 
 .afund {
-  padding: 0.85rem 0.95rem;
+  position: relative;
+  padding: 0.85rem 0.95rem 0.85rem 1.05rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--a-line);
+  background: var(--a-fill);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  /* A colour bar rather than a tinted fill: it identifies the bucket at a
+     glance without tinting the text, which is what made the red variant
+     unreadable. */
+  overflow: hidden;
+}
+
+.afund::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--a-line-strong);
 }
 
 .afund--stuck {
   border-color: rgba(216, 76, 76, 0.36);
-  background: rgba(216, 76, 76, 0.06);
+  background: linear-gradient(180deg, rgba(216, 76, 76, 0.07), rgba(216, 76, 76, 0.02));
 }
+.afund--stuck::before { background: var(--a-red); }
 
 .afund--owner {
   border-color: rgba(212, 168, 67, 0.3);
-  background: rgba(212, 168, 67, 0.05);
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.06), rgba(212, 168, 67, 0.015));
 }
+.afund--owner::before { background: var(--fx-gold-mid); }
 
 .afund--wait {
   border-color: rgba(74, 127, 181, 0.28);
-  background: rgba(74, 127, 181, 0.04);
+  background: linear-gradient(180deg, rgba(74, 127, 181, 0.05), rgba(74, 127, 181, 0.012));
 }
+.afund--wait::before { background: var(--a-blue); }
 
 .afund__k {
   font-size: 0.62rem;
@@ -738,15 +1135,19 @@
 
 .afund__v {
   font-family: var(--font-mono);
-  font-size: 1.25rem;
+  /* Scales with the viewport so a five-figure balance is not clipped on a
+     320px phone. */
+  font-size: clamp(1.05rem, 4.6vw, 1.3rem);
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1.25;
   margin-top: 0.15rem;
+  overflow-wrap: anywhere;
 }
 
-.afund--stuck .afund__v { color: #f0a0a0; }
+.afund--stuck .afund__v { color: var(--a-red-text); }
 .afund--owner .afund__v { color: var(--fx-gold-text); }
-.afund--wait .afund__v { color: #8fbde8; }
+.afund--wait .afund__v { color: var(--a-blue-text); }
 
 .afund__n {
   font-size: 0.66rem;
@@ -754,10 +1155,11 @@
 }
 
 .afund__r {
-  margin: 0.4rem 0 0.55rem;
+  margin: 0.4rem 0 0.6rem;
   font-size: 0.72rem;
   line-height: 1.5;
   color: var(--fx-ink-muted);
+  overflow-wrap: anywhere;
   flex: 1;
 }
 
@@ -783,19 +1185,22 @@
   font-size: 0.63rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #8fbde8;
+  color: var(--a-blue-text);
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
 
-.areason.is-stuck .areason__t { color: #f0a0a0; }
+.areason.is-stuck .areason__t { color: var(--a-red-text); }
 
 .areason p {
-  margin: 0 0 0.3rem;
+  margin: 0 0 0.35rem;
   font-size: 0.75rem;
   line-height: 1.5;
   color: var(--fx-ink-muted);
+  overflow-wrap: anywhere;
 }
+
+.areason p:last-child { margin-bottom: 0; }
 
 .areason__x b { color: var(--fx-gold-text); }
 .areason__d { color: var(--fx-ink-subtle); font-size: 0.68rem; font-family: var(--font-mono); }
@@ -804,7 +1209,7 @@
 
 .astats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
   gap: 0.65rem;
   margin-bottom: 1.5rem;
 }
@@ -812,8 +1217,14 @@
 .astat {
   padding: 0.8rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid var(--fx-line, rgba(255, 255, 255, 0.08));
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--a-line);
+  background: var(--a-fill);
+  transition: border-color var(--a-mid) var(--a-ease), background var(--a-mid) var(--a-ease);
+}
+
+.astat:hover {
+  border-color: var(--a-line-strong);
+  background: var(--a-fill-hi);
 }
 
 .astat--alert {
@@ -822,7 +1233,7 @@
 }
 
 .astat--alert .astat__v {
-  color: #f0a0a0;
+  color: var(--a-red-text);
 }
 
 .astat--good .astat__v {
@@ -842,21 +1253,39 @@
   font-size: 1.15rem;
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .astat__d {
   margin-top: 0.15rem;
   font-size: 0.66rem;
   color: var(--fx-ink-subtle);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- tabs + controls ---------- */
 
 .atabs {
+  position: sticky;
+  /* Below the site header, which is also sticky. The offset is measured at
+     runtime and published as --a-nav-h, because the header wraps to two rows
+     below 640px and a fixed offset would park the tabs behind it. */
+  top: var(--a-nav-h, 0px);
+  z-index: 20;
   display: flex;
-  gap: 0.4rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--a-line);
   margin-bottom: 1rem;
+  /* The tabs stay reachable while a 68-row list scrolls. The opaque-to-
+     transparent gradient covers content passing underneath, which a solid
+     background alone would need a fixed height to do. */
+  background: linear-gradient(180deg, #000 55%, rgba(0, 0, 0, 0.86));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* Bleed past the wrap padding so the bar spans the full width. */
+  margin-inline: calc(clamp(0.85rem, 3vw, 1.25rem) * -1);
+  padding-inline: clamp(0.85rem, 3vw, 1.25rem);
 }
 
 .atab {
@@ -864,11 +1293,13 @@
   background: none;
   border: 0;
   border-bottom: 2px solid transparent;
-  padding: 0.55rem 0.9rem;
+  padding: 0.6rem 0.85rem;
   color: var(--fx-ink-subtle);
   font-size: 0.83rem;
+  font-family: inherit;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease;
+  white-space: nowrap;
+  transition: color var(--a-mid) var(--a-ease), border-color var(--a-mid) var(--a-ease);
 }
 
 .atab:hover {
@@ -877,7 +1308,7 @@
 
 .atab.is-active {
   color: var(--fx-gold-text);
-  border-bottom-color: var(--fx-gold-text, #d4a843);
+  border-bottom-color: var(--fx-gold-mid, #d4a843);
 }
 
 .atab__n {
@@ -885,6 +1316,21 @@
   font-size: 0.72rem;
   opacity: 0.7;
   margin-left: 0.3rem;
+}
+
+/* Three tabs with counts will not fit a 320px phone. Scroll rather than
+   shrink, so the label stays readable. */
+@media (max-width: 520px) {
+  .atabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .atabs::-webkit-scrollbar { display: none; }
+  .atab {
+    padding: 0.6rem 0.7rem;
+    font-size: 0.8rem;
+  }
 }
 
 .actl {
@@ -897,17 +1343,29 @@
 
 .ainput {
   background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--a-line);
   border-radius: 9px;
   padding: 0.5rem 0.7rem;
   color: var(--fx-ink, #ece8e1);
   font-size: 0.8rem;
   font-family: inherit;
+  min-width: 0;
+  transition: border-color var(--a-fast) var(--a-ease), background var(--a-fast) var(--a-ease);
 }
 
 input.ainput {
   flex: 1 1 260px;
-  min-width: 220px;
+}
+
+/* Selects size to their widest option, which on this page is long enough to
+   blow out a phone layout on its own. Cap the basis and let them share a row. */
+select.ainput {
+  flex: 1 1 11rem;
+  max-width: 100%;
+}
+
+.ainput:hover {
+  border-color: var(--a-line-strong);
 }
 
 .ainput:focus {
@@ -915,27 +1373,23 @@ input.ainput {
   border-color: rgba(212, 168, 67, 0.45);
 }
 
-.abtn {
-  appearance: none;
-  cursor: pointer;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--fx-ink-muted);
-  font-size: 0.78rem;
-  font-family: inherit;
-  padding: 0.5rem 0.9rem;
-  transition: border-color 0.18s ease, color 0.18s ease;
+.ainput::placeholder {
+  color: var(--fx-ink-subtle);
 }
 
-.abtn:hover {
-  border-color: rgba(212, 168, 67, 0.35);
-  color: var(--fx-gold-text);
-}
-
-.abtn--sm {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.75rem;
+/* On a phone each control gets its own full-width row: two half-width selects
+   side by side produce truncated labels that cannot be read before opening. */
+@media (max-width: 560px) {
+  .actl {
+    gap: 0.5rem;
+  }
+  input.ainput,
+  select.ainput {
+    flex: 1 1 100%;
+  }
+  .actl .abtn {
+    flex: 1 1 auto;
+  }
 }
 
 .ahint {
@@ -945,13 +1399,20 @@ input.ainput {
   color: var(--fx-ink-subtle);
 }
 
+@media (max-width: 560px) {
+  .ahint {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 /* Banner shown while the trade list is pinned to one person's trades. */
 .ajump {
   display: inline-flex;
   align-items: center;
   padding: 0.4rem 0.7rem;
   border-radius: 9px;
-  border: 1px solid rgba(212, 168, 67, 0.35);
+  border: 1px solid var(--a-gold-line);
   background: rgba(212, 168, 67, 0.07);
   color: var(--fx-gold-text);
   font-size: 0.75rem;
@@ -961,11 +1422,26 @@ input.ainput {
 /* ---------- rows ---------- */
 
 .arow {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-fill);
   margin-bottom: 0.45rem;
   overflow: hidden;
+  /* Clear the sticky header and tab bar when a jump scrolls to this row.
+     Without it, "open this person's trades" scrolled the target underneath both
+     bars, so the row you asked to see was hidden by the row above it. */
+  scroll-margin-top: calc(var(--a-nav-h, 0px) + 3.25rem);
+  /* An open row is the one being read, so it gets a gold edge. */
+  transition: border-color var(--a-mid) var(--a-ease), background var(--a-mid) var(--a-ease);
+}
+
+.arow:hover {
+  border-color: var(--a-line-strong);
+}
+
+.arow.is-open {
+  border-color: rgba(212, 168, 67, 0.26);
+  background: rgba(255, 255, 255, 0.028);
 }
 
 .arow__head {
@@ -983,7 +1459,7 @@ input.ainput {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.16s ease;
+  transition: background var(--a-mid) var(--a-ease);
 }
 
 .arow__head:hover {
@@ -994,6 +1470,7 @@ input.ainput {
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--fx-gold-text);
+  min-width: 0;
 }
 
 .arow__pair {
@@ -1017,6 +1494,7 @@ input.ainput {
   line-height: 1.6;
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .arow__badges {
@@ -1030,17 +1508,22 @@ input.ainput {
   font-size: 0.6rem;
   color: var(--fx-ink-subtle);
   text-align: center;
-  transition: transform 0.18s ease;
+  transition: transform var(--a-mid) var(--a-ease), color var(--a-mid) var(--a-ease);
 }
 
 .arow.is-open .arow__caret {
   transform: rotate(90deg);
+  color: var(--fx-gold-text);
+}
+
+.arow__head:hover .arow__caret {
+  color: var(--fx-ink-muted);
 }
 
 .arow__body {
   padding: 0.25rem 0.95rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  animation: afade 0.18s ease;
+  border-top: 1px solid var(--a-line-soft);
+  animation: afade var(--a-mid) var(--a-ease);
 }
 
 @keyframes afade {
@@ -1052,16 +1535,20 @@ input.ainput {
 
 .agrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* minmax(100%, ...) so the single-column fallback cannot itself overflow
+     on a 320px screen. 17rem rather than 15rem: the timeline puts an 8.5rem
+     timestamp beside its text, and 15rem left the text about 100px wide. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: 0.9rem;
   margin-top: 0.85rem;
 }
 
 .ablock {
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--a-line-soft);
   border-radius: 10px;
   padding: 0.7rem 0.85rem;
   background: rgba(0, 0, 0, 0.22);
+  min-width: 0;
 }
 
 .ablock h3 {
@@ -1081,7 +1568,7 @@ input.ainput {
   display: flex;
   justify-content: space-between;
   gap: 0.8rem;
-  padding: 0.18rem 0;
+  padding: 0.22rem 0;
   font-size: 0.78rem;
 }
 
@@ -1095,16 +1582,38 @@ input.ainput {
   font-family: var(--font-mono);
   font-size: 0.73rem;
   text-align: right;
-  word-break: break-all;
+  min-width: 0;
+  /* anywhere, not break-all: a transaction hash has to break somewhere, but a
+     release function name should break at its own spaces first. */
+  overflow-wrap: anywhere;
 }
 
 .ablock dd a {
-  color: #7fb0dd;
+  color: var(--a-blue-soft);
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .ablock dd a:hover {
   text-decoration: underline;
+}
+
+/* Label above value, but only when there is genuinely no room for both. Above
+   this the value wraps onto a second line instead, right-aligned against the
+   label. Stacking everything from 420px made the KYC record over twice as tall
+   for two fields that would have fitted side by side. */
+@media (max-width: 360px) {
+  .adgrid > div,
+  .ablock dl > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
+  .adgrid dd,
+  .ablock dd {
+    text-align: left;
+    width: 100%;
+  }
 }
 
 .amono--dim {
@@ -1115,6 +1624,7 @@ input.ainput {
 .anote {
   color: #b9a06a;
   font-size: 0.68rem;
+  overflow-wrap: anywhere;
 }
 
 /* Receipt-confirmed token movement. Green means the crypto provably reached the
@@ -1122,12 +1632,23 @@ input.ainput {
 .averified {
   color: var(--fx-emerald-bright);
   font-size: 0.7rem;
+  overflow-wrap: anywhere;
 }
 
 .aunverified {
-  color: #f0a0a0;
+  color: var(--a-red-text);
   font-size: 0.7rem;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A value column is right-aligned so the values form a clean edge. That stops
+   working when the value is a sentence: a wrapped right-aligned paragraph gets
+   a ragged left edge and reads as a mistake rather than as emphasis. The two
+   payout messages are the only prose-length values here. */
+.ablock dd:has(.aunverified),
+.ablock dd:has(.averified) {
+  text-align: left;
 }
 
 .aempty {
@@ -1135,6 +1656,7 @@ input.ainput {
   font-size: 0.78rem;
   font-style: italic;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .aempty code {
@@ -1142,6 +1664,7 @@ input.ainput {
   font-size: 0.7rem;
   font-style: normal;
   color: var(--fx-gold-text);
+  overflow-wrap: anywhere;
 }
 
 /* chips */
@@ -1152,9 +1675,11 @@ input.ainput {
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.04em;
+  line-height: 1.6;
   text-transform: uppercase;
   white-space: nowrap;
   border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
 }
 
 .achip--is-open     { background: rgba(212,168,67,.14); color: #d4a843; border-color: rgba(212,168,67,.32); }
@@ -1169,38 +1694,40 @@ input.ainput {
   50% { opacity: 0.6; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .achip--stuck { animation: none; }
-}
-
 /* chat */
 .achat {
   display: grid;
   gap: 0.4rem;
   max-height: 15rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .amsg {
   padding: 0.4rem 0.55rem;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--a-line-soft);
 }
 
 .amsg__h {
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
+  /* Wraps rather than compressing: "0xf9D3...b0fd" and a UTC timestamp are
+     both unbreakable, and squeezed together they overlapped. */
+  flex-wrap: wrap;
   font-family: var(--font-mono);
   font-size: 0.65rem;
   color: var(--fx-ink-subtle);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.2rem;
 }
 
 .amsg__x {
   font-size: 0.78rem;
-  word-break: break-word;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 /* screenshots */
@@ -1209,10 +1736,13 @@ input.ainput {
   gap: 0.55rem;
   max-height: 15rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .ashot {
   margin: 0;
+  min-width: 0;
 }
 
 /* Fixed-height frame so a slow or failing image never collapses the layout or
@@ -1223,7 +1753,7 @@ input.ainput {
   max-width: 250px;
   aspect-ratio: 4 / 3;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--a-line-strong);
   background: rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
@@ -1240,7 +1770,7 @@ input.ainput {
   object-fit: contain;
   display: block;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity var(--a-slow) var(--a-ease);
 }
 
 .ashot-frame.is-loaded img {
@@ -1272,22 +1802,25 @@ input.ainput {
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ashot-loading__spin { animation-duration: 2.4s; }
-}
-
 .ashot figcaption {
   margin-top: 0.25rem;
   display: grid;
-  gap: 0.1rem;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
 .ashot figcaption a {
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  color: #7fb0dd;
-  word-break: break-all;
+  color: var(--a-blue-soft);
+  /* A CID is 59 unbroken characters. Wrapping it is the only alternative to a
+     horizontal scrollbar on every screenshot caption. */
+  overflow-wrap: anywhere;
   text-decoration: none;
+}
+
+.ashot figcaption a:hover {
+  text-decoration: underline;
 }
 
 .ashot figcaption span {
@@ -1297,7 +1830,7 @@ input.ainput {
 
 .awarn {
   font-style: normal;
-  color: #f0a0a0;
+  color: var(--a-red-text);
 }
 
 .aslow {
@@ -1308,7 +1841,7 @@ input.ainput {
 /* Shown when every gateway failed. Deliberately informative rather than an
    empty frame, so an unreachable image is never mistaken for a missing file. */
 .ashot-missing {
-  max-width: 250px;
+  max-width: 100%;
   padding: 0.6rem 0.7rem;
   border-radius: 8px;
   border: 1px dashed rgba(216, 76, 76, 0.4);
@@ -1320,7 +1853,7 @@ input.ainput {
 .ashot-missing__t {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #f0a0a0;
+  color: var(--a-red-text);
 }
 
 .ashot-missing__d {
@@ -1333,26 +1866,29 @@ input.ainput {
   font-family: var(--font-mono);
   font-size: 0.65rem;
   color: var(--fx-gold-text);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .ashot-missing a {
   font-size: 0.68rem;
-  color: #7fb0dd;
+  color: var(--a-blue-soft);
   text-decoration: underline;
+  overflow-wrap: anywhere;
 }
 
 /* timeline */
 .atl {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.45rem;
   max-height: 15rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .aev {
   display: grid;
-  grid-template-columns: 8.5rem 1fr;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
   gap: 0.5rem;
   align-items: start;
   font-size: 0.75rem;
@@ -1366,7 +1902,7 @@ input.ainput {
 
 .aev__b {
   min-width: 0;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--fx-ink-muted);
 }
 
@@ -1377,19 +1913,182 @@ input.ainput {
   margin-right: 0.3rem;
 }
 
+/* ---------- loading skeleton ---------- */
+
+/* The index is ~640KB of JSON and takes a moment to fetch and parse. A single
+   line of italic text gave no indication of the page's shape, so the layout is
+   sketched instead - which also stops the header jumping when data lands. */
+.askel {
+  border-radius: 12px;
+  /* Slightly brighter than --a-fill. On a near-black page a 2% white fill is
+     effectively invisible, which makes a skeleton look like a blank screen
+     rather than a pending one. */
+  background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0.085) 37%,
+      rgba(255, 255, 255, 0.04) 63%
+    ),
+    rgba(255, 255, 255, 0.035);
+  background-size: 400% 100%;
+  animation: askel 1.5s ease-in-out infinite;
+}
+
+@keyframes askel {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+
+.askel--title {
+  height: 2rem;
+  width: min(18rem, 70%);
+  margin-bottom: 0.6rem;
+}
+
+.askel--line {
+  height: 0.7rem;
+  margin-bottom: 0.5rem;
+}
+
+.askel--card {
+  height: 3.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.askel--row {
+  height: 3.2rem;
+  margin-bottom: 0.45rem;
+  border-radius: 12px;
+}
+
+/* Stand-in for the funds section heading + its card row. */
+.askel__head {
+  height: 0.7rem;
+  width: 34%;
+  margin: 0 0 0.7rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Stand-in for the tab bar. */
+.askel--tabs {
+  height: 2.1rem;
+  width: min(16rem, 60%);
+  border-radius: 0 0 8px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 1rem;
+}
+
+.askel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.5rem;
+}
+
+.askel--stat {
+  height: 4.6rem;
+}
+
+/* Announced by a screen reader, not shown. The skeleton is decorative and the
+   state change alone carries no meaning. */
+.a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- narrow screens ---------- */
+
 @media (max-width: 720px) {
+  /* A stack, not a squeezed grid. The previous 3-column version kept the
+     amount in a 1.2rem track, so "7.8 USDT" rendered 19px wide and its text
+     overflowed the cell - which is what looked like words running together. */
   .arow__head {
-    grid-template-columns: 3rem 1fr 1.2rem;
-    row-gap: 0.3rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'id    caret'
+      'pair  pair'
+      'amt   amt'
+      'badge badge';
+    gap: 0.4rem 0.75rem;
+    align-items: center;
+    padding: 0.8rem 0.85rem;
   }
+
+  .arow__id { grid-area: id; }
+  .arow__pair { grid-area: pair; }
   .arow__amt {
+    grid-area: amt;
+    /* Now allowed to wrap: a long balance on its own line has the full width
+       of the row. */
     text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .arow__badges {
-    grid-column: 1 / -1;
+    grid-area: badge;
     justify-content: flex-start;
   }
+  .arow__caret {
+    grid-area: caret;
+    justify-self: end;
+    /* A real tap target rather than a 7px glyph. */
+    padding: 0.4rem 0.2rem;
+    margin: -0.4rem -0.2rem;
+  }
+
+  .arow__body {
+    padding: 0.25rem 0.85rem 0.9rem;
+  }
+
   .aev {
     grid-template-columns: 1fr;
+    gap: 0.15rem;
+    /* A hairline between events, so a stacked timestamp/body pair reads as
+       one entry rather than two. */
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--a-line-soft);
+  }
+  .aev:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* The open drawer is full width on a phone; give it the notch inset. */
+@media (max-width: 620px) {
+  .adrawer__panel {
+    padding-top: max(1.4rem, env(safe-area-inset-top, 0px) + 0.6rem);
+    border-left: 0;
+  }
+  .adrawer__head {
+    /* Cancel whatever padding-top the panel ended up with, notch inset included. */
+    margin-top: calc(max(1.4rem, env(safe-area-inset-top, 0px) + 0.6rem) * -1);
+  }
+}
+
+/* Reduced motion: keep every state change instant rather than removing it, so
+   nothing depends on an animation to be legible. */
+@media (prefers-reduced-motion: reduce) {
+  .audit-root *,
+  .audit-root *::before,
+  .audit-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* The skeleton is the one case where removing the animation leaves a flat
+     grey block, so it keeps a static, slightly brighter fill instead. */
+  .askel {
+    background: rgba(255, 255, 255, 0.05);
   }
 }

@@ -11,7 +11,7 @@
 // AUDIT_PAGE_ENABLED=1. This file is a viewer only; it never touches a
 // contract, so there is nothing here to sign and no wallet is required.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 
 import './audit.css';
@@ -33,10 +33,19 @@ function useTradeJump() {
     // to exist inside it.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        // Asked for per call rather than set once on <html>. Next.js 16 leaves
+        // scroll-behavior alone during route transitions, so a global rule
+        // would animate the scroll-to-top on every navigation away from this
+        // page - and Next warns about the rule in dev. This only ever affects
+        // this one jump.
+        const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const behavior: ScrollBehavior = smooth ? 'smooth' : 'auto';
         if (list.length === 1) {
-          document.getElementById(`trade-${list[0]}`)?.scrollIntoView({ block: 'center' });
+          document
+            .getElementById(`trade-${list[0]}`)
+            ?.scrollIntoView({ block: 'center', behavior });
         } else {
-          document.getElementById('anchor-trades')?.scrollIntoView({ block: 'start' });
+          document.getElementById('anchor-trades')?.scrollIntoView({ block: 'start', behavior });
         }
       });
     });
@@ -518,51 +527,56 @@ function PersonActivity({
       <h3 className="adrawer__h3">
         Trades <span className="acount">{mine.length}</span>
       </h3>
+      {/* Eight columns cannot fit a phone. Rather than dropping any - on an
+          audit page a hidden column is the thing being checked - the table
+          scrolls sideways with its id column pinned. */}
       {mine.length === 0 ? (
         <p className="aempty">No trades.</p>
       ) : (
-        <table className="atable">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Side</th>
-              <th>Pair</th>
-              <th className="anum">Amount</th>
-              <th>Status</th>
-              <th>Other party</th>
-              <th>Started</th>
-              <th>Closed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mine.map((t) => {
-              const sold = sellIds.has(t.id);
-              const other = sold ? t.buyer : t.seller;
-              return (
-                <tr key={t.id}>
-                  <td>#{t.id}</td>
-                  <td>
-                    <span className={`achip ${sold ? 'achip--sell' : 'achip--buy'}`}>
-                      {sold ? 'SOLD' : 'BOUGHT'}
-                    </span>
-                  </td>
-                  <td>{t.pair}</td>
-                  <td className="anum">
-                    {t.cryptoAmount} {t.token}
-                  </td>
-                  <td>
-                    <StatusChip status={t.status} />
-                  </td>
-                  <td>
-                    <Addr a={other} ctx={ctx} showTrades={showTrades} />
-                  </td>
-                  <td className="anow">{when(t.startedAt)}</td>
-                  <td className="anow">{t.closedAt ? when(t.closedAt) : '—'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="asheet">
+          <table className="atable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Side</th>
+                <th>Pair</th>
+                <th className="anum">Amount</th>
+                <th>Status</th>
+                <th>Other party</th>
+                <th>Started</th>
+                <th>Closed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mine.map((t) => {
+                const sold = sellIds.has(t.id);
+                const other = sold ? t.buyer : t.seller;
+                return (
+                  <tr key={t.id}>
+                    <td>#{t.id}</td>
+                    <td>
+                      <span className={`achip ${sold ? 'achip--sell' : 'achip--buy'}`}>
+                        {sold ? 'SOLD' : 'BOUGHT'}
+                      </span>
+                    </td>
+                    <td>{t.pair}</td>
+                    <td className="anum">
+                      {t.cryptoAmount} {t.token}
+                    </td>
+                    <td>
+                      <StatusChip status={t.status} />
+                    </td>
+                    <td>
+                      <Addr a={other} ctx={ctx} showTrades={showTrades} />
+                    </td>
+                    <td className="anow">{when(t.startedAt)}</td>
+                    <td className="anow">{t.closedAt ? when(t.closedAt) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <h3 className="adrawer__h3">
@@ -571,38 +585,40 @@ function PersonActivity({
       {myOrders.length === 0 ? (
         <p className="aempty">No orders listed.</p>
       ) : (
-        <table className="atable">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Side</th>
-              <th>Pair</th>
-              <th className="anum">Original</th>
-              <th className="anum">Remaining</th>
-              <th>Status</th>
-              <th>Taken in</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {myOrders.map((a) => (
-              <tr key={a.id}>
-                <td>#{a.id}</td>
-                <td>{a.side}</td>
-                <td>{a.pair}</td>
-                <td className="anum">{a.originalCrypto}</td>
-                <td className="anum">{a.remainingCrypto}</td>
-                <td>
-                  <StatusChip status={a.outcome} />
-                </td>
-                <td className="anow">
-                  {a.tradesTaken.length ? a.tradesTaken.map((t) => `#${t}`).join(', ') : '—'}
-                </td>
-                <td className="anow">{when(a.createdAt)}</td>
+        <div className="asheet">
+          <table className="atable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Side</th>
+                <th>Pair</th>
+                <th className="anum">Original</th>
+                <th className="anum">Remaining</th>
+                <th>Status</th>
+                <th>Taken in</th>
+                <th>Created</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {myOrders.map((a) => (
+                <tr key={a.id}>
+                  <td>#{a.id}</td>
+                  <td>{a.side}</td>
+                  <td>{a.pair}</td>
+                  <td className="anum">{a.originalCrypto}</td>
+                  <td className="anum">{a.remainingCrypto}</td>
+                  <td>
+                    <StatusChip status={a.outcome} />
+                  </td>
+                  <td className="anow">
+                    {a.tradesTaken.length ? a.tradesTaken.map((t) => `#${t}`).join(', ') : '—'}
+                  </td>
+                  <td className="anow">{when(a.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <h3 className="adrawer__h3">
@@ -677,6 +693,9 @@ function PersonRow({
             <span className="achip">STATUS CHANGED ×{person.verificationChanges}</span>
           )}
         </span>
+        {/* This row expands like the others, so it needs the same caret. Without
+            it the only cue that a person row is expandable is the chips. */}
+        <span className="arow__caret">▶</span>
       </button>
 
       {open && (
@@ -1104,6 +1123,28 @@ export default function AuditPage() {
   // would invalidate it every time and defeat the memo entirely.
   const pinned = useMemo(() => (jumpIds ? new Set(jumpIds) : null), [jumpIds]);
 
+  /*
+   * Height of the site header, published to CSS.
+   *
+   * The header is sticky at the top of the viewport, so the tab bar has to stop
+   * below it - otherwise the tabs stick at top:0 and slide underneath the
+   * header. Its height is not a constant: the inner bar wraps to two rows below
+   * 640px, and the buttons reflow, so a hard-coded offset is correct on desktop
+   * and wrong on exactly the screens this page is mostly read on. Measured
+   * instead, and observed so a rotation or a font swap re-measures.
+   */
+  const [navH, setNavH] = useState(0);
+
+  useEffect(() => {
+    const nav = document.querySelector('.fx-topnav');
+    if (!nav) return;
+    const measure = () => setNavH(Math.round(nav.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+
   const rows = useMemo(() => {
     if (!data) return null;
     const needle = q.trim().toLowerCase();
@@ -1294,9 +1335,26 @@ export default function AuditPage() {
   }
 
   if (loading) {
+    // The index is ~640KB and takes a moment to fetch and parse. A line of
+    // italic text gave no sense of what was coming, and the page then jumped
+    // as each block landed. A skeleton shaped like the real page does neither.
     return (
       <div className="fx-shell audit-root">
-        <div className="audit-wrap"><p className="aempty">Loading audit index…</p></div>
+        <div className="audit-wrap" aria-busy="true" aria-live="polite">
+          <span className="a11y">Loading audit index</span>
+          <div className="askel askel--title" />
+          <div className="askel askel--line" style={{ width: '60%' }} />
+          <div className="askel__head" />
+          <div className="askel__grid">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="askel askel--stat" />
+            ))}
+          </div>
+          <div className="askel askel--tabs" />
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="askel askel--row" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -1326,14 +1384,18 @@ export default function AuditPage() {
   const s = data.summary;
 
   return (
-    <div className="fx-shell audit-root">
+    <div className="fx-shell audit-root" style={{ '--a-nav-h': `${navH}px` } as CSSProperties}>
       <div className="audit-wrap">
         <header className="ahead">
           <div>
             <h1 className="ahead__t">P2P Escrow — Audit</h1>
             <p className="ahead__s">
-              index built {data.generatedAt.replace('T', ' ').slice(0, 19)} UTC · blocks{' '}
-              {data.blockRange.deployBlock.toLocaleString()} → {data.blockRange.head.toLocaleString()}
+              index built {data.generatedAt.replace('T', ' ').slice(0, 19)} UTC ·{' '}
+              {/* One nowrap run, so the arrow cannot end a line by itself. */}
+              <span className="anowrap">
+                blocks {data.blockRange.deployBlock.toLocaleString()} →{' '}
+                {data.blockRange.head.toLocaleString()}
+              </span>
             </p>
           </div>
           <div className="ahead__m">
