@@ -1168,16 +1168,55 @@ const P2PPage: React.FC = () => {
             </select>
           </div>
           <div className="p2p-field">
-            <label className="p2p-label" htmlFor="p2p-type">Type</label>
-            <select
-              id="p2p-type"
-              className="p2p-select"
-              value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'buy' | 'sell' }))}
-            >
-              <option value="sell">Sell {form.token} for INR</option>
-              <option value="buy">Buy {form.token} with INR</option>
-            </select>
+            <span className="p2p-label" id="p2p-type-label">Type</span>
+            <div className="p2p-type-options" role="group" aria-labelledby="p2p-type-label">
+              <button
+                type="button"
+                className={`p2p-type-option${form.type === 'sell' ? ' is-active' : ''}`}
+                aria-pressed={form.type === 'sell'}
+                onClick={() => setForm((f) => ({ ...f, type: 'sell' }))}
+              >
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 21V9" />
+                  <path d="m6 15 6-6 6 6" />
+                  <path d="M5 3h14" />
+                </svg>
+                <span>Sell {form.token}</span>
+              </button>
+              <button
+                type="button"
+                className={`p2p-type-option${form.type === 'buy' ? ' is-active' : ''}`}
+                aria-pressed={form.type === 'buy'}
+                onClick={() => setForm((f) => ({ ...f, type: 'buy' }))}
+              >
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3v12" />
+                  <path d="m6 9 6 6 6-6" />
+                  <path d="M5 21h14" />
+                </svg>
+                <span>Buy {form.token}</span>
+              </button>
+            </div>
           </div>
           <div className="p2p-field">
             <label className="p2p-label" htmlFor="p2p-amount">Amount ({form.token})</label>

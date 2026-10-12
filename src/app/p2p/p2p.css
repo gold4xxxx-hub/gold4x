@@ -606,6 +606,46 @@
   cursor: not-allowed;
 }
 
+.p2p-type-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.p2p-type-option {
+  display: flex;
+  min-width: 0;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+  color: var(--fx-ink-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.p2p-type-option:hover {
+  border-color: rgba(212, 168, 67, 0.35);
+  color: var(--fx-ink);
+}
+
+.p2p-type-option.is-active {
+  border-color: rgba(212, 168, 67, 0.5);
+  background: rgba(212, 168, 67, 0.1);
+  color: var(--fx-gold-text);
+}
+
+.p2p-type-option:focus-visible {
+  outline: 2px solid rgba(212, 168, 67, 0.7);
+  outline-offset: 2px;
+}
+
 /* Native number spinners clash with the dark surface. */
 .p2p-input[type='number']::-webkit-outer-spin-button,
 .p2p-input[type='number']::-webkit-inner-spin-button {
