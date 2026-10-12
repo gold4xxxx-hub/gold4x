@@ -911,6 +911,39 @@
   text-decoration: underline;
 }
 
+.p2p-copy-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.p2p-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 0.42rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fx-ink-subtle);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.p2p-copy-btn:hover {
+  border-color: rgba(212, 168, 67, 0.45);
+  color: var(--fx-gold-text);
+  background: rgba(212, 168, 67, 0.08);
+}
+
+.p2p-copy-btn:focus-visible {
+  outline: 2px solid rgba(212, 168, 67, 0.65);
+  outline-offset: 2px;
+}
+
 /* --------------------------------------------------------------------------
    Pagination
 

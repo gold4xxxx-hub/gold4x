@@ -18,6 +18,7 @@ import {
 } from '@/config/web3Config';
 import {
   FIXED_INR_PRICES,
+  MIN_P2P_SELL_AMOUNT,
   tokenForPairType,
   TRADE_STATUS_LABEL,
   shortAddress,
@@ -375,6 +376,24 @@ const P2PPage: React.FC = () => {
     return () => clearInterval(t);
   }, [tradeOpen]);
 
+  const copyField = useCallback(async (value: string, label: string) => {
+    const text = value.trim();
+    if (!text) {
+      setStatus(`${label} is not available to copy.`);
+      return;
+    }
+    if (!navigator.clipboard?.writeText) {
+      setStatus(`Clipboard is not available in this browser. Copy the ${label.toLowerCase()} manually.`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus(`${label} copied.`);
+    } catch {
+      setStatus(`Could not copy ${label.toLowerCase()}. Please copy it manually.`);
+    }
+  }, []);
+
   const reload = useCallback(async () => {
     await Promise.all([refresh(), refreshKyc(), refreshTrades()]);
   }, [refresh, refreshKyc, refreshTrades]);
@@ -458,6 +477,10 @@ const P2PPage: React.FC = () => {
   const onCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.amount) return;
+    if (form.type === 'sell' && Number(form.amount) < MIN_P2P_SELL_AMOUNT) {
+      setStatus(`Sell ads require a minimum of ${MIN_P2P_SELL_AMOUNT} ${form.token}.`);
+      return;
+    }
     await guard(
       (s) =>
         createAd(
@@ -1106,11 +1129,19 @@ const P2PPage: React.FC = () => {
             <label className="p2p-label" htmlFor="p2p-amount">Amount ({form.token})</label>
             <input
               id="p2p-amount"
-              type="number" min="0" step="any" required
+              type="number"
+              min={form.type === 'sell' ? MIN_P2P_SELL_AMOUNT : 0}
+              step="any"
+              required
               className="p2p-input"
               value={form.amount}
               onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
             />
+            {form.type === 'sell' && (
+              <p className="p2p-storage-note mt-1">
+                Minimum sell amount: {MIN_P2P_SELL_AMOUNT} {form.token}
+              </p>
+            )}
           </div>
           <div className="p2p-field">
             <span className="p2p-label">Value (INR)</span>
@@ -1590,7 +1621,23 @@ const P2PPage: React.FC = () => {
                               {contact === undefined
                                 ? 'Loading…'
                                 : contact?.mobile
-                                  ? <a href={`tel:${encodeURIComponent(contact.mobile)}`}>{contact.mobile}</a>
+                                  ? (
+                                    <span className="p2p-copy-inline">
+                                      <a href={`tel:${encodeURIComponent(contact.mobile)}`}>{contact.mobile}</a>
+                                      <button
+                                        type="button"
+                                        className="p2p-copy-btn"
+                                        onClick={() => void copyField(contact.mobile, 'Mobile number')}
+                                        aria-label="Copy mobile number"
+                                        title="Copy mobile number"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                          <rect x="9" y="9" width="11" height="11" rx="2" />
+                                          <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                                        </svg>
+                                      </button>
+                                    </span>
+                                  )
                                   : 'Not provided'}
                             </dd>
                           </div>
@@ -1600,7 +1647,23 @@ const P2PPage: React.FC = () => {
                               {contact === undefined
                                 ? 'Loading…'
                                 : contact?.email
-                                  ? <a href={`mailto:${encodeURIComponent(contact.email)}`}>{contact.email}</a>
+                                  ? (
+                                    <span className="p2p-copy-inline">
+                                      <a href={`mailto:${encodeURIComponent(contact.email)}`}>{contact.email}</a>
+                                      <button
+                                        type="button"
+                                        className="p2p-copy-btn"
+                                        onClick={() => void copyField(contact.email, 'Email address')}
+                                        aria-label="Copy email address"
+                                        title="Copy email address"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                          <rect x="9" y="9" width="11" height="11" rx="2" />
+                                          <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                                        </svg>
+                                      </button>
+                                    </span>
+                                  )
                                   : 'Not provided'}
                             </dd>
                           </div>
@@ -1628,9 +1691,41 @@ const P2PPage: React.FC = () => {
                     <dt>Bank</dt>
                     <dd>{bank.bankName}</dd>
                     <dt>Account</dt>
-                    <dd>{bank.bankAccountNumber}</dd>
+                    <dd>
+                      <span className="p2p-copy-inline">
+                        <span>{bank.bankAccountNumber}</span>
+                        <button
+                          type="button"
+                          className="p2p-copy-btn"
+                          onClick={() => void copyField(bank.bankAccountNumber, 'Account number')}
+                          aria-label="Copy account number"
+                          title="Copy account number"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        </button>
+                      </span>
+                    </dd>
                     <dt>IFSC</dt>
-                    <dd>{bank.ifscCode}</dd>
+                    <dd>
+                      <span className="p2p-copy-inline">
+                        <span>{bank.ifscCode}</span>
+                        <button
+                          type="button"
+                          className="p2p-copy-btn"
+                          onClick={() => void copyField(bank.ifscCode, 'IFSC code')}
+                          aria-label="Copy IFSC code"
+                          title="Copy IFSC code"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        </button>
+                      </span>
+                    </dd>
                   </dl>
                 ) : (
                   <p className="text-sm text-[#b9b0a3]">

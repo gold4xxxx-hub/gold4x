@@ -19,6 +19,7 @@ import {
   cryptoToWei,
   inrToPaise,
   FIXED_INR_PRICES,
+  MIN_P2P_SELL_AMOUNT,
   TradeStatus,
   type P2PToken,
 } from '@/config/p2pEscrow';
@@ -636,6 +637,9 @@ export async function createAd(
   const c = readContract(signer);
   const pairType = pairTypeFor(token);
   const cryptoAmount = cryptoToWei(amount);
+  if (isSellOrder && cryptoAmount < cryptoToWei(MIN_P2P_SELL_AMOUNT)) {
+    throw new Error(`Sell ads require a minimum of ${MIN_P2P_SELL_AMOUNT} ${token}.`);
+  }
   const quoteAmount = inrToPaise(Number(amount) * FIXED_INR_PRICES[token]);
 
   // Sell order on an INR pair: the contract pulls the crypto up front.
