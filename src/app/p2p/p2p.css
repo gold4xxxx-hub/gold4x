@@ -646,6 +646,20 @@
   outline-offset: 2px;
 }
 
+.p2p-type-badge {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 /* Native number spinners clash with the dark surface. */
 .p2p-input[type='number']::-webkit-outer-spin-button,
 .p2p-input[type='number']::-webkit-inner-spin-button {

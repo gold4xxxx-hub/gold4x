@@ -1176,20 +1176,7 @@ const P2PPage: React.FC = () => {
                 aria-pressed={form.type === 'sell'}
                 onClick={() => setForm((f) => ({ ...f, type: 'sell' }))}
               >
-                <svg
-                  width="17"
-                  height="17"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M8 12h8" />
-                </svg>
+                <span className="p2p-type-badge" aria-hidden="true">SELL</span>
                 <span>Sell {form.token}</span>
               </button>
               <button
@@ -1198,21 +1185,7 @@ const P2PPage: React.FC = () => {
                 aria-pressed={form.type === 'buy'}
                 onClick={() => setForm((f) => ({ ...f, type: 'buy' }))}
               >
-                <svg
-                  width="17"
-                  height="17"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M8 12h8" />
-                  <path d="M12 8v8" />
-                </svg>
+                <span className="p2p-type-badge" aria-hidden="true">BUY</span>
                 <span>Buy {form.token}</span>
               </button>
             </div>
