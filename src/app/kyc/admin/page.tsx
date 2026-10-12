@@ -9,7 +9,7 @@
 // The previous version listed an in-memory Map, so approvals here did nothing
 // to the trading desk. That path has been removed.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ethers } from 'ethers';
 import { useConnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
@@ -23,15 +23,6 @@ import { getKycApplicants, type KycApplicant } from '@/lib/p2pLogs';
 import { shortAddress } from '@/config/p2pEscrow';
 import '../../p2p/p2p.css';
 
-/** Kept in step with the shared log reader's window. */
-const LOG_WINDOW = 5_000;
-
-// BSC produces a block roughly every 0.45s, so the window above is only about
-// 37 minutes of history. That is the practical limit of a list built from
-// eth_getLogs on a public node: it will not show older applicants, which is
-// why the manual wallet lookup exists and is the reliable path.
-const SECONDS_PER_BLOCK = 0.45;
-
 type ApprovedKycUser = {
   wallet: string;
   verifiedAtBlock: number;
@@ -42,11 +33,26 @@ type ApprovedKycUsersResponse = {
   error?: string;
 };
 
+type PendingKycUser = {
+  wallet: string;
+  submittedAtBlock: number;
+};
+
+type PendingKycUsersResponse = {
+  users?: PendingKycUser[];
+  error?: string;
+};
+
 export default function KycAdminPage() {
   const { address, isConnected, signer } = useEthersSigner();
   const { connect: connectWallet } = useConnect();
 
   const [applicants, setApplicants] = useState<KycApplicant[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingKycUser[]>([]);
+  // Verification results confirmed on-chain this session. The pending list is
+  // cached server-side, so this keeps an approved wallet from reappearing as
+  // pending until the cache expires.
+  const [settled, setSettled] = useState<Record<string, boolean>>({});
   const [approvedUsers, setApprovedUsers] = useState<ApprovedKycUser[]>([]);
   const [approvedLoading, setApprovedLoading] = useState(false);
   const [approvedError, setApprovedError] = useState<string | null>(null);
@@ -62,7 +68,7 @@ export default function KycAdminPage() {
 
   const isOwner = isP2pEscrowOwner(address);
 
-  // The event list only covers a short window (see LOG_WINDOW below), so
+  // The live event list only covers a short window, so
   // looking an applicant up by wallet is the reliable path. It calls the
   // contract directly, which needs no log query at all.
   const lookupManual = async () => {
@@ -83,17 +89,12 @@ export default function KycAdminPage() {
       // Delegates to the shared log reader, which serialises eth_getLogs. Two
       // concurrent queries here made the public node return "could not
       // coalesce error".
-      const { applicants, truncated } = await getKycApplicants();
-      setApplicants(applicants);
+      const { applicants: recent, truncated } = await getKycApplicants();
+      setApplicants(recent);
       setStatus(
-        applicants.length === 0
-          ? 'No submissions in the last ' +
-            `${LOG_WINDOW.toLocaleString()} blocks, which is roughly ` +
-            `${Math.round((LOG_WINDOW * SECONDS_PER_BLOCK) / 60)} minutes of BSC history. ` +
-            'If someone applied earlier than that, look them up by wallet below.'
-          : `Showing ${applicants.length} from the last ` +
-            `${LOG_WINDOW.toLocaleString()} blocks.` +
-            (truncated ? ' Older submissions may not be listed.' : ''),
+        truncated
+          ? 'Recent submissions are shown live. Older pending applicants come from the full history below.'
+          : null,
       );
     } catch (e) {
       const err = e as { shortMessage?: string; message?: string };
@@ -121,10 +122,48 @@ export default function KycAdminPage() {
     }
   }, []);
 
+  // The recent-block list above forgets applicants after ~37 minutes, so the
+  // full history is read server-side. A wallet stays listed until approved.
+  const loadPendingUsers = useCallback(async () => {
+    try {
+      const response = await fetch('/api/kyc/pending-users/', { cache: 'no-store' });
+      const payload = await response.json() as PendingKycUsersResponse;
+      if (!response.ok || !payload.users) {
+        throw new Error(payload.error || 'Could not load pending users.');
+      }
+      setPendingUsers(payload.users);
+    } catch (e) {
+      const err = e as { message?: string };
+      setError(err.message || 'Could not load pending users.');
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void loadApprovedUsers();
-  }, [load, loadApprovedUsers]);
+    void loadPendingUsers();
+  }, [load, loadApprovedUsers, loadPendingUsers]);
+
+  // Recent-block entries are fresher, so they override the full-history ones.
+  const applicantRows = useMemo(() => {
+    const rows = new Map<string, KycApplicant>();
+    for (const user of pendingUsers) {
+      rows.set(user.wallet.toLowerCase(), {
+        wallet: user.wallet,
+        verified: false,
+        submittedAt: user.submittedAtBlock,
+      });
+    }
+    for (const applicant of applicants) {
+      rows.set(applicant.wallet.toLowerCase(), applicant);
+    }
+    return [...rows.values()]
+      .map((row) => {
+        const confirmed = settled[row.wallet.toLowerCase()];
+        return confirmed === undefined ? row : { ...row, verified: confirmed };
+      })
+      .sort((a, b) => b.submittedAt - a.submittedAt);
+  }, [pendingUsers, applicants, settled]);
 
   // Full record for one applicant. owner-gated on-chain.
   const openDetail = async (wallet: string) => {
@@ -209,6 +248,7 @@ export default function KycAdminPage() {
           : remaining;
       });
       const walletKey = wallet.toLowerCase();
+      setSettled((current) => ({ ...current, [walletKey]: nowVerified }));
       setApplicants((current) =>
         current.map((applicant) =>
           applicant.wallet.toLowerCase() === walletKey
@@ -357,14 +397,20 @@ export default function KycAdminPage() {
           <div className="p2p-panel__head">
             <h2 className="p2p-panel__title">Applicants</h2>
             <div className="flex items-center gap-3">
-              <span className="p2p-panel__count">{applicants.length} found</span>
-              <button className="p2p-btn p2p-btn--sm p2p-btn--ghost" onClick={() => void load()} disabled={loading}>
+              <span className="p2p-panel__count">
+                {applicantRows.filter((a) => !a.verified).length} pending
+              </span>
+              <button
+                className="p2p-btn p2p-btn--sm p2p-btn--ghost"
+                onClick={() => { void load(); void loadPendingUsers(); }}
+                disabled={loading}
+              >
                 <span>{loading ? 'Loading…' : 'Refresh'}</span>
               </button>
             </div>
           </div>
 
-          {applicants.length === 0 ? (
+          {applicantRows.length === 0 ? (
             <div className="p2p-empty">
               <div className="p2p-empty__ring">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -375,7 +421,7 @@ export default function KycAdminPage() {
               <p className="p2p-empty__text">
                 {loading
                   ? 'Reading events from chain…'
-                  : 'No KYC submissions in the recent block window. Once a user submits, a transaction will appear here.'}
+                  : 'No KYC submissions yet. Once a user submits, they stay listed here until approved.'}
               </p>
             </div>
           ) : (
@@ -390,7 +436,7 @@ export default function KycAdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {applicants.map((a) => (
+                  {applicantRows.map((a) => (
                     <tr key={a.wallet}>
                       <td className="p2p-addr">{a.wallet}</td>
                       <td className="text-center">
