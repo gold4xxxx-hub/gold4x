@@ -890,6 +890,30 @@ const P2PPage: React.FC = () => {
                 stays in escrow until the buyer marks INR paid and the seller
                 confirms receipt.
               </p>
+              <div className="p2p-market-shortcuts" aria-label="JSAV/INR trading shortcuts">
+                <a
+                  className="p2p-btn"
+                  href="#p2p-order-book"
+                  onClick={() => {
+                    setPairFilter('JSAV');
+                    setSideFilter('sell');
+                    setShowClosedAds(false);
+                  }}
+                >
+                  Buy JSAV with INR
+                </a>
+                <a
+                  className="p2p-btn p2p-btn--ghost"
+                  href="#p2p-order-book"
+                  onClick={() => {
+                    setPairFilter('JSAV');
+                    setSideFilter('buy');
+                    setShowClosedAds(false);
+                  }}
+                >
+                  Sell JSAV for INR
+                </a>
+              </div>
             </div>
             <div className="flex flex-col items-start gap-2.5">
               {account ? (
@@ -1156,7 +1180,12 @@ const P2PPage: React.FC = () => {
 
         {status && <div className="p2p-alert p2p-alert--info">{status}</div>}
 
-        <section className="p2p-panel p2p-market-panel p-5 sm:p-6 fx-reveal fx-reveal--delay-3">
+        <section
+          id="p2p-order-book"
+          tabIndex={-1}
+          aria-label="JSAV and USDT order book"
+          className="p2p-panel p2p-market-panel p-5 sm:p-6 fx-reveal fx-reveal--delay-3"
+        >
           <div className="p2p-panel__head">
             <h2 className="p2p-panel__title">Order Book</h2>
             <div className="p2p-market-tools">

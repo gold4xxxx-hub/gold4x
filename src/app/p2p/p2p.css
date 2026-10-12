@@ -1606,6 +1606,21 @@
   color: #a8b0ac;
 }
 
+.p2p-market-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.p2p-market-shortcuts .p2p-btn {
+  text-decoration: none;
+}
+
+.p2p-market-panel {
+  scroll-margin-top: 1rem;
+}
+
 .p2p-account-note {
   color: #a8b0ac;
   font-size: 0.8rem;
@@ -1773,6 +1788,10 @@
 
   .p2p-hero--market .p2p-hero__title {
     font-size: 1.55rem;
+  }
+
+  .p2p-market-shortcuts .p2p-btn {
+    flex: 1 1 10rem;
   }
 
   .p2p-market-stat {
