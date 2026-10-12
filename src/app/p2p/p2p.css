@@ -1662,13 +1662,19 @@
 
 .p2p-market-shortcuts {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.55rem;
   margin-top: 1rem;
 }
 
 .p2p-market-shortcuts .p2p-btn {
   text-decoration: none;
+}
+
+.p2p-shortcut-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
 }
 
 .p2p-market-panel {
@@ -1845,7 +1851,11 @@
   }
 
   .p2p-market-shortcuts .p2p-btn {
-    flex: 1 1 10rem;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0.35rem;
+    padding-inline: 0.55rem;
+    font-size: 0.68rem;
   }
 
   .p2p-market-stat {

@@ -901,8 +901,7 @@ const P2PPage: React.FC = () => {
                   }}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    className="p2p-shortcut-icon"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -911,9 +910,8 @@ const P2PPage: React.FC = () => {
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M12 3v12" />
-                    <path d="m6 9 6 6 6-6" />
-                    <path d="M5 21h14" />
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v8M8 12h8" />
                   </svg>
                   Buy JSAV with INR
                 </a>
@@ -927,8 +925,7 @@ const P2PPage: React.FC = () => {
                   }}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    className="p2p-shortcut-icon"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -937,9 +934,8 @@ const P2PPage: React.FC = () => {
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M12 21V9" />
-                    <path d="m6 15 6-6 6 6" />
-                    <path d="M5 3h14" />
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8 12h8" />
                   </svg>
                   Sell JSAV for INR
                 </a>
