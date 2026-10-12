@@ -12,7 +12,7 @@ export const FIXED_INR_PRICES = {
   USDT: 100,
 } as const;
 
-export const MIN_P2P_SELL_AMOUNT = 500;
+export const MIN_P2P_SELL_AMOUNT = 100;
 
 export type P2PToken = keyof typeof FIXED_INR_PRICES;
 
