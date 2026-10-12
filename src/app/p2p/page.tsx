@@ -1148,42 +1148,26 @@ const P2PPage: React.FC = () => {
 
         <form
           onSubmit={onCreateAd}
-          className="p2p-panel p-6 grid gap-4 md:grid-cols-[1fr_1fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2"
+          className="p2p-panel p-6 grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] items-end fx-reveal fx-reveal--delay-2"
         >
           <div className="p2p-field">
-            <label className="p2p-label" htmlFor="p2p-token">Token</label>
-            <select
-              id="p2p-token"
-              className="p2p-select"
-              value={form.token}
-              onChange={(e) => setForm((f) => ({ ...f, token: e.target.value as P2PToken }))}
-            >
-              {TOKENS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+            <div className="p2p-ad-pair-options" role="group" aria-label="Choose ad type and token">
+              {([
+                { token: 'JSAV', type: 'buy', label: 'Buy JSAV' },
+                { token: 'USDT', type: 'buy', label: 'Buy USDT' },
+                { token: 'JSAV', type: 'sell', label: 'Sell JSAV' },
+                { token: 'USDT', type: 'sell', label: 'Sell USDT' },
+              ] as const).map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={`p2p-ad-pair-option${form.token === option.token && form.type === option.type ? ' is-active' : ''}`}
+                  aria-pressed={form.token === option.token && form.type === option.type}
+                  onClick={() => setForm((f) => ({ ...f, token: option.token, type: option.type }))}
+                >
+                  {option.label}
+                </button>
               ))}
-            </select>
-          </div>
-          <div className="p2p-field">
-            <span className="p2p-label" id="p2p-type-label">Type</span>
-            <div className="p2p-type-options" role="group" aria-labelledby="p2p-type-label">
-              <button
-                type="button"
-                className={`p2p-type-option${form.type === 'sell' ? ' is-active' : ''}`}
-                aria-pressed={form.type === 'sell'}
-                onClick={() => setForm((f) => ({ ...f, type: 'sell' }))}
-              >
-                <span className="p2p-type-badge" aria-hidden="true">SELL</span>
-                <span>Sell {form.token}</span>
-              </button>
-              <button
-                type="button"
-                className={`p2p-type-option${form.type === 'buy' ? ' is-active' : ''}`}
-                aria-pressed={form.type === 'buy'}
-                onClick={() => setForm((f) => ({ ...f, type: 'buy' }))}
-              >
-                <span className="p2p-type-badge" aria-hidden="true">BUY</span>
-                <span>Buy {form.token}</span>
-              </button>
             </div>
           </div>
           <div className="p2p-field">

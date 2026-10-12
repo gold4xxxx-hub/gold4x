@@ -606,58 +606,51 @@
   cursor: not-allowed;
 }
 
-.p2p-type-options {
+.p2p-ad-pair-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  align-items: center;
 }
 
-.p2p-type-option {
-  display: flex;
+.p2p-ad-pair-option {
+  display: inline-flex;
+  width: 4.75rem;
+  max-width: 100%;
+  aspect-ratio: 1;
   min-width: 0;
-  min-height: 2.55rem;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.5rem;
+  justify-self: center;
+  padding: 0.3rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 8px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.022);
   color: var(--fx-ink-muted);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
-.p2p-type-option:hover {
+.p2p-ad-pair-option:hover {
   border-color: rgba(212, 168, 67, 0.35);
   color: var(--fx-ink);
 }
 
-.p2p-type-option.is-active {
+.p2p-ad-pair-option.is-active {
   border-color: rgba(212, 168, 67, 0.5);
   background: rgba(212, 168, 67, 0.1);
   color: var(--fx-gold-text);
+  box-shadow: 0 0 0 2px rgba(212, 168, 67, 0.1);
 }
 
-.p2p-type-option:focus-visible {
+.p2p-ad-pair-option:focus-visible {
   outline: 2px solid rgba(212, 168, 67, 0.7);
   outline-offset: 2px;
-}
-
-.p2p-type-badge {
-  display: inline-flex;
-  width: 2rem;
-  height: 2rem;
-  flex: 0 0 2rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 0.48rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 /* Native number spinners clash with the dark surface. */
