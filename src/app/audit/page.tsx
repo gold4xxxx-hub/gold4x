@@ -1321,6 +1321,11 @@ export default function AuditPage() {
     return (
       <div className="fx-shell audit-root">
         <div className="audit-wrap">
+          <div className="aadmin">
+            <b>Admin only.</b> This page is restricted to the platform operator and is not
+            part of the trading desk. If you are a trader or a regular user, this page is
+            not for you — please close it.
+          </div>
           <AuditGate
             token={token}
             setToken={setToken}
@@ -1386,6 +1391,11 @@ export default function AuditPage() {
   return (
     <div className="fx-shell audit-root" style={{ '--a-nav-h': `${navH}px` } as CSSProperties}>
       <div className="audit-wrap">
+        <div className="aadmin">
+          <b>Admin only.</b> This page is restricted to the platform operator and is not
+          part of the trading desk. If you are a trader or a regular user, this page is
+          not for you — please close it.
+        </div>
         <header className="ahead">
           <div>
             <h1 className="ahead__t">P2P Escrow — Audit</h1>

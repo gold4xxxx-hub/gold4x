@@ -1059,6 +1059,33 @@
   overflow-wrap: anywhere;
 }
 
+/* ---------- admin-only notice ---------- */
+
+/* Shown at the top of the audit page so nobody mistakes the operator's tool
+   for part of the trading desk. Gold, not red: this is a scope notice, not an
+   error, and the page already reserves red for broken things. */
+.aadmin {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--a-gold-line);
+  background: rgba(212, 168, 67, 0.08);
+  color: var(--fx-gold-text);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.aadmin b {
+  color: var(--fx-gold-text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* ---------- escrow funds breakdown ---------- */
 
 .afunds {
