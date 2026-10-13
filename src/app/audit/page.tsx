@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import Link from 'next/link';
 
 import './audit.css';
+import './audit-premium.css';
 import { AuditGate, useAuditToken } from './AuditGate';
 import { KycPanel, type KycRecord } from './KycPanel';
 
@@ -1398,7 +1399,8 @@ export default function AuditPage() {
         </div>
         <header className="ahead">
           <div>
-            <h1 className="ahead__t">P2P Escrow — Audit</h1>
+            <span className="audit-eyebrow">Operator console · read-only</span>
+            <h1 className="ahead__t">P2P Escrow Audit</h1>
             <p className="ahead__s">
               index built {data.generatedAt.replace('T', ' ').slice(0, 19)} UTC ·{' '}
               {/* One nowrap run, so the arrow cannot end a line by itself. */}

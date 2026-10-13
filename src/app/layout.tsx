@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} antialiased fx-body`}
         suppressHydrationWarning

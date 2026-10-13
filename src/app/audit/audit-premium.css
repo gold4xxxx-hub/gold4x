@@ -1,0 +1,544 @@
+/* Premium visual layer for the audit page.
+   Loaded after audit.css; everything here is an override/addition on top of
+   the existing layout logic, so responsive behaviour is untouched. */
+
+.audit-root {
+  position: relative;
+  background:
+    radial-gradient(1100px 640px at 12% -8%, rgba(212, 168, 67, 0.20), transparent 60%),
+    radial-gradient(900px 560px at 100% 4%, rgba(74, 127, 181, 0.15), transparent 58%),
+    radial-gradient(800px 620px at 52% 112%, rgba(45, 139, 120, 0.11), transparent 62%),
+    #030305;
+}
+
+.audit-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(circle at 50% 32%, black, transparent 74%);
+  mask-image: radial-gradient(circle at 50% 32%, black, transparent 74%);
+  opacity: 0.42;
+}
+
+.audit-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- hero header ---------- */
+
+.audit-root .ahead {
+  padding-bottom: 1.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .ahead::after {
+  width: min(260px, 50%);
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.85), rgba(212, 168, 67, 0.2), transparent 85%);
+}
+
+.audit-root .ahead__t {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #f5f5f5 15%, #c9a84c 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 12px 40px rgba(212, 168, 67, 0.12);
+}
+
+.audit-root .ahead__s {
+  color: rgba(255, 255, 255, 0.48);
+  font-family: var(--font-mono);
+}
+
+.audit-root .ahead__m {
+  gap: 0.45rem 1rem;
+}
+
+.audit-root .ahead__m p {
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .ahead__m .acode {
+  background: rgba(212, 168, 67, 0.09);
+  border-color: rgba(212, 168, 67, 0.2);
+}
+
+/* ---------- admin notice ---------- */
+
+.audit-root .aadmin {
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.16), rgba(212, 168, 67, 0.05));
+  border: 1px solid rgba(212, 168, 67, 0.26);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(212, 168, 67, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+/* ---------- signature gate ---------- */
+
+.audit-root .agate__box {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 168, 67, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.audit-root .agate__sig {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(212, 168, 67, 0.2);
+  border-radius: 12px;
+}
+
+.audit-root .abtn--gate {
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.18), rgba(212, 168, 67, 0.08));
+  border-color: rgba(212, 168, 67, 0.45);
+  box-shadow: 0 8px 24px rgba(212, 168, 67, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- funds section ---------- */
+
+.audit-root .afunds__t {
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.14em;
+}
+
+.audit-root .afund {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  transform: translateZ(0);
+  transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+    border-color 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .afund::before {
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+}
+
+.audit-root .afund:hover {
+  transform: translateY(-3px);
+  border-color: rgba(212, 168, 67, 0.24);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(212, 168, 67, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .afund--stuck {
+  background: linear-gradient(180deg, rgba(216, 76, 76, 0.10), rgba(216, 76, 76, 0.025));
+  box-shadow: 0 0 40px rgba(216, 76, 76, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .afund--owner {
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.10), rgba(212, 168, 67, 0.02));
+}
+
+.audit-root .afund--wait {
+  background: linear-gradient(180deg, rgba(74, 127, 181, 0.09), rgba(74, 127, 181, 0.02));
+}
+
+/* ---------- stat cards ---------- */
+
+.audit-root .astats {
+  gap: 0.75rem;
+}
+
+.audit-root .astat {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    border-color 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .astat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(212, 168, 67, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.audit-root .astat__v {
+  background: linear-gradient(180deg, #ffffff, #c9a84c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.audit-root .astat--alert .astat__v,
+.audit-root .astat--good .astat__v {
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: inherit;
+}
+
+/* ---------- tabs ---------- */
+
+.audit-root .atabs {
+  background: rgba(8, 8, 10, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  padding: 0.35rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  margin-bottom: 1.1rem;
+}
+
+.audit-root .atab {
+  border-radius: 12px;
+  padding: 0.55rem 1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: background 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+    color 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .atab:hover {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .atab.is-active {
+  background: radial-gradient(120% 140% at 50% 0%, rgba(212, 168, 67, 0.34), rgba(212, 168, 67, 0.09));
+  color: #f5e8c4;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 8px 24px rgba(212, 168, 67, 0.10);
+}
+
+.audit-root .atab__n {
+  opacity: 0.75;
+  font-weight: 600;
+}
+
+/* ---------- control bar ---------- */
+
+.audit-root .actl {
+  padding: 0.9rem 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+  align-items: center;
+}
+
+.audit-root .ainput {
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: border-color 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .ainput:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.audit-root .ainput:focus {
+  border-color: rgba(212, 168, 67, 0.55);
+  box-shadow: 0 0 0 4px rgba(212, 168, 67, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.audit-root .ahint {
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  letter-spacing: 0.02em;
+}
+
+.audit-root .ajump {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.16), rgba(212, 168, 67, 0.05));
+  border-color: rgba(212, 168, 67, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- rows ---------- */
+
+.audit-root .arow {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    border-color 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .arow:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .arow.is-open {
+  border-color: rgba(212, 168, 67, 0.3);
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.06), rgba(255, 255, 255, 0.01));
+  box-shadow: 0 0 0 1px rgba(212, 168, 67, 0.06), 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .arow__head {
+  padding: 0.95rem 1.1rem;
+  transition: background 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .arow__head:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.audit-root .arow__id {
+  color: #e8c56a;
+  letter-spacing: 0.01em;
+}
+
+.audit-root .arow__pair {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.audit-root .arow__pair b {
+  color: #ffffff;
+}
+
+.audit-root .arow__amt {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+
+.audit-root .arow__caret {
+  transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1), color 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .arow.is-open .arow__caret {
+  color: #e8c56a;
+}
+
+.audit-root .arow__body {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent);
+}
+
+/* ---------- detail cards ---------- */
+
+.audit-root .agrid {
+  gap: 1rem;
+}
+
+.audit-root .ablock {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.audit-root .ablock h3 {
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.12em;
+}
+
+.audit-root .areason {
+  border-radius: 12px;
+  border-color: rgba(74, 127, 181, 0.32);
+  background: linear-gradient(180deg, rgba(74, 127, 181, 0.10), rgba(74, 127, 181, 0.02));
+}
+
+.audit-root .areason.is-stuck {
+  border-color: rgba(216, 76, 76, 0.4);
+  background: linear-gradient(180deg, rgba(216, 76, 76, 0.10), rgba(216, 76, 76, 0.02));
+}
+
+/* ---------- chips ---------- */
+
+.audit-root .achip {
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.05em;
+}
+
+.audit-root .achip--stuck {
+  box-shadow: 0 0 20px rgba(216, 76, 76, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.audit-root .achip--override {
+  box-shadow: 0 0 14px rgba(216, 76, 76, 0.16);
+}
+
+/* ---------- buttons ---------- */
+
+.audit-root .abtn {
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    border-color 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .abtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(212, 168, 67, 0.32);
+  background: linear-gradient(180deg, rgba(212, 168, 67, 0.12), rgba(212, 168, 67, 0.03));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+.audit-root .abtn:active {
+  transform: scale(0.98);
+}
+
+/* ---------- drawer ---------- */
+
+.audit-root .adrawer__scrim {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.audit-root .adrawer__panel {
+  background: linear-gradient(180deg, rgba(12, 12, 16, 0.98), rgba(6, 6, 8, 0.99));
+  border-left: 1px solid rgba(212, 168, 67, 0.16);
+  box-shadow: -30px 0 90px rgba(0, 0, 0, 0.75), inset 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .adrawer__head {
+  background: rgba(10, 10, 14, 0.88);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .adrawer__x:hover {
+  box-shadow: 0 0 24px rgba(216, 76, 76, 0.16);
+}
+
+.audit-root .adoc {
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.audit-root .ashot-frame {
+  border-radius: 10px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.42);
+}
+
+/* ---------- empty states ---------- */
+
+.audit-root .aempty {
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0.5rem 0;
+}
+
+/* ---------- skeleton ---------- */
+
+.audit-root .askel {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audit-root .askel {
+    background: rgba(255, 255, 255, 0.05);
+    animation: none;
+  }
+}
+
+/* ---------- eyebrow ---------- */
+
+.audit-root .audit-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.22);
+  color: #e8c56a;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .audit-eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4da08c;
+  box-shadow: 0 0 10px rgba(77, 160, 140, 0.7);
+}
+
+/* ---------- small accents ---------- */
+
+.audit-root .acode {
+  border-radius: 7px;
+}
+
+.audit-root .alink--addr {
+  border-bottom-style: solid;
+  border-bottom-color: rgba(127, 176, 221, 0.35);
+}
+
+.audit-root .b {
+  /* keep parent component accent */
+}
+
+/* ---------- mobile atmosphere ---------- */
+
+@media (max-width: 720px) {
+  .audit-root::before {
+    opacity: 0.28;
+  }
+
+  .audit-root .afund:hover,
+  .audit-root .astat:hover,
+  .audit-root .arow:hover {
+    transform: none;
+  }
+}
