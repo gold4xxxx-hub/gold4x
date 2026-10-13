@@ -19,6 +19,7 @@ import {
 import {
   FIXED_INR_PRICES,
   MIN_P2P_SELL_AMOUNT,
+  P2P_PAYMENT_WINDOW_SECONDS,
   tokenForPairType,
   TRADE_STATUS_LABEL,
   shortAddress,
@@ -78,6 +79,16 @@ function formatCountdown(deadline: number, now: number): string | null {
   const m = Math.floor(left / 60);
   const s = left % 60;
   return `${m}m ${String(s).padStart(2, '0')}s`;
+}
+
+function formatPaymentWindow(seconds: number, compact = false): string {
+  if (seconds <= 0) return '—';
+  if (seconds >= 24 * 60 * 60) {
+    const days = Math.round(seconds / (24 * 60 * 60));
+    return compact ? `${days}d` : `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  const minutes = Math.round(seconds / 60);
+  return compact ? `${minutes}m` : `${minutes} min`;
 }
 
 /** Turn a contract revert into something a user can act on. */
@@ -481,6 +492,10 @@ const P2PPage: React.FC = () => {
       setStatus(`Sell ads require a minimum of ${MIN_P2P_SELL_AMOUNT} ${form.token}.`);
       return;
     }
+    if (stats.maxWindow > 0 && stats.maxWindow < P2P_PAYMENT_WINDOW_SECONDS) {
+      setStatus('The escrow contract does not allow a 1-day payment window.');
+      return;
+    }
     await guard(
       (s) =>
         createAd(
@@ -488,7 +503,7 @@ const P2PPage: React.FC = () => {
           form.token,
           form.type === 'sell',
           form.amount,
-          stats.defaultWindow || 1800,
+          P2P_PAYMENT_WINDOW_SECONDS,
         ),
       'Ad created',
     );
@@ -1315,7 +1330,7 @@ const P2PPage: React.FC = () => {
                           )}
                         </td>
                         <td className="text-center p2p-num">
-                          {ad.paymentWindow > 0 ? `${Math.round(ad.paymentWindow / 60)}m` : '—'}
+                          {formatPaymentWindow(ad.paymentWindow, true)}
                         </td>
                         <td className={ad.creator === account ? 'p2p-addr p2p-addr--me' : 'p2p-addr'}>
                           {shortAddress(ad.creator)}
@@ -1524,7 +1539,7 @@ const P2PPage: React.FC = () => {
               <div className="p2p-tile">
                 <div className="p2p-tile__label">Payment window</div>
                 <div className="p2p-tile__value">
-                  {activeAd.paymentWindow > 0 ? `${Math.round(activeAd.paymentWindow / 60)} min` : '—'}
+                  {formatPaymentWindow(activeAd.paymentWindow)}
                 </div>
               </div>
             </div>

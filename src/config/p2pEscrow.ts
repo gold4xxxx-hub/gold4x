@@ -13,6 +13,7 @@ export const FIXED_INR_PRICES = {
 } as const;
 
 export const MIN_P2P_SELL_AMOUNT = 100;
+export const P2P_PAYMENT_WINDOW_SECONDS = 24 * 60 * 60;
 
 export type P2PToken = keyof typeof FIXED_INR_PRICES;
 
