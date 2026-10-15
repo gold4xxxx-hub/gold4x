@@ -351,6 +351,16 @@ export function useAds(adCounter: number, chainActive: boolean) {
   }, [adCounter, chainActive, pages, readIds]);
 
   const loadedThrough = Math.max(0, adCounter - pages * PAGE_SIZE + 1);
+  const hasMoreAds = loadedThrough > 1;
+
+  // The order book must show every ad until it is filled or cancelled, not
+  // just the newest page. Chain through loadOlder automatically instead of
+  // waiting on a manual "load older" click, so an older ad (including the
+  // user's own) is never hidden behind pagination.
+  useEffect(() => {
+    if (!chainActive || loading || loadingOlder || !hasMoreAds) return;
+    void loadOlder();
+  }, [chainActive, loading, loadingOlder, hasMoreAds, loadOlder]);
 
   return {
     ads,
@@ -358,7 +368,7 @@ export function useAds(adCounter: number, chainActive: boolean) {
     refresh: load,
     loadOlder,
     loadingOlder,
-    hasMore: loadedThrough > 1,
+    hasMore: hasMoreAds,
     totalOnChain: adCounter,
     loadedFrom: loadedThrough,
     loadedTo: adCounter,

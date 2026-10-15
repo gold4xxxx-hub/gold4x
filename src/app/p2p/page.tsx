@@ -1366,8 +1366,8 @@ const P2PPage: React.FC = () => {
           {moreAds && (
             <div className="p2p-pager">
               <p className="p2p-pager__note">
-                Showing orders #{adsFrom}–#{adsTo} of {totalAds} created. Older orders are
-                not loaded yet.
+                Showing orders #{adsFrom}–#{adsTo} of {totalAds} created. Older orders load
+                automatically — every ad stays visible here until it&apos;s filled or cancelled.
               </p>
               <button
                 type="button"
@@ -1378,7 +1378,7 @@ const P2PPage: React.FC = () => {
                 <span>
                   {loadingOlderAds
                     ? 'Loading…'
-                    : `Load ${Math.min(25, Math.max(0, adsFrom - 1))} older orders`}
+                    : `Load ${Math.min(25, Math.max(0, adsFrom - 1))} older orders now`}
                 </span>
               </button>
             </div>
