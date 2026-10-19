@@ -1,0 +1,1220 @@
+/* Cyber-luxury layer for the audit page. Loaded after audit.css and
+   audit-premium.css, so where it sets a property it is the last word on it;
+   layout, spacing and responsive behaviour stay in audit.css and are not
+   re-declared here.
+
+   The visual language is the JSAVIOR concept page: obsidian ground, the same
+   cyan honeycomb lattice, gold and cyan on glass. Tuned down for a console
+   that is read all day rather than skimmed once - the lattice is faint, the
+   colour carries meaning (money in gold, state in cyan/emerald/ember), and
+   nothing moves unless it is hovered. */
+
+.audit-root {
+  /* Concept palette, scoped under .audit-root. The fx-* tokens stay as they
+     are, so no other page changes colour. */
+  --lx-gold: #f4c542;
+  --lx-gold-hi: #ffcc00;
+  --lx-cyan: #00f3ff;
+  --lx-cyan-text: #8bf3ff;
+  --lx-emerald: #00ff85;
+  --lx-amber: #ff9500;
+  --lx-ember: #ff6a3d;
+  --lx-red: #ff5f56;
+  --lx-red-text: #ffb3a5;
+
+  --lx-edge: rgba(255, 255, 255, 0.085);
+  --lx-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012));
+
+  --lx-display: var(--font-lux, 'Space Grotesk'), var(--font-body, 'Inter'), system-ui, sans-serif;
+
+  background: #050505;
+}
+
+/* ---------- atmosphere: lattice + glows ---------- */
+
+/* ::before paints the concept's honeycomb tile - the identical SVG, 56x98 in
+   cyan - masked so it fades out before the long trade list, where a full
+   field of lattice would compete with the rows. */
+.audit-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='98' viewBox='0 0 56 98'%3E%3Cg transform='scale(2)' fill='%238fe8ff'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 56px 98px;
+  -webkit-mask-image: radial-gradient(125% 88% at 50% 0%, #000 18%, rgba(0, 0, 0, 0.45) 62%, transparent 92%);
+  mask-image: radial-gradient(125% 88% at 50% 0%, #000 18%, rgba(0, 0, 0, 0.45) 62%, transparent 92%);
+  opacity: 0.07;
+}
+
+/* ::after lays the three concept glows and the vignette over the lattice. Both
+   layers are fixed, so the page reads as one lit room while the list scrolls. */
+.audit-root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1150px 900px at 8% -18%, rgba(0, 243, 255, 0.085), rgba(0, 243, 255, 0.02) 42%, transparent 68%),
+    radial-gradient(1050px 860px at 102% -12%, rgba(244, 197, 66, 0.075), rgba(244, 197, 66, 0.018) 45%, transparent 70%),
+    radial-gradient(1250px 950px at 40% 118%, rgba(0, 255, 133, 0.05), transparent 65%),
+    radial-gradient(132% 100% at 50% 0%, transparent 40%, rgba(0, 0, 0, 0.64) 100%);
+}
+
+/* The fixed layers above paint over static content, so the wrap is lifted
+   into its own layer; the vignette must darken the room, not the text. */
+.audit-root > .audit-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- admin notice ---------- */
+
+.audit-root .aadmin {
+  background:
+    linear-gradient(90deg, rgba(255, 149, 0, 0.13), rgba(244, 197, 66, 0.055) 42%, rgba(244, 197, 66, 0.02)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.008));
+  border: 1px solid rgba(244, 197, 66, 0.26);
+  border-radius: 14px;
+  color: rgba(255, 233, 190, 0.78);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(255, 149, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.audit-root .aadmin::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lx-amber);
+  box-shadow: 0 0 12px rgba(255, 149, 0, 0.75);
+}
+
+.audit-root .aadmin b {
+  color: var(--lx-gold-hi);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.74rem;
+  text-shadow: 0 0 16px rgba(244, 197, 66, 0.4);
+}
+
+/* ---------- header ---------- */
+
+.audit-root .ahead {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .ahead::after {
+  width: min(220px, 45%);
+  background: linear-gradient(90deg, rgba(244, 197, 66, 0.65), rgba(244, 197, 66, 0.1) 60%, transparent);
+}
+
+.audit-root .audit-eyebrow {
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.12), rgba(244, 197, 66, 0.03));
+  border-color: rgba(244, 197, 66, 0.28);
+  color: #ffe08a;
+  box-shadow: 0 0 22px rgba(244, 197, 66, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.audit-root .audit-eyebrow::before {
+  background: var(--lx-gold);
+  box-shadow: 0 0 10px rgba(244, 197, 66, 0.9);
+}
+
+.audit-root .ahead__t {
+  font-family: var(--lx-display);
+  font-size: clamp(1.65rem, 4.6vw, 2.3rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: #ffffff;
+}
+
+/* Same treatment as the concept hero: the last word carries the gold. */
+.audit-root .ahead__t-g {
+  background: linear-gradient(96deg, #ffe9ad 0%, #f4c542 34%, #e8a93c 64%, #ff9500 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 34px rgba(244, 197, 66, 0.22));
+}
+
+.audit-root .ahead__s {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Contract and owner, as glowing glass pills. */
+.audit-root .ahead__m p {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(0, 243, 255, 0.16);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 10px 26px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .ahead__m p:hover {
+  border-color: rgba(0, 243, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 26px rgba(0, 0, 0, 0.4),
+    0 0 24px rgba(0, 243, 255, 0.07);
+}
+
+.audit-root .ahead__lbl {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.audit-root .ahead__m .acode {
+  background: none;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  color: var(--lx-cyan-text);
+  font-size: 0.72rem;
+  text-shadow: 0 0 16px rgba(0, 243, 255, 0.4);
+}
+
+/* ---------- escrow funds ---------- */
+
+.audit-root .afunds__t {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.audit-root .afunds__lbl {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(244, 197, 66, 0.9);
+}
+
+.audit-root .afunds__num {
+  font-family: var(--lx-display);
+  font-size: clamp(1.4rem, 3.6vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #ffffff, #f8d572 62%, #f4c542);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 20px rgba(244, 197, 66, 0.38));
+}
+
+/* Four buckets, each keyed to one accent: ember for the money that needs a
+   cancel, amber for the seller, cyan for the buyer, gold for the house
+   balance. The accent drives the edge bar, the top hairline and the value. */
+.audit-root .afund {
+  --af: rgba(255, 255, 255, 0.3);
+  --af-glow: transparent;
+  padding: 1rem 1.05rem 1rem 1.2rem;
+  border-radius: 18px;
+  border: 1px solid var(--lx-edge);
+  background: var(--lx-glass);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+}
+
+.audit-root .afund::before {
+  width: 2px;
+  background: linear-gradient(180deg, var(--af), rgba(255, 255, 255, 0.02) 78%, transparent);
+  box-shadow: 0 0 14px var(--af-glow);
+}
+
+.audit-root .afund::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--af), transparent);
+  opacity: 0.55;
+}
+
+.audit-root .afund:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), 0 0 40px var(--af-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.audit-root .afund--stuck {
+  --af: var(--lx-ember);
+  --af-glow: rgba(255, 106, 61, 0.45);
+  border-color: rgba(255, 95, 76, 0.3);
+  background:
+    radial-gradient(130% 100% at 0% 0%, rgba(255, 86, 64, 0.12), transparent 58%),
+    var(--lx-glass);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45), 0 0 34px rgba(255, 86, 64, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.audit-root .afund--seller {
+  --af: var(--lx-amber);
+  --af-glow: rgba(255, 149, 0, 0.4);
+  border-color: rgba(255, 149, 0, 0.26);
+  background:
+    radial-gradient(130% 100% at 0% 0%, rgba(255, 149, 0, 0.1), transparent 58%),
+    var(--lx-glass);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45), 0 0 30px rgba(255, 149, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.audit-root .afund--buyer {
+  --af: var(--lx-cyan);
+  --af-glow: rgba(0, 243, 255, 0.38);
+  border-color: rgba(0, 243, 255, 0.26);
+  background:
+    radial-gradient(130% 100% at 0% 0%, rgba(0, 243, 255, 0.115), transparent 58%),
+    var(--lx-glass);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45), 0 0 30px rgba(0, 243, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.audit-root .afund--owner {
+  --af: var(--lx-gold);
+  --af-glow: rgba(244, 197, 66, 0.45);
+  border-color: rgba(244, 197, 66, 0.34);
+  background:
+    radial-gradient(130% 110% at 100% 0%, rgba(244, 197, 66, 0.13), transparent 60%),
+    var(--lx-glass);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.5), 0 0 44px rgba(244, 197, 66, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .afund__k {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.audit-root .afund--stuck .afund__k { color: #ffb39e; }
+.audit-root .afund--seller .afund__k { color: #ffd28c; }
+.audit-root .afund--buyer .afund__k { color: var(--lx-cyan-text); }
+.audit-root .afund--owner .afund__k { color: #ffe196; }
+
+.audit-root .afund__v {
+  /* fit-content so the white-to-accent gradient spans the number itself. */
+  width: fit-content;
+  max-width: 100%;
+  font-family: var(--lx-display);
+  font-size: clamp(1.3rem, 4.4vw, 1.55rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 0.2rem;
+  background: linear-gradient(180deg, #ffffff, #f4c542);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 16px rgba(244, 197, 66, 0.28));
+}
+
+.audit-root .afund--stuck .afund__v {
+  background-image: linear-gradient(180deg, #ffffff, #ff9a7c);
+  filter: drop-shadow(0 0 16px rgba(255, 106, 61, 0.32));
+}
+
+.audit-root .afund--seller .afund__v {
+  background-image: linear-gradient(180deg, #ffffff, #ffbe5c);
+  filter: drop-shadow(0 0 16px rgba(255, 149, 0, 0.3));
+}
+
+.audit-root .afund--buyer .afund__v {
+  background-image: linear-gradient(180deg, #ffffff, #7deeff);
+  filter: drop-shadow(0 0 16px rgba(0, 243, 255, 0.3));
+}
+
+.audit-root .afund--owner .afund__v {
+  background-image: linear-gradient(180deg, #ffffff, #ffdf7e 60%, #f4c542);
+  filter: drop-shadow(0 0 20px rgba(244, 197, 66, 0.4));
+}
+
+.audit-root .afund__n {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.audit-root .afund__r {
+  font-size: 0.73rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- buttons ---------- */
+
+.audit-root .abtn {
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.015));
+  color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.audit-root .abtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 197, 66, 0.45);
+  color: var(--lx-gold-hi);
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.15), rgba(244, 197, 66, 0.04));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38), 0 0 22px rgba(244, 197, 66, 0.1);
+}
+
+.audit-root .abtn:active {
+  transform: scale(0.98);
+}
+
+/* ---------- metrics grid ---------- */
+
+.audit-root .astat {
+  border-radius: 16px;
+  border: 1px solid var(--lx-edge);
+  background: var(--lx-glass);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.audit-root .astat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(244, 197, 66, 0.24);
+  box-shadow: 0 26px 54px rgba(0, 0, 0, 0.45), 0 0 26px rgba(244, 197, 66, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.audit-root .astat__k {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.audit-root .astat__v {
+  width: fit-content;
+  max-width: 100%;
+  font-family: var(--lx-display);
+  font-size: 1.32rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  background: linear-gradient(180deg, #ffffff, #f0cc6e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgba(244, 197, 66, 0.16));
+}
+
+.audit-root .astat--alert .astat__v {
+  /* background:none, not just a clip reset: the base rule paints a gradient
+     box, and without this the number renders as a smudge on gold. */
+  background: none;
+  color: var(--lx-red-text);
+  filter: drop-shadow(0 0 14px rgba(255, 95, 86, 0.22));
+}
+
+.audit-root .astat--good .astat__v {
+  background: none;
+  color: #63ffb4;
+  filter: drop-shadow(0 0 14px rgba(0, 255, 133, 0.18));
+}
+
+.audit-root .astat--alert {
+  border-color: rgba(255, 95, 86, 0.3);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(255, 86, 64, 0.09), transparent 60%),
+    var(--lx-glass);
+}
+
+.audit-root .astat__d {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* ---------- tabs: stat pills ---------- */
+
+/* Three floating stat pills on a fading strip, rather than a segmented bar -
+   the pill is the same glass object as the cards above it, so the tab row
+   reads as part of the same instrument. The strip is full-bleed (the base
+   layer's negative margins) and only exists so content scrolling under the
+   sticky row fades out instead of colliding with the pills. */
+.audit-root .atabs {
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem clamp(0.85rem, 3vw, 1.25rem) 0.85rem;
+  background: linear-gradient(180deg, rgba(5, 6, 8, 0.95), rgba(5, 6, 8, 0.72) 58%, rgba(5, 6, 8, 0));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.audit-root .atab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.62);
+  font-family: var(--lx-display);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.audit-root .atab:hover {
+  transform: translateY(-1px);
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02));
+}
+
+/* The count is a badge of its own, so "68" stays the read-at-a-glance value
+   and the label stays quiet. */
+.audit-root .atab__n {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.audit-root .atab.is-active {
+  color: #ffe9ad;
+  border-color: rgba(244, 197, 66, 0.45);
+  background:
+    radial-gradient(130% 160% at 50% 0%, rgba(244, 197, 66, 0.22), rgba(244, 197, 66, 0.05)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  box-shadow: 0 0 26px rgba(244, 197, 66, 0.14), 0 14px 34px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.audit-root .atab.is-active .atab__n {
+  background: rgba(244, 197, 66, 0.18);
+  border-color: rgba(244, 197, 66, 0.4);
+  color: #ffdf8a;
+  box-shadow: 0 0 16px rgba(244, 197, 66, 0.18);
+  text-shadow: 0 0 12px rgba(244, 197, 66, 0.5);
+}
+
+/* A cut-off pill reads as a bug on a phone. Wrapping keeps all three counts
+   visible instead of hiding the third behind a horizontal scroll. Breakpoint
+   matches the base layer's control stacking (560px) so the whole bar changes
+   shape in one step. */
+@media (max-width: 560px) {
+  .audit-root .atabs {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .audit-root .atab {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.78rem;
+  }
+
+  /* The result count is a badge, not a field - the base stretches it to 100%
+     when the bar stacks; keep it hugging its text. */
+  .audit-root .ahint {
+    width: auto;
+    align-self: flex-start;
+  }
+}
+
+/* ---------- controls ---------- */
+
+.audit-root .actl {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.audit-root .ainput {
+  padding: 0.55rem 0.8rem;
+  background: rgba(4, 5, 7, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 -6px 14px rgba(0, 0, 0, 0.18);
+}
+
+.audit-root .ainput:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(4, 5, 7, 0.62);
+}
+
+.audit-root .ainput:focus {
+  border-color: rgba(0, 243, 255, 0.5);
+  box-shadow: 0 0 0 4px rgba(0, 243, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: rgba(4, 5, 7, 0.66);
+}
+
+.audit-root .ahint {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.audit-root .ajump {
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(244, 197, 66, 0.16), rgba(244, 197, 66, 0.05));
+  border-color: rgba(244, 197, 66, 0.32);
+  color: #ffe08a;
+  box-shadow: 0 0 24px rgba(244, 197, 66, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* ---------- trade / order rows ---------- */
+
+/* Cards with a chain-link divider between them: a hairline broken by small
+   gold hexagons, so the list reads as one connected ledger while each trade
+   stays its own glass object. The base layer clips rows for the radius; the
+   clip moves onto the head and body instead, because the divider lives in
+   the gap between rows and a clipped row would hide it. */
+.audit-root .arow {
+  position: relative;
+  overflow: visible;
+  border-radius: 16px;
+  border: 1px solid var(--lx-edge);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008));
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.audit-root .arow + .arow {
+  margin-top: 0.85rem;
+}
+
+.audit-root .arow + .arow::before {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  top: -0.78rem;
+  height: 0.72rem;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpolygon points='6 1 10.4 3.5 10.4 8.5 6 11 1.6 8.5 1.6 3.5' fill='%23050505' fill-opacity='0.92' stroke='%23f4c542' stroke-opacity='0.55' stroke-width='1'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpolygon points='6 2 9.4 4 9.4 8 6 10 2.6 8 2.6 4' fill='none' stroke='%238fe8ff' stroke-opacity='0.3' stroke-width='1'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpolygon points='6 2 9.4 4 9.4 8 6 10 2.6 8 2.6 4' fill='none' stroke='%238fe8ff' stroke-opacity='0.3' stroke-width='1'/%3E%3C/svg%3E"),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09) 18%, rgba(255, 255, 255, 0.09) 82%, transparent);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  background-position: center, 24% center, 76% center, center;
+  background-size: 12px 12px, 6px 6px, 6px 6px, 100% 1px;
+  opacity: 0.9;
+}
+
+.audit-root .arow__head {
+  border-radius: 15px;
+}
+
+.audit-root .arow.is-open .arow__head {
+  border-radius: 15px 15px 0 0;
+}
+
+.audit-root .arow__body {
+  border-radius: 0 0 15px 15px;
+}
+
+.audit-root .arow:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.42), 0 0 30px rgba(244, 197, 66, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.audit-root .arow.is-open {
+  border-color: rgba(244, 197, 66, 0.34);
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.055), rgba(255, 255, 255, 0.01));
+  box-shadow: 0 0 0 1px rgba(244, 197, 66, 0.05), 0 28px 64px rgba(0, 0, 0, 0.5),
+    0 0 44px rgba(244, 197, 66, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.audit-root .arow__id {
+  color: var(--lx-gold-hi);
+  text-shadow: 0 0 14px rgba(244, 197, 66, 0.35);
+}
+
+.audit-root .arow__amt {
+  color: #ffffff;
+}
+
+.audit-root .arow.is-open .arow__caret {
+  color: var(--lx-gold);
+}
+
+/* ---------- trade detail view (expanded row) ---------- */
+
+/* Three columns: escrow left, chat over the payment proof in the middle,
+   timeline right. Scoped with :has() to the trade grid - order rows reuse
+   .agrid for a single "Order" block and must keep the auto-fit fallback. */
+.audit-root .agrid:has(> .ablock--escrow) {
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.3fr) minmax(0, 0.96fr);
+  grid-template-areas:
+    'esc chat tl'
+    'esc proof tl';
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.audit-root .ablock--escrow { grid-area: esc; }
+.audit-root .ablock--chat { grid-area: chat; }
+.audit-root .ablock--proof { grid-area: proof; }
+.audit-root .ablock--timeline { grid-area: tl; }
+
+/* Each panel is the same glass object as the cards above the fold: gradient
+   fill, hairline edge, soft drop, inner top highlight. */
+.audit-root .agrid .ablock {
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.008));
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+/* The header is the concept's kicker: a glowing hexagon, an uppercase label,
+   a hairline to the panel edge. Gold marks the money panels, cyan the comms
+   and evidence ones. */
+.audit-root .agrid .ablock h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.audit-root .agrid .ablock h3::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(180deg, #ffe9ad, var(--lx-gold));
+  box-shadow: 0 0 12px rgba(244, 197, 66, 0.55);
+}
+
+.audit-root .agrid .ablock--chat h3::before,
+.audit-root .agrid .ablock--proof h3::before {
+  background: linear-gradient(180deg, #d7fbff, var(--lx-cyan));
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.5);
+}
+
+/* The real/total count rides the header as a badge - emerald only when every
+   screenshot on the trade is a real image. */
+.audit-root .ablock__badge {
+  margin-left: auto;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-root .ablock__badge--ok {
+  color: #57ffb1;
+  border-color: rgba(0, 255, 133, 0.34);
+  background: rgba(0, 255, 133, 0.1);
+  box-shadow: 0 0 16px rgba(0, 255, 133, 0.14);
+  text-shadow: 0 0 10px rgba(0, 255, 133, 0.4);
+}
+
+/* ---------- escrow panel ---------- */
+
+/* Rows are hairlined and spread to fill the column, so the sheet reads as a
+   deliberate spec list rather than one that ran out early. */
+.audit-root .ablock--escrow dl {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.audit-root .ablock--escrow dl > div {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.audit-root .ablock--escrow dl > div:last-child {
+  border-bottom: 0;
+}
+
+.audit-root .ablock--escrow dt {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.72rem;
+}
+
+.audit-root .ablock--escrow dd {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.audit-root .ablock--escrow dd a {
+  color: #7ee9ff;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 243, 255, 0.28);
+}
+
+.audit-root .ablock--escrow dd a:hover {
+  color: #ffd98a;
+  border-bottom-color: rgba(244, 197, 66, 0.5);
+}
+
+.audit-root .ablock--escrow .amono {
+  color: #ffd98a;
+}
+
+.audit-root .ablock--escrow .amono--dim {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.audit-root .ablock--escrow .anote {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.audit-root .ablock--escrow .averified {
+  display: inline-block;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 133, 0.3);
+  background: rgba(0, 255, 133, 0.08);
+  color: #57ffb1;
+  box-shadow: 0 0 16px rgba(0, 255, 133, 0.1);
+}
+
+.audit-root .ablock--escrow .aunverified {
+  display: inline-block;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 110, 70, 0.5);
+  background: rgba(255, 94, 58, 0.16);
+  color: #ffc9b4;
+}
+
+/* ---------- chat panel ---------- */
+
+.audit-root .ablock--chat .achat {
+  max-height: 11.5rem;
+  gap: 0.5rem;
+}
+
+.audit-root .ablock--chat .amsg {
+  border-radius: 13px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 2px solid rgba(0, 243, 255, 0.38);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008));
+  transition: border-color 0.22s, background 0.22s, box-shadow 0.22s;
+}
+
+.audit-root .ablock--chat .amsg:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(0, 243, 255, 0.7);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), 0 0 18px rgba(0, 243, 255, 0.06);
+}
+
+.audit-root .ablock--chat .amsg__h {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.audit-root .ablock--chat .amsg__h span:first-child {
+  color: #7ee9ff;
+}
+
+.audit-root .ablock--chat .amsg__x {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ---------- payment proof panel ---------- */
+
+.audit-root .ablock--proof .ashots {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  max-height: 14.5rem;
+}
+
+/* The evidence glows: a gold-edged frame with a soft outer light - the
+   brightest object in the column it sits in. */
+.audit-root .ablock--proof .ashot-frame {
+  border-radius: 13px;
+  border-color: rgba(244, 197, 66, 0.3);
+  background: rgba(3, 4, 6, 0.55);
+  box-shadow: 0 0 30px rgba(244, 197, 66, 0.12), 0 16px 36px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.audit-root .ablock--proof .ashot:hover .ashot-frame {
+  border-color: rgba(244, 197, 66, 0.55);
+  box-shadow: 0 0 46px rgba(244, 197, 66, 0.24), 0 18px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.audit-root .ablock--proof .ashot figcaption a {
+  color: #7ee9ff;
+  text-decoration: none;
+}
+
+.audit-root .ablock--proof .ashot figcaption a:hover {
+  color: #ffd98a;
+}
+
+.audit-root .ablock--proof .ashot figcaption span {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- timeline panel ---------- */
+
+.audit-root .ablock--timeline .atl {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  align-content: start;
+}
+
+/* Every event is a node on a rail: a glowing hexagon, a connector down to the
+   next node, and the timestamp in the gutter beside it. */
+.audit-root .ablock--timeline .aev {
+  position: relative;
+  grid-template-columns: 7.4rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.3rem 0 0.3rem 1.5rem;
+}
+
+.audit-root .ablock--timeline .aev::before {
+  content: '';
+  position: absolute;
+  left: 0.28rem;
+  top: 0.5rem;
+  width: 0.44rem;
+  height: 0.44rem;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(180deg, #ffe9ad, #e8a93c);
+  box-shadow: 0 0 10px rgba(244, 197, 66, 0.5);
+}
+
+.audit-root .ablock--timeline .aev::after {
+  content: '';
+  position: absolute;
+  left: 0.485rem;
+  top: 1.12rem;
+  bottom: -0.9rem;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.32), rgba(244, 197, 66, 0.07));
+}
+
+.audit-root .ablock--timeline .aev:last-child::after {
+  display: none;
+}
+
+.audit-root .ablock--timeline .aev__t {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.62rem;
+}
+
+.audit-root .ablock--timeline .aev__b {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.74rem;
+}
+
+.audit-root .ablock--timeline .aev__b b {
+  color: #ffd98a;
+  font-size: 0.66rem;
+}
+
+/* The last node takes the trade's own colour, so the timeline visibly ends on
+   the outcome: emerald for completed, ember for cancelled or stuck. */
+.audit-root .atl--completed .aev:last-child::before {
+  background: linear-gradient(180deg, #b9ffd9, #2fe08a);
+  box-shadow: 0 0 16px rgba(0, 255, 133, 0.65);
+}
+
+.audit-root .atl--completed .aev:last-child .aev__b b {
+  color: #57ffb1;
+}
+
+.audit-root .atl--cancelled .aev:last-child::before,
+.audit-root .atl--stuck .aev:last-child::before {
+  background: linear-gradient(180deg, #ffc9b4, #ff5a3d);
+  box-shadow: 0 0 16px rgba(255, 94, 58, 0.6);
+}
+
+.audit-root .atl--cancelled .aev:last-child .aev__b b,
+.audit-root .atl--stuck .aev:last-child .aev__b b {
+  color: #ff9c82;
+}
+
+/* ---------- the open row's top bar ---------- */
+
+.audit-root .arow.is-open .arow__head {
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.055), rgba(244, 197, 66, 0.012));
+}
+
+.audit-root .arow.is-open .arow__head:hover {
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.075), rgba(244, 197, 66, 0.02));
+}
+
+.audit-root .arow.is-open .arow__amt {
+  color: #ffe9ad;
+  text-shadow: 0 0 16px rgba(244, 197, 66, 0.3);
+}
+
+/* ---------- detail view: responsive ---------- */
+
+@media (max-width: 1120px) {
+  .audit-root .agrid:has(> .ablock--escrow) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'esc tl'
+      'chat proof';
+  }
+}
+
+@media (max-width: 720px) {
+  .audit-root .agrid:has(> .ablock--escrow) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'esc'
+      'chat'
+      'proof'
+      'tl';
+  }
+
+  /* Stacked, the escrow sheet is its natural height again. */
+  .audit-root .ablock--escrow dl {
+    justify-content: flex-start;
+  }
+
+  .audit-root .ablock--timeline .atl {
+    flex: none;
+    max-height: 20rem;
+  }
+
+  /* The base layer stacks the event time above the body on phones; keep that,
+     but keep the rail too. */
+  .audit-root .ablock--timeline .aev {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.12rem;
+    border-bottom: 0;
+  }
+}
+
+/* ---------- escrow alert (kept from the previous pass) ---------- */
+
+.audit-root .areason {
+  border-color: rgba(0, 243, 255, 0.28);
+  background: linear-gradient(180deg, rgba(0, 243, 255, 0.07), rgba(0, 243, 255, 0.015));
+}
+
+.audit-root .areason.is-stuck {
+  border-color: rgba(255, 95, 76, 0.36);
+  background: linear-gradient(180deg, rgba(255, 86, 64, 0.08), rgba(255, 86, 64, 0.02));
+}
+
+.audit-root .areason__t { color: var(--lx-cyan-text); }
+.audit-root .areason.is-stuck .areason__t { color: #ffb39e; }
+
+/* ---------- status chips ---------- */
+
+/* The concept's chip, made glass: mono and letterspaced, a whisper of fill,
+   the colour carried mostly by the text's own glow, an inner top highlight
+   and a soft inner shadow for depth. No backdrop blur - the audit list can
+   hold a hundred of these, and the depth comes from the shadows. */
+.audit-root .achip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.028);
+  color: rgba(255, 255, 255, 0.62);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  line-height: 1.5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 -5px 10px rgba(0, 0, 0, 0.22);
+}
+
+/* OPEN - electric cyan. */
+.audit-root .achip--is-open {
+  color: #7ef4ff;
+  border-color: rgba(0, 243, 255, 0.3);
+  background: rgba(0, 243, 255, 0.06);
+  text-shadow: 0 0 16px rgba(0, 243, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(0, 243, 255, 0.14);
+}
+
+/* PAID - soft electric blue, so it never reads as OPEN at a glance. */
+.audit-root .achip--is-paid {
+  color: #9dd4ff;
+  border-color: rgba(110, 190, 255, 0.3);
+  background: rgba(110, 190, 255, 0.06);
+  text-shadow: 0 0 16px rgba(110, 190, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(110, 190, 255, 0.12);
+}
+
+/* COMPLETED - emerald. */
+.audit-root .achip--is-done {
+  color: #5cffb5;
+  border-color: rgba(0, 255, 133, 0.3);
+  background: rgba(0, 255, 133, 0.06);
+  text-shadow: 0 0 16px rgba(0, 255, 133, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(0, 255, 133, 0.14);
+}
+
+/* OWNER OVERRIDE - house gold. */
+.audit-root .achip--override {
+  color: #ffd76e;
+  border-color: rgba(244, 197, 66, 0.32);
+  background: rgba(244, 197, 66, 0.07);
+  text-shadow: 0 0 16px rgba(244, 197, 66, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(244, 197, 66, 0.14);
+}
+
+/* STUCK - deep amber-red; the alarm pulse comes from the base layer. */
+.audit-root .achip--stuck {
+  color: #ff9c82;
+  border-color: rgba(255, 94, 58, 0.36);
+  background: rgba(255, 94, 58, 0.08);
+  text-shadow: 0 0 16px rgba(255, 94, 58, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+    0 0 20px rgba(255, 94, 58, 0.16);
+}
+
+/* CANCELLED / UNVERIFIED - quiet glass, no glow. */
+.audit-root .achip--is-closed {
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+/* SOLD / BOUGHT side chips - muted so they never compete with a status. */
+.audit-root .achip--sell {
+  color: #ecc987;
+  border-color: rgba(244, 197, 66, 0.24);
+  background: rgba(244, 197, 66, 0.05);
+}
+
+.audit-root .achip--buy {
+  color: #8fe8ff;
+  border-color: rgba(0, 243, 255, 0.22);
+  background: rgba(0, 243, 255, 0.05);
+}
+
+/* A shot count or trade count is a quiet tally, not a state. */
+.audit-root .achip--done {
+  color: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+/* ---------- links + focus ---------- */
+
+.audit-root .alink--addr {
+  color: #7ee9ff;
+  border-bottom-color: rgba(0, 243, 255, 0.32);
+}
+
+.audit-root .alink--addr:hover {
+  color: #c2f8ff;
+}
+
+.audit-root :where(.abtn, .atab, .arow__head, .ainput, .alink--addr, .adoc__zoom, .adrawer__x):focus-visible {
+  outline: 2px solid rgba(244, 197, 66, 0.8);
+  outline-offset: 2px;
+}
+
+/* ---------- drawer (person detail) ---------- */
+
+.audit-root .adrawer__panel {
+  border-left-color: rgba(244, 197, 66, 0.18);
+}
+
+.audit-root .adrawer__head {
+  background: linear-gradient(180deg, rgba(10, 10, 13, 0.9), rgba(8, 8, 10, 0.86));
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+/* ---------- signature gate ---------- */
+
+.audit-root .agate__box {
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(244, 197, 66, 0.16);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.65), 0 0 70px rgba(244, 197, 66, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.audit-root .agate__sig {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(244, 197, 66, 0.2);
+}
+
+.audit-root .abtn--gate {
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(244, 197, 66, 0.2), rgba(244, 197, 66, 0.08));
+  border-color: rgba(244, 197, 66, 0.5);
+  color: #ffe9ad;
+  box-shadow: 0 10px 28px rgba(244, 197, 66, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+/* ---------- motion opt-out ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .audit-root .afund:hover,
+  .audit-root .astat:hover,
+  .audit-root .arow:hover,
+  .audit-root .abtn:hover {
+    transform: none;
+  }
+}

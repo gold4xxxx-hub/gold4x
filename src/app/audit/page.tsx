@@ -16,6 +16,8 @@ import Link from 'next/link';
 
 import './audit.css';
 import './audit-premium.css';
+// Loaded last on purpose: the cyber-luxury layer overrides both of the above.
+import './audit-luxury.css';
 import { AuditGate, useAuditToken } from './AuditGate';
 import { KycPanel, type KycRecord } from './KycPanel';
 
@@ -779,7 +781,7 @@ function TradeRow({ trade, ctx, showTrades }: { trade: Trade; ctx: AuditCtx; sho
       {open && (
         <div className="arow__body">
           <div className="agrid">
-            <section className="ablock">
+            <section className="ablock ablock--escrow">
               <h3>Escrow</h3>
               {trade.escrowState && trade.escrowState !== 'RELEASED' && (
                 <div className={`areason ${trade.stuck ? 'is-stuck' : ''}`}>
@@ -869,7 +871,7 @@ function TradeRow({ trade, ctx, showTrades }: { trade: Trade; ctx: AuditCtx; sho
               </dl>
             </section>
 
-            <section className="ablock">
+            <section className="ablock ablock--chat">
               <h3>Chat ({trade.chat.length})</h3>
               {trade.chat.length === 0 ? (
                 <p className="aempty">No messages.</p>
@@ -888,8 +890,19 @@ function TradeRow({ trade, ctx, showTrades }: { trade: Trade; ctx: AuditCtx; sho
               )}
             </section>
 
-            <section className="ablock">
-              <h3>Payment proof ({real.length}/{trade.screenshots.length} real)</h3>
+            <section className="ablock ablock--proof">
+              <h3>
+                Payment proof{' '}
+                <span
+                  className={
+                    real.length > 0 && real.length === trade.screenshots.length
+                      ? 'ablock__badge ablock__badge--ok'
+                      : 'ablock__badge'
+                  }
+                >
+                  ({real.length}/{trade.screenshots.length} real)
+                </span>
+              </h3>
               {trade.screenshots.length === 0 ? (
                 <p className="aempty">None shared.</p>
               ) : (
@@ -922,9 +935,9 @@ function TradeRow({ trade, ctx, showTrades }: { trade: Trade; ctx: AuditCtx; sho
               )}
             </section>
 
-            <section className="ablock">
+            <section className="ablock ablock--timeline">
               <h3>Timeline</h3>
-              <div className="atl">
+              <div className={`atl atl--${trade.status.toLowerCase()}`}>
                 {trade.startedAt && (
                   <div className="aev">
                     <span className="aev__t">{when(trade.startedAt)}</span>
@@ -1400,7 +1413,9 @@ export default function AuditPage() {
         <header className="ahead">
           <div>
             <span className="audit-eyebrow">Operator console · read-only</span>
-            <h1 className="ahead__t">P2P Escrow Audit</h1>
+            <h1 className="ahead__t">
+              P2P Escrow <span className="ahead__t-g">Audit</span>
+            </h1>
             <p className="ahead__s">
               index built {data.generatedAt.replace('T', ' ').slice(0, 19)} UTC ·{' '}
               {/* One nowrap run, so the arrow cannot end a line by itself. */}
@@ -1411,8 +1426,16 @@ export default function AuditPage() {
             </p>
           </div>
           <div className="ahead__m">
-            <p>contract <code className="acode">{data.contract}</code></p>
-            <p>owner <code className="acode">{data.escrowOwner}</code></p>
+            {/* Labels are spans so the pill can dim the word and light the
+                address - the address is the part read at a glance. */}
+            <p>
+              <span className="ahead__lbl">contract</span>{' '}
+              <code className="acode">{data.contract}</code>
+            </p>
+            <p>
+              <span className="ahead__lbl">owner</span>{' '}
+              <code className="acode">{data.escrowOwner}</code>
+            </p>
           </div>
         </header>
 
@@ -1423,7 +1446,12 @@ export default function AuditPage() {
           refunds; the two buckets below are the ones that need a decision.
         */}
         <section className="afunds">
-          <h2 className="afunds__t">Escrow funds — {s.escrowBalanceJSAV} JSAV</h2>
+          {/* The total is the headline; the label rides beside it so the
+              figure can carry the glow without shrinking the words. */}
+          <h2 className="afunds__t">
+            <span className="afunds__lbl">Escrow funds</span> —{' '}
+            <span className="afunds__num">{s.escrowBalanceJSAV} JSAV</span>
+          </h2>
           <div className="afunds__grid">
             <div className="afund afund--stuck">
               <div className="afund__k">Stuck — needs cancelling</div>
@@ -1435,7 +1463,9 @@ export default function AuditPage() {
               </button>
             </div>
 
-            <div className="afund afund--wait">
+            {/* afund--wait is shared; the modifier picks the accent: amber
+                for a seller who must confirm, cyan for a buyer who must pay. */}
+            <div className="afund afund--wait afund--seller">
               <div className="afund__k">Waiting on seller confirmation</div>
               <div className="afund__v">{s.awaitingSeller.valueJSAV} JSAV</div>
               <div className="afund__n">{s.awaitingSeller.trades} trade(s)</div>
@@ -1445,7 +1475,7 @@ export default function AuditPage() {
               </button>
             </div>
 
-            <div className="afund afund--wait">
+            <div className="afund afund--wait afund--buyer">
               <div className="afund__k">Waiting on buyer payment</div>
               <div className="afund__v">{s.awaitingBuyer.valueJSAV} JSAV</div>
               <div className="afund__n">{s.awaitingBuyer.trades} trade(s)</div>
