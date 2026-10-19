@@ -1174,7 +1174,34 @@
 
 /* ---------- drawer (person detail) ---------- */
 
+/* The drawer is position:fixed, but React mounts it inside the person row
+   (.arow__body) - so any transform on the row becomes the drawer's containing
+   block. The row's hover lift in audit-premium.css did exactly that. With the
+   cursor over the row (the state right after clicking "Full KYC record &
+   Aadhaar") the drawer collapsed to the row's box; and because the drawer is
+   itself inside the row, every resize re-triggered :hover and it pumped
+   between row-sized and full-height with the cursor sitting still. Reported as
+   "the view is so short and keeps getting big and small on its own".
+   While a drawer is mounted the row must stay untransformed, and transform
+   must not be in its transition list, or the 0.28s lift fade keeps the drawer
+   anchored to the row for one more transition on open. */
+.audit-root .arow:has(.adrawer) {
+  transition:
+    border-color 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.audit-root .arow:has(.adrawer):hover {
+  transform: none;
+}
+
+/* Same class of feedback loop, other mechanism: the panel scrolls, and a
+   classic scrollbar appearing steals ~15px of width, which wraps text taller
+   and can flip the scrollbar back off - a loop that reads as the panel
+   breathing. A stable gutter reserves the width once. */
 .audit-root .adrawer__panel {
+  scrollbar-gutter: stable;
   border-left-color: rgba(244, 197, 66, 0.18);
 }
 
