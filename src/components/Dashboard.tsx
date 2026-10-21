@@ -249,27 +249,28 @@ export const Dashboard: React.FC = () => {
           setAllTimeTeamBV(sumTeam);
           setAllTimeTotalBV(sumPersonal + sumTeam);
           setMonthlyBreakdown(breakdown);
-          // Try fetching exact first transaction date from API (overrides fallback)
-          (async () => {
-            try {
-              const res = await fetch(`/api/user/join-date/${address}`);
-              if (res.ok) {
-                const data = await res.json();
-                if (data.date === 'coming soon') {
-                  setJoinDate('coming soon');
-                } else if (data.date) {
-                  const raw = data.date.includes('T') ? data.date : data.date.replace(' ', 'T') + 'Z';
-                  const d = new Date(raw);
-                  if (!isNaN(d.getTime())) {
-                    setJoinDate(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
-                  }
-                }
-              }
-            } catch (_) { /* ignore */ }
-          })();
         } catch (err2) {
           console.warn('All-time BV fetch failed:', err2);
         }
+        // Join date is fetched independently of the BV loop above, so the
+        // "Joined" tile still fills in even when a BV call fails.
+        (async () => {
+          try {
+            const res = await fetch(`/api/user/join-date/${address}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.date === 'coming soon') {
+                setJoinDate('coming soon');
+              } else if (data.date) {
+                const raw = data.date.includes('T') ? data.date : data.date.replace(' ', 'T') + 'Z';
+                const d = new Date(raw);
+                if (!isNaN(d.getTime())) {
+                  setJoinDate(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
+                }
+              }
+            }
+          } catch (_) { /* ignore */ }
+        })();
       } catch (err) {
         console.error('Dashboard fetch error:', err);
         setInvested(null);
@@ -519,7 +520,11 @@ export const Dashboard: React.FC = () => {
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Joined</div>
-          {loading ? <div className="fx-skeleton h-5 w-24" /> : <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || 'Coming Soon'}</span>}
+          {loading ? (
+            <div className="fx-skeleton h-5 w-24" />
+          ) : (
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || 'Coming Soon'}</span>
+          )}
         </div>
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-2" style={{ padding: '16px 20px' }}>

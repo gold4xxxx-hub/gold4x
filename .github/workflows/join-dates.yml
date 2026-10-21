@@ -1,0 +1,127 @@
+# Keeps the dashboard "Joined" tile current.
+#
+# The contract stores no registration timestamp, so the join date of every
+# user is derived from the first on-chain moment that wallet paid into the
+# contract - the REG_FEE transfer performed by register() / registerWithStable().
+#
+# That mapping is a snapshot: src/data/userJoinDates.json holds one entry per
+# user registered up to meta.checkpointBlock. Without this job the snapshot
+# would stop growing, and the API route would have to fall back to scanning the
+# chain for users it does not know yet. That fallback is fine for a day or two,
+# but the scan window grows by roughly 190,000 blocks a day, so it gets slower
+# and slower until it stops being usable.
+#
+# The refresh is incremental: only the blocks after the current checkpoint are
+# scanned, which takes a few seconds instead of walking 42 million blocks.
+#
+# Commits only when the snapshot actually changed, so no deploy is triggered
+# on a day without new registrations.
+
+name: Refresh the join dates
+
+on:
+  schedule:
+    # 04:23 UTC, twice a day. Off the hour on purpose: scheduled workflows are
+    # queued at :00 and GitHub's own load makes those the busiest minutes.
+    - cron: '23 4,16 * * *'
+  # A manual run, for when you want fresh data now instead of waiting.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Never let two builds race. A manual run while a scheduled one is going would
+  # otherwise produce two commits from two different chain heads.
+  group: join-dates
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Cron workflows are skipped on repositories with no activity for 60 days, so
+    # this runs for free on a public repository and cannot quietly start costing
+    # money. The job is cheap regardless.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Only ethers is needed to read the chain. Installing the full dependency
+      # tree would pull in Next and React for a script that never touches
+      # either, which is several minutes of CI for nothing.
+      - name: Install the one dependency the builder needs
+        run: npm install --no-save --no-audit --no-fund ethers@^6.16.0
+
+      - name: Add the new registrations to the snapshot
+        env:
+          ANKR_API_KEY: ${{ secrets.ANKR_API_KEY }}
+        run: node scripts/buildJoinDates.mjs --incremental
+
+      # Fails the job if the refresh produced nothing usable, rather than
+      # committing a snapshot that silently lost records.
+      - name: Confirm the snapshot is usable
+        run: |
+          node -e "
+            const fs = require('fs');
+            if (!fs.existsSync('src/data/userJoinDates.json')) { console.error('no snapshot written'); process.exit(1); }
+            const dates = JSON.parse(fs.readFileSync('src/data/userJoinDates.json', 'utf8'));
+            const meta  = JSON.parse(fs.readFileSync('src/data/userJoinDates.meta.json', 'utf8'));
+            const keys = Object.keys(dates);
+            if (keys.length === 0) { console.error('the snapshot is empty'); process.exit(1); }
+            if (meta.count !== keys.length) { console.error('count does not match', meta.count, keys.length); process.exit(1); }
+            const bad = keys.filter(k => !/^0x[0-9a-f]{40}$/.test(k) || isNaN(Date.parse(dates[k])));
+            if (bad.length) { console.error('malformed entries', bad.slice(0,5)); process.exit(1); }
+            console.log('users', keys.length, '| checkpoint', meta.checkpointBlock);
+          "
+
+      # The join date of a user must never change once it is known, so the
+      # refresh is only allowed to add entries. A changed date means the
+      # builder mis-derived something and the job has to stop.
+      - name: Check that no existing date changed
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+            const before = JSON.parse(execSync('git show HEAD:src/data/userJoinDates.json', { encoding: 'utf8' }));
+            const after  = JSON.parse(require('fs').readFileSync('src/data/userJoinDates.json', 'utf8'));
+            const changed = Object.keys(before).filter(k => before[k] !== after[k]);
+            if (changed.length) {
+              console.error('existing join dates changed:', changed.slice(0, 5));
+              process.exit(1);
+            }
+            const added = Object.keys(after).filter(k => !(k in before)).length;
+            console.log('existing dates unchanged | new users:', added);
+          "
+
+      - name: Commit and push
+        run: |
+          git config user.name  'join-dates-bot'
+          git config user.email 'join-dates-bot@users.noreply.github.com'
+          git add src/data/userJoinDates.json src/data/userJoinDates.meta.json
+          # Adding the two files explicitly is the safeguard against a stray
+          # `git add -A` sweeping up anything else.
+          if git diff --cached --name-only | grep -qvx -e 'src/data/userJoinDates.json' -e 'src/data/userJoinDates.meta.json'; then
+            echo 'refusing to commit anything other than the join date files'
+            git diff --cached --name-only
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo 'no new registrations since the last run. No deploy.'
+            exit 0
+          fi
+          head=$(node -e "console.log(JSON.parse(require('fs').readFileSync('src/data/userJoinDates.meta.json','utf8')).checkpointBlock)")
+          users=$(node -e "console.log(JSON.parse(require('fs').readFileSync('src/data/userJoinDates.meta.json','utf8')).count)")
+          git commit -m "Refresh the join dates to block $head ($users users)"
+          # Someone may have pushed since the checkout. Rebase and try once more
+          # rather than losing the run to a non-fast-forward.
+          for attempt in 1 2; do
+            if git push; then exit 0; fi
+            echo "push attempt $attempt failed, rebasing onto origin/main"
+            git pull --rebase origin main
+          done
+          echo 'could not push after rebasing; the next scheduled run will retry'
+          exit 0

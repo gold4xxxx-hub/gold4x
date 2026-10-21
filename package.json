@@ -12,7 +12,9 @@
     "audit:offline": "node scripts/buildOfflineAudit.mjs",
     "audit:refresh": "node scripts/auditRefresh.mjs",
     "audit:encrypt": "node scripts/encryptAuditIndex.mjs",
-    "audit:serve": "node scripts/auditServer.mjs"
+    "audit:serve": "node scripts/auditServer.mjs",
+    "join:build": "node scripts/buildJoinDates.mjs",
+    "join:validate": "node scripts/validateJoinDates.mjs"
   },
   "dependencies": {
     "@metamask/sdk": "^0.34.0",
