@@ -823,33 +823,6 @@ select.fx-input option {
   line-height: 1;
 }
 
-/* The countdown that replaces the join date until the deadline. */
-.fx-join-countdown {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 4px;
-  max-width: 100%;
-}
-.fx-join-countdown__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--fx-gold-highlight);
-  box-shadow: 0 0 8px rgba(232, 197, 106, 0.9);
-  animation: fxPulse 1.6s ease-in-out infinite;
-  flex-shrink: 0;
-}
-.fx-join-countdown__text {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--fx-gold-highlight);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  text-shadow: 0 0 14px rgba(232, 197, 106, 0.55);
-  white-space: nowrap;
-}
-
 .fx-data-strip__label--alltime {
   display: inline;
   line-height: 1.2;
@@ -1667,21 +1640,6 @@ select.fx-input option {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-  }
-  /* The countdown is the one value that has to be readable at a glance, and
-     on a phone the Joined tile only gets half the row. Let it shrink and
-     wrap rather than be cut off with an ellipsis. */
-  .fx-data-strip--status .fx-data-strip__item .fx-join-countdown,
-  .fx-data-strip--status .fx-data-strip__item .fx-join-countdown__text {
-    overflow: visible;
-    text-overflow: clip;
-    max-width: none;
-  }
-  .fx-data-strip--status .fx-data-strip__item .fx-join-countdown__text {
-    white-space: normal;
-    font-size: 0.78rem;
-    letter-spacing: 0;
-    line-height: 1.25;
   }
   .fx-data-strip__value,
   .fx-data-strip__value--gold,

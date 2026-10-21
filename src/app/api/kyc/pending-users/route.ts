@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import {
+  archiveRpcUrl,
+  asBlockNumber,
+  scanTopic,
+  walletFromTopic,
+  KYC_SUBMITTED_TOPIC,
+  KYC_VERIFIED_TOPIC,
+} from '@/lib/kycLogScan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CONTRACT_ADDRESS = '0x8578Aaf3bA423e62A5e6ea04b69fe91B8545c2C0';
-const DEPLOY_BLOCK = 116_000_000;
-const WINDOW = 50_000;
-const CACHE_TTL_MS = 30 * 1000;
-const KYC_SUBMITTED_TOPIC = ethers.id('KYCSubmitted(address)');
-const KYC_VERIFIED_TOPIC = ethers.id('KYCVerified(address,bool)');
-
-type ScanLog = {
-  topics?: string[];
-  data?: string;
-  blockNumber?: string;
-};
+const CACHE_TTL_MS = 30_000;
 
 type PendingUser = {
   wallet: string;
@@ -24,56 +21,6 @@ type PendingUser = {
 
 let cache: { expiresAt: number; users: PendingUser[] } | null = null;
 let pendingScan: Promise<PendingUser[]> | null = null;
-
-function asBlockNumber(value: string | undefined): number {
-  if (!value) return 0;
-  return Number.parseInt(value, value.startsWith('0x') ? 16 : 10) || 0;
-}
-
-function walletFromTopic(topic: string | undefined): string | null {
-  if (!topic) return null;
-  try {
-    return ethers.getAddress(`0x${topic.slice(-40)}`);
-  } catch {
-    return null;
-  }
-}
-
-function archiveRpcUrl(): string | null {
-  const explicit = process.env.BSC_RPC_URL?.trim();
-  if (explicit) return explicit;
-  const ankr = process.env.ANKR_API_KEY?.trim();
-  return ankr ? `https://rpc.ankr.com/bsc/${ankr}` : null;
-}
-
-async function scanTopic(
-  provider: ethers.JsonRpcProvider,
-  topic0: string,
-  latest: number,
-): Promise<ScanLog[]> {
-  const logs: ScanLog[] = [];
-  for (let from = DEPLOY_BLOCK; from <= latest; from += WINDOW) {
-    const to = Math.min(from + WINDOW - 1, latest);
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        const chunk = await provider.getLogs({
-          address: CONTRACT_ADDRESS,
-          topics: [topic0],
-          fromBlock: from,
-          toBlock: to,
-        });
-        for (const log of chunk) {
-          logs.push({ topics: [...log.topics], data: log.data, blockNumber: String(log.blockNumber) });
-        }
-        break;
-      } catch (error) {
-        if (attempt >= 3) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-      }
-    }
-  }
-  return logs;
-}
 
 async function scanPendingUsers(): Promise<PendingUser[]> {
   const url = archiveRpcUrl();
@@ -104,6 +51,7 @@ async function scanPendingUsers(): Promise<PendingUser[]> {
     .map(([wallet, submittedAtBlock]) => ({ wallet, submittedAtBlock }))
     .sort((a, b) => b.submittedAtBlock - a.submittedAtBlock);
 }
+
 async function getPendingUsers(): Promise<PendingUser[]> {
   if (cache && cache.expiresAt > Date.now()) return cache.users;
   if (pendingScan) return pendingScan;

@@ -24,6 +24,10 @@ pnpm-debug.log*
 Thumbs.db
 .vercel
 
+# Netlify build artefacts from an earlier attempt. The site is deployed on
+# Vercel, so this was never used and it only carried stale build output.
+.netlify
+
 # local dev logs from this session
 dev-p2p.log
 dev-p2p.err
