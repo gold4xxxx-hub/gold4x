@@ -28,6 +28,24 @@ function fmtInt(n: number | null): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
+/**
+ * The "Joined" tile teases the 22:00 IST deadline of 21 October 2026.
+ *
+ * Until then it counts down to it, and afterwards it shows the real join
+ * date. The deadline is a fixed absolute moment (22:00 in India, UTC+5:30,
+ * which has no daylight saving) so every visitor sees the same countdown
+ * regardless of the timezone their browser is in.
+ */
+const TEASER_DEADLINE_UTC = Date.UTC(2026, 9, 21, 16, 30, 0); // 21 Oct 2026, 22:00 IST
+
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function fmtRank(n: number | null): string {
   if (n === null) return '-';
   const rankMap: Record<number, string> = {
@@ -121,6 +139,29 @@ export const Dashboard: React.FC = () => {
   const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  // null until the component is mounted, so the server render and the first
+  // client render agree and React never complains about a mismatch.
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const tick = () => {
+      const now = Date.now();
+      setNowMs(now);
+      if (now >= TEASER_DEADLINE_UTC && timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  const teaserRemaining = nowMs === null ? null : TEASER_DEADLINE_UTC - nowMs;
+  const teaserActive = teaserRemaining !== null && teaserRemaining > 0;
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -520,7 +561,11 @@ export const Dashboard: React.FC = () => {
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Joined</div>
-          {loading ? (
+          {teaserActive ? (
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
+              Coming in {formatCountdown(teaserRemaining ?? 0)}
+            </span>
+          ) : loading ? (
             <div className="fx-skeleton h-5 w-24" />
           ) : (
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || 'Coming Soon'}</span>
