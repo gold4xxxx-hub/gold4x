@@ -1,82 +1,46 @@
-\# Gold4x P2P Backend Server
+# Gold4x P2P Backend Server
 
+This Node.js + Socket.IO service supports trade signaling for WebRTC file
+transfers, plus the demo chat and upload endpoints.
 
+## Setup
 
-This is a simple Node.js + Socket.io backend for real-time chat and file uploads for the Gold4x P2P trading app.
-
-
-
-\## Features
-
-\- Real-time chat per order (Socket.io)
-
-\- File upload and sharing per order (Express + Multer)
-
-\- In-memory chat history (for demo)
-
-
-
-\## Setup
-
-
-
-1\. Install dependencies:
-
-
-
-```bash
-
+```powershell
 cd server
-
 npm install
-
-```
-
-
-
-2\. Start the server:
-
-
-
-```bash
-
 npm start
-
 ```
 
+The server listens on port 4000 by default. Configure `P2P_ESCROW_CONTRACT_ADDRESS`
+for a different escrow deployment and `BSC_RPC_URL` if the default BNB Smart Chain
+RPC is unsuitable.
 
+Set `NEXT_PUBLIC_P2P_SIGNALING_URL` in the frontend build environment to the
+public origin of this service (for example `https://p2p-signal.example.com`).
+Production deployments must serve it over HTTPS/WSS.
 
-\- The server will run on port 4000 by default.
+## WebRTC file transfer
 
-\- File uploads are stored in `server/uploads/` and served at `/uploads/<filename>`.
+Socket.IO is used only for WebRTC signaling. The service issues a one-time
+challenge, verifies the wallet signature, and checks on-chain that the wallet
+belongs to the buyer or seller of an OPEN or PAID trade before admitting it to
+the trade's signaling room. The file data travels directly between browsers and
+is not stored by this service. Wallet verification is a free signature request;
+it does not submit a blockchain transaction.
 
+Transfers are limited to 10 MB and both participants must be online. A received
+file is temporary in the page and should be downloaded before closing the trade.
+WebRTC data channels are encrypted in transit, but this does not make the files
+trusted; participants should only open files they expect. The client currently
+uses a public STUN server; users behind restrictive NATs or firewalls may need a
+TURN relay, which must be configured as part of the deployment for reliable
+connectivity.
 
+## Existing demo endpoints
 
-\## Endpoints
+- `POST /upload/:orderId` — Upload files for an order (form field: `files[]`)
+- `GET /uploads/<filename>` — Download an uploaded file
+- `joinOrder`, `chatMessage`, and `chatHistory` — Demo Socket.IO chat events
 
-
-
-\- `POST /upload/:orderId` — Upload files for a specific order (form field: `files\[]`)
-
-\- `GET /uploads/<filename>` — Download uploaded files
-
-
-
-\## Socket.io Events
-
-\- `joinOrder` (orderId) — Join a chat room for an order
-
-\- `chatMessage` ({ orderId, sender, text }) — Send a message
-
-\- `chatHistory` (\[messages]) — Receive chat history on join
-
-
-
----
-
-
-
-For production, use a persistent database and secure file storage.
-
-
-
+Chat history remains in-memory for demo purposes. Configure origin restrictions,
+rate limiting, and persistent storage before exposing chat or uploads publicly.

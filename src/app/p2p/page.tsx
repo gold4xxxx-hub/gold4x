@@ -58,6 +58,7 @@ import {
   type ScreenshotEntry,
 } from '@/lib/p2pLogs';
 import { ipfsUrl } from '@/lib/ipfs';
+import { useP2PFileTransfer } from '@/hooks/useP2PFileTransfer';
 
 /** Seconds remaining until `deadline`, floored at 0. */
 function secondsLeft(deadline: number, now: number): number {
@@ -347,6 +348,7 @@ const P2PPage: React.FC = () => {
   // button so it lines up with Send, but still a real file input, which is what
   // makes mobile browsers surface the camera.
   const shotInputRef = useRef<HTMLInputElement>(null);
+  const transferInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!activeTrade) {
@@ -380,6 +382,17 @@ const P2PPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeTrade, account]);
   const tradeOpen = activeTrade?.status === TradeStatus.OPEN || activeTrade?.status === TradeStatus.PAID;
+  const canTransferFiles = Boolean(
+    activeTrade &&
+    tradeOpen &&
+    (sameWallet(activeTrade.buyer, account) || sameWallet(activeTrade.seller, account)),
+  );
+  const fileTransfer = useP2PFileTransfer({
+    tradeId: activeTrade?.id ?? null,
+    walletAddress: account,
+    signer,
+    enabled: canTransferFiles,
+  });
 
   useEffect(() => {
     if (!tradeOpen) return;
@@ -1849,6 +1862,60 @@ const P2PPage: React.FC = () => {
               Messages are written on-chain and are permanently public. Never include a
               phone number, OTP or password here.
             </p>
+            {canTransferFiles && (
+              <div className="p2p-file-transfer mb-3">
+                <div className="p2p-file-transfer__row">
+                  <span className="p2p-storage-note">{fileTransfer.status}</span>
+                  <button
+                    type="button"
+                    className="p2p-btn p2p-btn--icon"
+                    title="Send a file directly to the counterparty"
+                    aria-label="Send a file directly to the counterparty"
+                    disabled={!fileTransfer.connected || fileTransfer.sending}
+                    onClick={() => transferInputRef.current?.click()}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                      <path d="M12 16V4m0 0L7 9m5-5 5 5" />
+                      <path d="M5 14v5h14v-5" />
+                    </svg>
+                  </button>
+                  <input
+                    ref={transferInputRef}
+                    type="file"
+                    className="p2p-shot-input"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (file) void fileTransfer.sendFile(file);
+                    }}
+                  />
+                </div>
+                {(fileTransfer.sending || fileTransfer.receiving) && (
+                  <progress
+                    className="p2p-file-transfer__progress"
+                    max={100}
+                    value={fileTransfer.sending ? fileTransfer.progress : fileTransfer.receiveProgress}
+                    aria-label="File transfer progress"
+                  />
+                )}
+                {fileTransfer.receivedFile && (
+                  <a
+                    className="p2p-file-transfer__download"
+                    href={fileTransfer.receivedFile.url}
+                    download={fileTransfer.receivedFile.name}
+                  >
+                    Download {fileTransfer.receivedFile.name} (
+                    {(fileTransfer.receivedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  </a>
+                )}
+                <p className="p2p-storage-note">
+                  Files go directly between connected browsers, are limited to 10 MB,
+                  and are not saved in trade history. Both parties must stay online.
+                </p>
+              </div>
+            )}
             <div className="p2p-chat mb-3">
               {chatLoading && <span className="p2p-chat__empty">Loading history…</span>}
               {!chatLoading && transcript.length === 0 && (
