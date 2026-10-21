@@ -28,6 +28,9 @@ the trade's signaling room. The file data travels directly between browsers and
 is not stored by this service. Wallet verification is a free signature request;
 it does not submit a blockchain transaction.
 
+After a participant joins or leaves, the service emits a presence snapshot for
+that trade so both sides can see whether buyer/seller are currently active.
+
 Transfers are limited to 10 MB and both participants must be online. A received
 file is temporary in the page and should be downloaded before closing the trade.
 WebRTC data channels are encrypted in transit, but this does not make the files

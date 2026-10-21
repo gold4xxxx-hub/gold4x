@@ -27,6 +27,14 @@ type SignalPayload = {
   candidate?: RTCIceCandidateInit;
 };
 
+type PresenceState = {
+  tradeId: number;
+  onlineCount: number;
+  bothOnline: boolean;
+  buyer: { wallet: string; online: boolean };
+  seller: { wallet: string; online: boolean };
+};
+
 function authMessage(tradeId: number, nonce: string): string {
   return `Gold4x P2P file transfer\nTrade #${tradeId}\nNonce: ${nonce}`;
 }
@@ -49,6 +57,7 @@ export function useP2PFileTransfer({
   const [receiving, setReceiving] = useState(false);
   const [receiveProgress, setReceiveProgress] = useState(0);
   const [receivedFile, setReceivedFile] = useState<ReceivedFile | null>(null);
+  const [presence, setPresence] = useState<PresenceState | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
   const receivedUrlRef = useRef<string | null>(null);
@@ -57,16 +66,19 @@ export function useP2PFileTransfer({
   useEffect(() => {
     if (!tradeId || !enabled) {
       setConnected(false);
+      setPresence(null);
       setStatus('File transfer is available during an active trade.');
       return;
     }
     if (!walletAddress || !signer) {
       setConnected(false);
+      setPresence(null);
       setStatus('Connect your buyer or seller wallet to enable file transfer.');
       return;
     }
     if (!SIGNALING_URL) {
       setConnected(false);
+      setPresence(null);
       setStatus('File transfer is not configured. Set NEXT_PUBLIC_P2P_SIGNALING_URL.');
       return;
     }
@@ -256,6 +268,15 @@ export function useP2PFileTransfer({
     socket.on('connect_error', () => {
       updateStatus('Could not connect to the file transfer service.');
     });
+    socket.on('file-transfer:presence', (snapshot: PresenceState) => {
+      if (snapshot.tradeId !== tradeId) return;
+      setPresence(snapshot);
+      if (snapshot.onlineCount === 1) {
+        updateStatus('You are online. Waiting for the counterparty to come online.');
+      } else if (snapshot.bothOnline && channelRef.current?.readyState !== 'open') {
+        updateStatus('Both participants are online. Connecting securely…');
+      }
+    });
     socket.on('file-transfer:peer-joined', async () => {
       try {
         const connection = getPeer();
@@ -325,6 +346,7 @@ export function useP2PFileTransfer({
       setProgress(0);
       setReceiving(false);
       setReceiveProgress(0);
+      setPresence(null);
     };
   }, [tradeId, walletAddress, signer, enabled]);
 
@@ -421,6 +443,7 @@ export function useP2PFileTransfer({
     progress,
     receiving,
     receiveProgress,
+    presence,
     receivedFile,
     sendFile,
   };

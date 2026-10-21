@@ -1864,6 +1864,20 @@ const P2PPage: React.FC = () => {
             </p>
             {canTransferFiles && (
               <div className="p2p-file-transfer mb-3">
+                {fileTransfer.presence && (
+                  <div className="p2p-presence mb-2" aria-label="Trade participant presence">
+                    <span
+                      className={`p2p-presence__item ${fileTransfer.presence.buyer.online ? 'p2p-presence__item--online' : 'p2p-presence__item--offline'}`}
+                    >
+                      Buyer {shortAddress(fileTransfer.presence.buyer.wallet)} {fileTransfer.presence.buyer.online ? 'active' : 'offline'}
+                    </span>
+                    <span
+                      className={`p2p-presence__item ${fileTransfer.presence.seller.online ? 'p2p-presence__item--online' : 'p2p-presence__item--offline'}`}
+                    >
+                      Seller {shortAddress(fileTransfer.presence.seller.wallet)} {fileTransfer.presence.seller.online ? 'active' : 'offline'}
+                    </span>
+                  </div>
+                )}
                 <div className="p2p-file-transfer__row">
                   <span className="p2p-storage-note">{fileTransfer.status}</span>
                   <button

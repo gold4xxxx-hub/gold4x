@@ -41,9 +41,42 @@ const transferChallenges = new Map();
 const transferAuthMessage = (tradeId, nonce) =>
   `Gold4x P2P file transfer\nTrade #${tradeId}\nNonce: ${nonce}`;
 
+async function emitTransferPresence(tradeId, seller, buyer) {
+  const room = `file-transfer:${tradeId}`;
+  const members = await io.in(room).fetchSockets();
+  const onlineWallets = new Set(
+    members
+      .map((member) =>
+        typeof member.data.transferWallet === 'string'
+          ? member.data.transferWallet.toLowerCase()
+          : null,
+      )
+      .filter(Boolean),
+  );
+  io.to(room).emit('file-transfer:presence', {
+    tradeId,
+    onlineCount: onlineWallets.size,
+    bothOnline: onlineWallets.has(seller.toLowerCase()) && onlineWallets.has(buyer.toLowerCase()),
+    seller: { wallet: seller, online: onlineWallets.has(seller.toLowerCase()) },
+    buyer: { wallet: buyer, online: onlineWallets.has(buyer.toLowerCase()) },
+  });
+}
+
 io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     transferChallenges.delete(socket.id);
+    const tradeId = socket.data.transferTradeId;
+    const seller = socket.data.transferSeller;
+    const buyer = socket.data.transferBuyer;
+    if (
+      Number.isSafeInteger(tradeId) &&
+      typeof seller === 'string' &&
+      typeof buyer === 'string'
+    ) {
+      void emitTransferPresence(tradeId, seller, buyer).catch((error) => {
+        console.error('P2P presence update failed on disconnect:', error);
+      });
+    }
   });
 
   socket.on('joinOrder', (orderId) => {
@@ -111,9 +144,12 @@ io.on('connection', (socket) => {
 
         socket.data.transferTradeId = tradeId;
         socket.data.transferWallet = wallet;
+        socket.data.transferSeller = String(trade.seller);
+        socket.data.transferBuyer = String(trade.buyer);
         await socket.join(room);
         acknowledge({ ok: true });
         socket.to(room).emit('file-transfer:peer-joined');
+        await emitTransferPresence(tradeId, String(trade.seller), String(trade.buyer));
       } catch (error) {
         console.error('P2P file transfer authorization failed:', error);
         acknowledge({ ok: false, error: 'Could not verify the trade on BNB Smart Chain.' });

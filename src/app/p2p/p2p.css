@@ -1329,6 +1329,40 @@
   gap: 0.75rem;
 }
 
+.p2p-presence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.p2p-presence__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  padding: 0.22rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.p2p-presence__item::before {
+  content: '';
+  width: 0.43rem;
+  height: 0.43rem;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.p2p-presence__item--online::before {
+  background: #16a34a;
+  box-shadow: 0 0 0.35rem rgba(22, 163, 74, 0.75);
+}
+
+.p2p-presence__item--offline::before {
+  background: #9ca3af;
+}
+
 .p2p-file-transfer__progress {
   display: block;
   width: 100%;
