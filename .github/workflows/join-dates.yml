@@ -21,16 +21,17 @@ name: Refresh the join dates
 
 on:
   schedule:
-    # 04:23 UTC, every four hours. Off the hour on purpose: scheduled
-    # workflows are queued at :00 and GitHub's own load makes those the
-    # busiest minutes.
+    # 04:23 UTC, every quarter of an hour. Off the hour on purpose:
+    # scheduled workflows are queued at :00 and GitHub's own load makes those
+    # the busiest minutes.
     #
-    # Four hours keeps the gap between the snapshot and the chain head
-    # short. The API route has to scan that gap for a wallet that is not in
-    # the snapshot yet, and a short gap means fewer requests against
-    # endpoints that rate limit. The job only commits when there is
-    # something new, so there is no deploy on a quiet stretch.
-    - cron: '23 */4 * * *'
+    # The job pushes to the join-dates branch, not to main, so a refresh
+    # does not cause a deploy. The API route reads the snapshot from that
+    # branch, which keeps the data current without waiting for a build.
+    # What is left for the route to scan on chain is only the few minutes
+    # since the last run, which is small enough to scan over a free
+    # endpoint.
+    - cron: '23,38,53,8 * * *'
   # A manual run, for when you want fresh data now instead of waiting.
   workflow_dispatch:
 
@@ -126,7 +127,7 @@ jobs:
           # Someone may have pushed since the checkout. Rebase and try once more
           # rather than losing the run to a non-fast-forward.
           for attempt in 1 2; do
-            if git push; then exit 0; fi
+            if git push origin HEAD:join-dates; then exit 0; fi
             echo "push attempt $attempt failed, rebasing onto origin/main"
             git pull --rebase origin main
           done

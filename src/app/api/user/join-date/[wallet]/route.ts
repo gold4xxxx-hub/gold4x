@@ -95,6 +95,36 @@ if (ANKR_KEY) {
   ENDPOINTS.unshift({ url: `https://rpc.ankr.com/bsc/${ANKR_KEY}`, range: 100000, logs: true });
 }
 
+/**
+ * The snapshot on the snapshot branch is refreshed every quarter of an hour
+ * by the scheduled job, which pushes there rather than to main. That keeps
+ * the data current without a deploy for every refresh, and the route can
+ * read it straight from GitHub. The copy bundled into this function is the
+ * one from the last deploy and is used first, because it needs no network.
+ */
+const FRESH_SNAPSHOT_URL =
+  'https://raw.githubusercontent.com/gold4xxxx-hub/gold4x/join-dates/src/data/userJoinDates.json';
+const FRESH_SNAPSHOT_TTL = 5 * 60 * 1000;
+let freshSnapshot: { at: number; dates: Record<string, string> } | null = null;
+
+/** The newest snapshot, straight from the branch the scheduled job pushes to. */
+async function fetchFreshSnapshot(): Promise<Record<string, string> | null> {
+  const now = Date.now();
+  if (freshSnapshot && now - freshSnapshot.at < FRESH_SNAPSHOT_TTL) return freshSnapshot.dates;
+  try {
+    const res = await fetch(FRESH_SNAPSHOT_URL, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const dates = (await res.json()) as Record<string, string>;
+    freshSnapshot = { at: now, dates };
+    return dates;
+  } catch {
+    return null;
+  }
+}
+
 const RPC_TIMEOUT = 8000;
 
 function padTopic(addr: string): string {
@@ -286,6 +316,16 @@ export async function GET(
   const snapshot = IGNORE_SNAPSHOT ? undefined : (joinDates as Record<string, string>)[wallet];
   if (snapshot) {
     return NextResponse.json({ date: snapshot, source: 'snapshot' });
+  }
+
+  // Tier 1b - the snapshot on the branch, which the scheduled job keeps
+  // current without waiting for a deploy. One cached download, no RPC.
+  if (!IGNORE_SNAPSHOT) {
+    const fresh = await fetchFreshSnapshot();
+    const freshDate = fresh?.[wallet];
+    if (freshDate) {
+      return NextResponse.json({ date: freshDate, source: 'fresh' });
+    }
   }
 
   const now = Date.now();
