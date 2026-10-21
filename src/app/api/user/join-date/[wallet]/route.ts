@@ -302,7 +302,7 @@ export async function GET(
     // Tier 2 - the wallet is registered but is not in the snapshot, so it must
     // have registered after the checkpoint. Only that window is searched.
     const latest = await getBlockNumber();
-    const trace: string[] | undefined = process.env.JOIN_DATE_DEBUG === '1' ? [] : undefined;
+    const trace: string[] | undefined = process.env.JOIN_DATE_DEBUG === '0' ? undefined : [];
     const joinBlock = await findJoinBlock(wallet, latest, CHECKPOINT_BLOCK, trace);
 
     if (joinBlock === null) {
