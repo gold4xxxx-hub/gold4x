@@ -77,10 +77,10 @@ const walletCache = new Map<string, { date: string | null; ts: number }>();
  */
 type Endpoint = { url: string; range: number; logs: boolean };
 const ENDPOINTS: Endpoint[] = [
+  { url: 'https://rpc-bsc.48.club', range: 5000, logs: true },
   { url: 'https://bsc.drpc.org', range: 10000, logs: true },
   { url: 'https://bsc-rpc.publicnode.com', range: 5000, logs: true },
   { url: 'https://bsc.publicnode.com', range: 5000, logs: true },
-  { url: 'https://rpc-bsc.48.club', range: 5000, logs: true },
   { url: 'https://1rpc.io/bnb', range: 50, logs: true },
   { url: 'https://bsc.blockrazor.xyz', range: 25, logs: true },
   { url: 'https://bsc-dataseed1.binance.org', range: 0, logs: false },
@@ -107,7 +107,14 @@ type LogEntry = { blockNumber: string; transactionHash?: string };
 async function rpc(url: string, method: string, params: unknown[]): Promise<RpcResult> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Several of the public endpoints sit behind a bot filter that turns
+      // away a request without a browser-like User-Agent, which is what a
+      // server-side fetch sends by default.
+      'User-Agent': 'Mozilla/5.0 (compatible; gold4x-join-date/1.0)',
+      Accept: 'application/json',
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     signal: AbortSignal.timeout(RPC_TIMEOUT),
   });
