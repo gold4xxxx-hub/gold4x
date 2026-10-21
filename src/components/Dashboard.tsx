@@ -580,11 +580,9 @@ export const Dashboard: React.FC = () => {
             Joined
           </div>
           {teaserActive ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', marginTop: '4px' }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--fx-gold-highlight)', boxShadow: '0 0 8px rgba(232,197,106,0.9)', animation: 'fxPulse 1.6s ease-in-out infinite', flexShrink: 0 }} />
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--fx-gold-highlight)', fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', textShadow: '0 0 14px rgba(232,197,106,0.55)', whiteSpace: 'nowrap' }}>
-                Coming in {formatCountdown(teaserRemaining ?? 0)}
-              </span>
+            <span className="fx-join-countdown">
+              <span className="fx-join-countdown__dot" />
+              <span className="fx-join-countdown__text">Coming in {formatCountdown(teaserRemaining ?? 0)}</span>
             </span>
           ) : loading ? (
             <div className="fx-skeleton h-5 w-24" />
