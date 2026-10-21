@@ -124,12 +124,15 @@ jobs:
           head=$(node -e "console.log(JSON.parse(require('fs').readFileSync('src/data/userJoinDates.meta.json','utf8')).checkpointBlock)")
           users=$(node -e "console.log(JSON.parse(require('fs').readFileSync('src/data/userJoinDates.meta.json','utf8')).count)")
           git commit -m "Refresh the join dates to block $head ($users users)"
-          # Someone may have pushed since the checkout. Rebase and try once more
-          # rather than losing the run to a non-fast-forward.
-          for attempt in 1 2; do
-            if git push origin HEAD:join-dates; then exit 0; fi
-            echo "push attempt $attempt failed, rebasing onto origin/main"
-            git pull --rebase origin main
+          # The join-dates branch is written by this job alone, and every run
+          # rewrites the same two files, so each run replaces the previous
+          # one rather than stacking on it. The lease makes sure nothing that
+          # appeared on the branch in the meantime is thrown away.
+          for attempt in 1 2 3; do
+            git fetch origin join-dates
+            if git push --force-with-lease origin HEAD:join-dates; then exit 0; fi
+            echo "push attempt $attempt failed, retrying"
+            sleep 5
           done
-          echo 'could not push after rebasing; the next scheduled run will retry'
+          echo 'could not push after three attempts; the next scheduled run will retry'
           exit 0
