@@ -61,18 +61,27 @@ const SYMBOL = ['JSAV', 'JSAV', 'USDT'];
 // RPC
 // ---------------------------------------------------------------------------
 
-const envFile = path.join(ROOT, '.env.local');
-let ankrKey = '';
-if (fs.existsSync(envFile)) {
+/**
+ * The Ankr key comes from the environment first, because CI passes it in as
+ * a secret. Only a local run falls back to .env.local, which is untracked and
+ * therefore not available in a checkout.
+ */
+function readAnkrKey() {
+  const fromEnv = (process.env.ANKR_API_KEY ?? '').trim();
+  if (fromEnv) return fromEnv;
+  const envFile = path.join(ROOT, '.env.local');
+  if (!fs.existsSync(envFile)) return '';
   const m = fs.readFileSync(envFile, 'utf8').match(/ANKR_API_KEY\s*=\s*"?([^"\r\n]+)"?/);
-  if (m) ankrKey = m[1].trim();
+  return m ? m[1].trim() : '';
 }
+const ankrKey = readAnkrKey();
 const RPC_URL = process.env.BSC_RPC_URL || (ankrKey ? `https://rpc.ankr.com/bsc/${ankrKey}` : '');
 
 if (!RPC_URL) {
   console.error(
     'No archive RPC configured.\n' +
-      'Set BSC_RPC_URL, or add ANKR_API_KEY to .env.local.\n' +
+      'Set ANKR_API_KEY or BSC_RPC_URL in the environment, or add ANKR_API_KEY\n' +
+      'to .env.local for a local run.\n' +
       'An archive endpoint is required: this script reads eth_getCode on old\n' +
       'blocks to find the deploy point, which public endpoints refuse.',
   );

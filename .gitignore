@@ -14,7 +14,10 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
-!.env.local
+# .env.local holds real API keys. It used to be committed, which published
+# them to anyone who cloned the repository. It stays on the machine that
+# needs it and is never tracked again. See SECURITY-KEYS.md.
+.env.local
 
 # OS/editor noise
 .DS_Store
