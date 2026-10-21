@@ -308,6 +308,11 @@ export const Dashboard: React.FC = () => {
                 if (!isNaN(d.getTime())) {
                   setJoinDate(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
                 }
+              } else if (data.registered) {
+                // Registered, but the date could not be read from the chain
+                // just now. A dash says that, where "Coming Soon" would
+                // wrongly say they have not joined.
+                setJoinDate('-');
               }
             }
           } catch (_) { /* ignore */ }

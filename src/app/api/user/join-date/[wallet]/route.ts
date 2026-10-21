@@ -54,16 +54,33 @@ const CACHE_TTL = 30 * 60 * 1000;
 const FAILURE_CACHE_TTL = 30 * 1000;
 /** How many block windows the fallback will walk before giving up. */
 const MAX_WINDOWS = 40;
+/**
+ * The walk is also bounded in time. Public endpoints answer a burst with 403
+ * or "limit exceeded", and a walk that keeps retrying the same ground in
+ * smaller steps would otherwise hold the request open for most of a minute.
+ */
+const SCAN_BUDGET_MS = 12_000;
 const walletCache = new Map<string, { date: string | null; ts: number }>();
 
 /**
- * Public BSC endpoints. `range` is the largest block span each one accepts
- * for an eth_getLogs call (Binance's own dataseed blocks eth_getLogs
- * entirely, so it is only used for plain eth_call / eth_getBlockByNumber).
+ * Public BSC endpoints, with the largest block span each one accepts for an
+ * eth_getLogs call. These limits were measured, not guessed:
+ *
+ *   drpc       10,000    "ranges over 10000 blocks are not supported"
+ *   publicnode  5,000    beyond that it wants an archive token
+ *   48.club     5,000    "exceed maximum block range: 5000"
+ *   1rpc           50    "eth_getLogs is limited to 0 - 50 blocks range"
+ *   blockrazor     25    "log query range must not exceed 25 blocks"
+ *
+ * Binance's own dataseed refuses eth_getLogs outright, so it is only used
+ * for plain eth_call / eth_getBlockByNumber.
  */
 type Endpoint = { url: string; range: number; logs: boolean };
 const ENDPOINTS: Endpoint[] = [
+  { url: 'https://bsc.drpc.org', range: 10000, logs: true },
   { url: 'https://bsc-rpc.publicnode.com', range: 5000, logs: true },
+  { url: 'https://bsc.publicnode.com', range: 5000, logs: true },
+  { url: 'https://rpc-bsc.48.club', range: 5000, logs: true },
   { url: 'https://1rpc.io/bnb', range: 50, logs: true },
   { url: 'https://bsc.blockrazor.xyz', range: 25, logs: true },
   { url: 'https://bsc-dataseed1.binance.org', range: 0, logs: false },
@@ -189,12 +206,17 @@ async function scanWindow(
  */
 async function findJoinBlock(wallet: string, from: number, to: number): Promise<number | null> {
   const walletTopic = padTopic(wallet);
+  const deadline = Date.now() + SCAN_BUDGET_MS;
 
   let cursor = from;
   let best: number | null = null;
   let windows = 0;
 
   while (cursor >= to && windows < MAX_WINDOWS) {
+    if (Date.now() > deadline) {
+      console.warn('[join-date] scan budget spent, stopping the walk');
+      break;
+    }
     let handled = false;
 
     for (const ep of ENDPOINTS) {
@@ -269,13 +291,16 @@ export async function GET(
 
     if (joinBlock === null) {
       walletCache.set(wallet, { date: null, ts: now });
-      return NextResponse.json({ date: null, source: 'chain' });
+      // The wallet is registered, the date is simply not reachable right now.
+      // Saying so is more honest than "coming soon", which would tell a user
+      // who has already registered that they have not.
+      return NextResponse.json({ date: null, registered: true, source: 'chain' });
     }
 
     const ts = await blockTimestamp(joinBlock);
     if (!ts) {
       walletCache.set(wallet, { date: null, ts: now });
-      return NextResponse.json({ date: null, source: 'chain' });
+      return NextResponse.json({ date: null, registered: true, source: 'chain' });
     }
 
     const date = new Date(ts * 1000).toISOString().replace('.000Z', 'Z');
