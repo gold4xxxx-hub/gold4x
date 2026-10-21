@@ -59,7 +59,7 @@ const MAX_WINDOWS = 40;
  * or "limit exceeded", and a walk that keeps retrying the same ground in
  * smaller steps would otherwise hold the request open for most of a minute.
  */
-const SCAN_BUDGET_MS = 12_000;
+const SCAN_BUDGET_MS = 20_000;
 const walletCache = new Map<string, { date: string | null; ts: number }>();
 
 /**
@@ -162,49 +162,48 @@ async function isRegistered(wallet: string): Promise<boolean> {
  * Returns the lowest matching block, or null. `failed` means the endpoint
  * itself refused, which is different from "nothing there".
  */
+/**
+ * Scans one block window for a transfer INTO the contract from this wallet.
+ *
+ * Only the JSAV contract is asked about here. A registration almost always
+ * shows up there, and every extra endpoint is another request against
+ * endpoints that answer slowly - asking three at once for every window was
+ * enough to blow the time budget on the first window. The stablecoin
+ * lookups get their own pass, and only if this one finds nothing.
+ */
 async function scanWindow(
   ep: Endpoint,
   walletTopic: string,
   start: number,
   cursor: number,
-): Promise<{ found: number | null; failed: boolean; error?: string }> {
+  trace?: string[],
+  token: string = JSAVIOR,
+): Promise<{ found: number | null; failed: boolean }> {
   const topics = [TRANSFER_TOPIC, walletTopic, JSAVIOR_TOPIC];
   const fromBlock = '0x' + start.toString(16);
   const toBlock = '0x' + cursor.toString(16);
 
-  let logs: LogEntry[];
   try {
-    logs = (await rpc(ep.url, 'eth_getLogs', [
-      { address: JSAVIOR, fromBlock, toBlock, topics },
+    const t0 = Date.now();
+    const logs = (await rpc(ep.url, 'eth_getLogs', [
+      { address: token, fromBlock, toBlock, topics },
     ])) as LogEntry[];
-  } catch (e) {
-    return { found: null, failed: true, error: e instanceof Error ? e.message : String(e) };
-  }
-
-  let found: number | null = null;
-  for (const log of logs) {
-    const bn = parseInt(log.blockNumber, 16);
-    if (found === null || bn < found) found = bn;
-  }
-  if (found !== null) return { found, failed: false };
-
-  // registerWithStable() paid in USDT or USDC, so check those too.
-  for (const token of [USDT, USDC]) {
-    try {
-      const stableLogs = (await rpc(ep.url, 'eth_getLogs', [
-        { address: token, fromBlock, toBlock, topics },
-      ])) as LogEntry[];
-      for (const log of stableLogs) {
-        const bn = parseInt(log.blockNumber, 16);
-        if (found === null || bn < found) found = bn;
-      }
-      if (found !== null) return { found, failed: false };
-    } catch {
-      // this token is not indexed here, try the next one
+    if (trace) {
+      trace.push(`${ep.url} ${token.slice(0, 8)} ${start}-${cursor} -> ${logs.length} logs in ${Date.now() - t0}ms`);
     }
-  }
 
-  return { found: null, failed: false };
+    let found: number | null = null;
+    for (const log of logs) {
+      const bn = parseInt(log.blockNumber, 16);
+      if (found === null || bn < found) found = bn;
+    }
+    return { found, failed: false };
+  } catch (e) {
+    if (trace) {
+      trace.push(`${ep.url} ${token.slice(0, 8)} ${start}-${cursor} -> ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return { found: null, failed: true };
+  }
 }
 
 /**
@@ -224,36 +223,43 @@ async function findJoinBlock(
   let best: number | null = null;
   let windows = 0;
 
-  while (cursor >= to && windows < MAX_WINDOWS) {
-    if (Date.now() > deadline) {
-      trace?.push(`budget spent at block ${cursor}`);
-      break;
-    }
-    let handled = false;
+  // First pass: the JSAV contract only. The stablecoins get a second pass
+  // over the same range, and only if this one found nothing.
+  for (const tokens of [[JSAVIOR], [USDT, USDC]]) {
+    cursor = from;
+    windows = 0;
+    best = null;
 
-    for (const ep of ENDPOINTS) {
-      if (!ep.logs) continue;
-      const start = Math.max(to, cursor - ep.range + 1);
+    while (cursor >= to && windows < MAX_WINDOWS) {
+      if (Date.now() > deadline) {
+        trace?.push(`budget spent at block ${cursor}`);
+        break;
+      }
+      let handled = false;
 
-      const { found, failed, error } = await scanWindow(ep, walletTopic, start, cursor);
-      if (failed) {
-        trace?.push(`${ep.url} window ${start}-${cursor}: ${error}`);
-        continue; // this endpoint is unhappy, try the next one
+      for (const ep of ENDPOINTS) {
+        if (!ep.logs) continue;
+        const start = Math.max(to, cursor - ep.range + 1);
+
+        for (const token of tokens) {
+          const { found, failed } = await scanWindow(ep, walletTopic, start, cursor, trace, token);
+          if (failed) continue;
+          if (found !== null && (best === null || found < best)) best = found;
+        }
+
+        cursor = start - 1;
+        handled = true;
+        windows++;
+        break;
       }
 
-      if (found !== null && (best === null || found < best)) best = found;
-      cursor = start - 1;
-      handled = true;
-      windows++;
-      break;
+      if (!handled) {
+        trace?.push(`no endpoint could serve the window at ${cursor}`);
+        break;
+      }
     }
 
-    if (!handled) {
-      // Every endpoint refused. Stop instead of walking the same ground in
-      // ever smaller steps until the request times out.
-      trace?.push(`no endpoint could serve the window at ${cursor}`);
-      break;
-    }
+    if (best !== null) break; // found it, no need for the stablecoin pass
   }
 
   return best;
