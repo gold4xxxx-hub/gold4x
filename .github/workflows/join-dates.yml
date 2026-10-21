@@ -21,9 +21,16 @@ name: Refresh the join dates
 
 on:
   schedule:
-    # 04:23 UTC, twice a day. Off the hour on purpose: scheduled workflows are
-    # queued at :00 and GitHub's own load makes those the busiest minutes.
-    - cron: '23 4,16 * * *'
+    # 04:23 UTC, every four hours. Off the hour on purpose: scheduled
+    # workflows are queued at :00 and GitHub's own load makes those the
+    # busiest minutes.
+    #
+    # Four hours keeps the gap between the snapshot and the chain head
+    # short. The API route has to scan that gap for a wallet that is not in
+    # the snapshot yet, and a short gap means fewer requests against
+    # endpoints that rate limit. The job only commits when there is
+    # something new, so there is no deploy on a quiet stretch.
+    - cron: '23 */4 * * *'
   # A manual run, for when you want fresh data now instead of waiting.
   workflow_dispatch:
 
