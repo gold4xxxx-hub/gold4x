@@ -21,7 +21,7 @@ name: Refresh the join dates
 
 on:
   schedule:
-    # 04:23 UTC, every quarter of an hour. Off the hour on purpose:
+    # 04:22 UTC, every quarter of an hour. Off the hour on purpose:
     # scheduled workflows are queued at :00 and GitHub's own load makes those
     # the busiest minutes.
     #
@@ -31,7 +31,7 @@ on:
     # What is left for the route to scan on chain is only the few minutes
     # since the last run, which is small enough to scan over a free
     # endpoint.
-    - cron: '23,38,53,8 * * *'
+    - cron: '7,22,37,52 * * * *'
   # A manual run, for when you want fresh data now instead of waiting.
   workflow_dispatch:
 
