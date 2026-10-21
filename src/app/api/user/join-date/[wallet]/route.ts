@@ -167,7 +167,7 @@ async function scanWindow(
   walletTopic: string,
   start: number,
   cursor: number,
-): Promise<{ found: number | null; failed: boolean }> {
+): Promise<{ found: number | null; failed: boolean; error?: string }> {
   const topics = [TRANSFER_TOPIC, walletTopic, JSAVIOR_TOPIC];
   const fromBlock = '0x' + start.toString(16);
   const toBlock = '0x' + cursor.toString(16);
@@ -177,8 +177,8 @@ async function scanWindow(
     logs = (await rpc(ep.url, 'eth_getLogs', [
       { address: JSAVIOR, fromBlock, toBlock, topics },
     ])) as LogEntry[];
-  } catch {
-    return { found: null, failed: true };
+  } catch (e) {
+    return { found: null, failed: true, error: e instanceof Error ? e.message : String(e) };
   }
 
   let found: number | null = null;
@@ -211,7 +211,12 @@ async function scanWindow(
  * Walks backwards from `from` to `to` looking for the first moment the
  * wallet paid into the contract. Returns the lowest matching block, or null.
  */
-async function findJoinBlock(wallet: string, from: number, to: number): Promise<number | null> {
+async function findJoinBlock(
+  wallet: string,
+  from: number,
+  to: number,
+  trace?: string[],
+): Promise<number | null> {
   const walletTopic = padTopic(wallet);
   const deadline = Date.now() + SCAN_BUDGET_MS;
 
@@ -221,7 +226,7 @@ async function findJoinBlock(wallet: string, from: number, to: number): Promise<
 
   while (cursor >= to && windows < MAX_WINDOWS) {
     if (Date.now() > deadline) {
-      console.warn('[join-date] scan budget spent, stopping the walk');
+      trace?.push(`budget spent at block ${cursor}`);
       break;
     }
     let handled = false;
@@ -230,8 +235,11 @@ async function findJoinBlock(wallet: string, from: number, to: number): Promise<
       if (!ep.logs) continue;
       const start = Math.max(to, cursor - ep.range + 1);
 
-      const { found, failed } = await scanWindow(ep, walletTopic, start, cursor);
-      if (failed) continue; // this endpoint is unhappy, try the next one
+      const { found, failed, error } = await scanWindow(ep, walletTopic, start, cursor);
+      if (failed) {
+        trace?.push(`${ep.url} window ${start}-${cursor}: ${error}`);
+        continue; // this endpoint is unhappy, try the next one
+      }
 
       if (found !== null && (best === null || found < best)) best = found;
       cursor = start - 1;
@@ -243,7 +251,7 @@ async function findJoinBlock(wallet: string, from: number, to: number): Promise<
     if (!handled) {
       // Every endpoint refused. Stop instead of walking the same ground in
       // ever smaller steps until the request times out.
-      console.warn(`[join-date] no endpoint could serve the window at ${cursor}`);
+      trace?.push(`no endpoint could serve the window at ${cursor}`);
       break;
     }
   }
@@ -294,14 +302,20 @@ export async function GET(
     // Tier 2 - the wallet is registered but is not in the snapshot, so it must
     // have registered after the checkpoint. Only that window is searched.
     const latest = await getBlockNumber();
-    const joinBlock = await findJoinBlock(wallet, latest, CHECKPOINT_BLOCK);
+    const trace: string[] | undefined = process.env.JOIN_DATE_DEBUG === '1' ? [] : undefined;
+    const joinBlock = await findJoinBlock(wallet, latest, CHECKPOINT_BLOCK, trace);
 
     if (joinBlock === null) {
       walletCache.set(wallet, { date: null, ts: now });
       // The wallet is registered, the date is simply not reachable right now.
       // Saying so is more honest than "coming soon", which would tell a user
       // who has already registered that they have not.
-      return NextResponse.json({ date: null, registered: true, source: 'chain' });
+      return NextResponse.json({
+        date: null,
+        registered: true,
+        source: 'chain',
+        ...(trace ? { debug: trace } : {}),
+      });
     }
 
     const ts = await blockTimestamp(joinBlock);
