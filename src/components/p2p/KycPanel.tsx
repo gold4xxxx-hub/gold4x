@@ -227,7 +227,7 @@ export default function KycPanel({ signer, submitted, verified, onDone }: Props)
           <path d="M5 17c1.5-2 3-3 4-3s2.5 1 4 3" />
         </svg>
         <span>
-          Aadhaar images are pinned to public IPFS. Anyone with the CID can access them; only the CID is stored on-chain.
+          Aadhaar images are pinned to IPFS through our storage provider. Only a reference to each file is recorded on-chain; the images themselves stay off-chain.
         </span>
       </div>
 
