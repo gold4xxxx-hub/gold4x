@@ -427,7 +427,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="fx-card p-8 fx-reveal">
       {countdown && (
-        <div className="fx-cycle-countdown" style={{ background: '#141414', borderLeft: '3px solid #c9a84c', borderRadius: '10px', padding: '12px 20px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.85), 0 60px 120px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+        <div id="cycle-countdown" className="fx-cycle-countdown" style={{ background: '#141414', borderLeft: '3px solid #c9a84c', borderRadius: '10px', padding: '12px 20px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.85), 0 60px 120px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
           <div className="fx-cycle-countdown__label" style={{ flexShrink: 0 }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fx-ink-label)', fontWeight: 500, lineHeight: 1.2 }}>BV CYCLE<br />RESETS IN</div>
           </div>

@@ -578,7 +578,9 @@ export default function DashboardShell() {
         </header>
 
         <DashboardErrorBoundary>
-          <Dashboard />
+          <div id="portfolio" style={{ scrollMarginTop: '96px' }}>
+            <Dashboard />
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8 mt-12">
             <aside className="space-y-6 fx-reveal">
               <WalletInfo />

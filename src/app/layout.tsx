@@ -3,6 +3,7 @@ import { Playfair_Display, Inter, JetBrains_Mono, Space_Grotesk } from "next/fon
 import "./globals.css";
 import { Web3Providers } from "@/providers/Web3Providers";
 import { TopNav } from "@/components/TopNav";
+import { PortfolioAutoScroll } from "@/components/PortfolioAutoScroll";
 import { RevealInit } from "@/components/RevealInit";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -53,6 +54,7 @@ export default function RootLayout({
           <Web3Providers>
             <RevealInit />
             <TopNav />
+            <PortfolioAutoScroll />
             {children}
           </Web3Providers>
         </ErrorBoundary>
