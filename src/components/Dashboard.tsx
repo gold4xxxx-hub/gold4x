@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useWalletConnection, useBSCNetwork } from '@/hooks/useWalletConnection';
 import ProgressBar from './ProgressBar';
 import { CountUp } from './CountUp';
+import { JoinDate } from './JoinDate';
 import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
 /** Explicit latest head for eth_call; avoids stale snapshots from some RPC/wallet defaults. */
 const READ_CALL_OPTS = { blockTag: 'latest' as const };
@@ -118,6 +119,8 @@ export const Dashboard: React.FC = () => {
   const [allTimeTotalBV, setAllTimeTotalBV] = useState<number | null>(null);
   const [monthlyBreakdown, setMonthlyBreakdown] = useState<{ month: number; start: string; end: string; personalBV: number; teamBV: number; totalBV: number }[] | null>(null);
   const [joinDate, setJoinDate] = useState<string | null>(null);
+  // 'loading' until the join date answers, then 'date' or 'none'.
+  const [joinState, setJoinState] = useState<'loading' | 'date' | 'none'>('loading');
   const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -260,21 +263,31 @@ export const Dashboard: React.FC = () => {
             if (res.ok) {
               const data = await res.json();
               if (data.date === 'coming soon') {
-                setJoinDate('coming soon');
+                // Not registered, so there is no join date to show.
+                setJoinState('none');
+                setJoinDate(null);
               } else if (data.date) {
                 const raw = data.date.includes('T') ? data.date : data.date.replace(' ', 'T') + 'Z';
                 const d = new Date(raw);
                 if (!isNaN(d.getTime())) {
-                  setJoinDate(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }));
+                  const formatted = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+                  // "16 Mar 26" -> "16 Mar '26", the shape the tile shows.
+                  setJoinDate(formatted.replace(/ (\d{2})$/, " '$1"));
+                  setJoinState('date');
+                } else {
+                  setJoinState('none');
                 }
-              } else if (data.registered) {
+              } else {
                 // Registered, but the date could not be read from the chain
-                // just now. A dash says that, where "Coming Soon" would
-                // wrongly say they have not joined.
-                setJoinDate('-');
+                // just now.
+                setJoinState('none');
               }
+            } else {
+              setJoinState('none');
             }
-          } catch (_) { /* ignore */ }
+          } catch (_) {
+            setJoinState('none');
+          }
         })();
       } catch (err) {
         console.error('Dashboard fetch error:', err);
@@ -309,6 +322,7 @@ export const Dashboard: React.FC = () => {
         setAllTimeTotalBV(null);
         setMonthlyBreakdown(null);
         setJoinDate(null);
+        setJoinState('loading');
       }
       if (!silent) setLoading(false);
     },
@@ -525,10 +539,22 @@ export const Dashboard: React.FC = () => {
 
         <div className="fx-data-strip__item fx-reveal fx-reveal--delay-1" style={{ padding: '16px 20px' }}>
           <div className="fx-data-strip__label">Joined</div>
-          {loading ? (
-            <div className="fx-skeleton h-5 w-24" />
+          {joinState === 'date' && joinDate ? (
+            <JoinDate
+              value={joinDate}
+              className="fx-gold-emboss--sm"
+            />
+          ) : joinState === 'loading' ? (
+            <span className="fx-gold-emboss fx-gold-emboss--sm">
+              Fetching
+              <span className="fx-fetching-dots" aria-hidden="true">
+                {[0, 1, 2].map((dot) => (
+                  <i key={dot} />
+                ))}
+              </span>
+            </span>
           ) : (
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>{joinDate || 'Coming Soon'}</span>
+            <span style={{ fontSize: '0.85rem', color: 'var(--fx-ink-muted)', fontWeight: 400 }}>-</span>
           )}
         </div>
 

@@ -919,6 +919,267 @@ select.fx-input option {
   line-height: 1;
 }
 
+/**
+ * The join date, in gold with a bevelled edge.
+ *
+ * The gradient runs from a bright highlight at the top, through the mid
+ * gold, into a darker band and back to a light rim at the very bottom. That
+ * last light stop is what makes it read as a raised metal edge rather than a
+ * flat colour.
+ *
+ * The text itself is transparent so the gradient shows through, which means
+ * text-shadow cannot be used for the depth. A drop-shadow on the filtered
+ * element does the same job.
+ */
+.fx-gold-emboss {
+  background: linear-gradient(
+    180deg,
+    #fff6dc 0%,
+    #ecd080 22%,
+    #d4af4f 48%,
+    #a8801f 74%,
+    #7a5c12 87%,
+    #e3c070 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 248, 222, 0.55))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85))
+    drop-shadow(0 0 12px rgba(201, 168, 76, 0.35));
+}
+
+/* The same treatment, sized for a smaller strip. */
+.fx-gold-emboss--sm {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/**
+ * The join date, rolled into place.
+ *
+ * Each number and letter sits on its own one-line wheel: a strip of
+ * characters behind a fixed-height window. The strip starts at 0 (or "a")
+ * and is scrolled upwards to the real character with a transition, which is
+ * the same 0-to-value run the number tiles make.
+ *
+ * The gold is painted per character rather than once across the date, so a
+ * character scrolling through the window is always fully gilt.
+ */
+.fx-join-wheels {
+  --jd-cell: 1.25em;
+  /**
+   * The same bevel as .fx-gold-emboss, with the stops pulled in a little.
+   * A wheel cell is taller than a line of text, so the glyph sits in the
+   * middle of it - shifting the stops keeps the bright cream on the top edge
+   * of each character and the light rim at the bottom, as on the plain
+   * embossed text.
+   */
+  --jd-bevel: linear-gradient(
+    180deg,
+    #fff6dc 10%,
+    #ecd080 30%,
+    #d4af4f 54%,
+    #a8801f 78%,
+    #7a5c12 88%,
+    #e3c070 100%
+  );
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  /**
+   * One filter for the whole date. Per-wheel shadows would be cut off by the
+   * wheel windows as the characters scroll past their edges.
+   */
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 248, 222, 0.55))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85))
+    drop-shadow(0 0 12px rgba(201, 168, 76, 0.35));
+}
+
+.fx-join-wheel {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  height: var(--jd-cell);
+  overflow: hidden;
+}
+
+/**
+ * An invisible copy of the final character, the only thing in normal flow.
+ * It gives the wheel exactly the width of the settled character, so the
+ * finished date spaces like plain text instead of reserving room for the
+ * widest character it rolled past.
+ */
+.fx-join-sizer {
+  display: block;
+  height: var(--jd-cell);
+  line-height: var(--jd-cell);
+  visibility: hidden;
+  white-space: pre;
+}
+
+.fx-join-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fx-join-cell,
+.fx-join-static {
+  display: block;
+  flex: none;
+  height: var(--jd-cell);
+  line-height: var(--jd-cell);
+  text-align: center;
+  background-image: var(--jd-bevel);
+  background-size: 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.fx-join-static {
+  display: inline-block;
+  height: var(--jd-cell);
+  line-height: var(--jd-cell);
+  /* Without this the lone space between the day and the month collapses to
+     nothing, and the date reads "16Mar'26". */
+  white-space: pre;
+}
+
+/**
+ * In flight, the characters passing through the window are a ghost of the
+ * gold: a lighter cut, held back in opacity and softened a touch, so the eye
+ * reads motion instead of a stack of solid letters. The strip is also faded
+ * at the top and bottom of each window, so characters drift in and out rather
+ * than being chopped by a hard edge.
+ *
+ * Everything lifts the moment the wheels land - the last character, already
+ * rendered in the full weight, snaps into the complete emboss. That change
+ * from soft to solid is what makes the stop feel deliberate.
+ */
+.fx-join-wheels.fx-join-rolling .fx-join-strip {
+  opacity: 0.72;
+  filter: blur(0.25px);
+}
+
+.fx-join-wheels.fx-join-rolling .fx-join-cell:not(:last-child) {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.fx-join-wheels.fx-join-rolling .fx-join-wheel {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 7%,
+    #000 93%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 7%,
+    #000 93%,
+    transparent 100%
+  );
+}
+
+/**
+ * The highlight, once, wheel by wheel from the left. Each character carries
+ * its own glint; the stagger comes from --jd-i, the wheel's place in the
+ * date, so the sparkle reads as one sweep across the date.
+ */
+.fx-join-wheels.fx-join-swept .fx-join-cell,
+.fx-join-wheels.fx-join-swept .fx-join-static {
+  background-image:
+    linear-gradient(
+      100deg,
+      rgba(255, 250, 230, 0) 43%,
+      rgba(255, 251, 236, 0.82) 50%,
+      rgba(255, 250, 230, 0) 57%
+    ),
+    var(--jd-bevel);
+  background-size: 260% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 100% 0, 0 0;
+  animation: fx-join-glint 0.8s linear forwards;
+  animation-delay: var(--jd-i, 0s);
+}
+
+@keyframes fx-join-glint {
+  0% {
+    background-position: 100% 0, 0 0;
+  }
+  100% {
+    background-position: 0% 0, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-join-wheels.fx-join-swept .fx-join-cell,
+  .fx-join-wheels.fx-join-swept .fx-join-static {
+    animation: none;
+    background-image: var(--jd-bevel);
+  }
+  .fx-fetching-dots i {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/**
+ * The three dots that follow "Fetching". They light up one after the other
+ * and then start over, the way a loading indicator does.
+ *
+ * The dots carry their own colour because the text around them is
+ * transparent - that is what lets the gradient show through - so they cannot
+ * use currentColor.
+ */
+.fx-fetching-dots {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  margin-left: 3px;
+  vertical-align: baseline;
+}
+.fx-fetching-dots i {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: #e8c56a;
+  box-shadow: 0 0 7px rgba(232, 197, 106, 1);
+  opacity: 0.3;
+  animation: fx-dot-pulse 1.2s ease-in-out infinite;
+}
+.fx-fetching-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.fx-fetching-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes fx-dot-pulse {
+  0%, 55%, 100% {
+    opacity: 0.3;
+    transform: translateY(0) scale(0.85);
+  }
+  27% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.15);
+  }
+}
+
 .fx-data-strip__value--hero-lg { font-size: 1.696rem; }
 .fx-data-strip__value--hero-sm { font-size: 1.628rem; }
 
@@ -1640,6 +1901,23 @@ select.fx-input option {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+  }
+  /**
+   * The join date is a row of width-controlled wheels, not a line of text.
+   * The truncation above would collapse its spaces and eat the tips of the
+   * characters, so it sizes itself and lets only the wheel windows clip.
+   */
+  .fx-data-strip--status .fx-data-strip__item .fx-join-wheels,
+  .fx-data-strip--status .fx-data-strip__item .fx-join-strip,
+  .fx-data-strip--status .fx-data-strip__item .fx-join-cell,
+  .fx-data-strip--status .fx-data-strip__item .fx-join-sizer {
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+  }
+  .fx-data-strip--status .fx-data-strip__item .fx-join-static {
+    white-space: pre;
+    max-width: none;
   }
   .fx-data-strip__value,
   .fx-data-strip__value--gold,
