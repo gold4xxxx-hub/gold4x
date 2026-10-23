@@ -24,17 +24,30 @@ import { useEffect, useRef, useState } from 'react';
 
 /**
  * How long every wheel takes to roll. All wheels share one length and one
- * start, so the whole date moves as a single line instead of a jumble of
- * characters at different heights. The left-to-right wave comes from the
- * highlight after the roll.
+ * start, so they land together instead of finishing one after another. The
+ * left-to-right wave comes from the highlight after the roll.
  */
 const DUR_S = 1.45;
 /**
- * Quick off the mark, then a long, slow settle: most of the distance is
- * covered early, and the last few characters tick over slowly, so the date
- * eases onto its real value instead of snapping to it.
+ * Every wheel shares the same duration and the same start, so the date lands
+ * in one beat - but they do not travel the same distance. "O" climbs fourteen
+ * characters to get here, "c" only two. If they all used the same curve the
+ * short runs would burn their two rows in the first few frames and then sit
+ * still for a second. So the curve is picked by distance: long climbs launch
+ * hard and creep onto their final rows, short runs drift evenly across the
+ * whole roll, and both arrive at the same instant.
  */
-const ROLL_EASE = 'cubic-bezier(0.33, 1, 0.68, 1)';
+function rollEase(steps: number): string {
+  // Long climbs: quick off the line, then a long, visible settle through the
+  // last few characters.
+  if (steps >= 9) return 'cubic-bezier(0.33, 1, 0.68, 1)';
+  // A handful of rows: a softer start and a gentle stop, spread over the
+  // whole roll so a three-character climb still reads as motion.
+  if (steps >= 4) return 'cubic-bezier(0.45, 0.25, 0.55, 1)';
+  // One or two rows ("c" in Oct): an even, unhurried drift.
+  if (steps >= 1) return 'cubic-bezier(0.45, 0.05, 0.55, 0.95)';
+  return 'linear';
+}
 /** The roll waits this long before it starts. */
 const START_S = 0.05;
 /** Spacing between wheels when the highlight sweeps over them. */
@@ -87,22 +100,16 @@ function parseDateParts(value: string): DateParts | null {
 }
 
 /**
- * Every wheel rolls the same distance, so the characters stay on one line
- * while they move. Short stacks are padded at the top with their first
- * character - a letter that is already "a" simply holds still while the rest
- * of the date catches up.
+ * 0, 1, 2 ... target - the same run the number tiles make.
+ *
+ * Each wheel travels only as far as its own character is from the start, so
+ * "O" makes a long, quick run while "c" makes a short, unhurried one. Every
+ * wheel still shares one duration and one start, so they all land together.
  */
-function padStack(items: string[], steps: number): string[] {
-  const missing = steps - (items.length - 1);
-  if (missing <= 0) return items;
-  return [...Array.from({ length: missing }, () => items[0]), ...items];
-}
-
-/** 0, 1, 2 ... target - the same run the number tiles make. */
-function numberStack(target: number, steps: number): string[] {
+function numberStack(target: number): string[] {
   const items: string[] = [];
   for (let value = 0; value <= target; value += 1) items.push(String(value));
-  return padStack(items, steps);
+  return items;
 }
 
 /**
@@ -111,9 +118,9 @@ function numberStack(target: number, steps: number): string[] {
  * The run keeps the case of the letter it lands on, so the month's initial
  * climbs "A, B, C ... O" while the rest of the name stays lowercase.
  */
-function letterStack(letter: string, steps: number): string[] {
+function letterStack(letter: string): string[] {
   const position = letter.toLowerCase().charCodeAt(0) - 96;
-  if (position < 1 || position > 26) return padStack([letter], steps);
+  if (position < 1 || position > 26) return [letter];
 
   const upper = letter === letter.toUpperCase();
   const items: string[] = [];
@@ -123,15 +130,13 @@ function letterStack(letter: string, steps: number): string[] {
   }
   // Land on the real character, keeping the month's capital "M" or "O".
   items[items.length - 1] = letter;
-  return padStack(items, steps);
+  return items;
 }
 
 interface WheelProps {
   items: string[];
   /** Position in the date, left to right. Sets the sweep timing. */
   index: number;
-  /** The distance every wheel rolls, so they all move together. */
-  total: number;
   /** The roll transition is live. */
   rolling: boolean;
   /** Everything has come to rest at the final value. */
@@ -144,18 +149,23 @@ interface WheelProps {
   fit?: boolean;
 }
 
-function Wheel({ items, index, total, rolling, landed, fit }: WheelProps) {
+function Wheel({ items, index, rolling, landed, fit }: WheelProps) {
   const final = items[items.length - 1];
+
+  // The wheel travels its own stack: "0" to "16" is sixteen rows, "a" to "c"
+  // is only two. Same duration for every wheel, so the long climbs move
+  // quickly and the short ones drift, yet they all land on the same beat.
+  const steps = items.length - 1;
 
   const style = {
     '--jd-i': `${(index * SWEEP_STEP_S).toFixed(2)}s`,
   } as CSSProperties;
 
   const stripStyle: CSSProperties = {
-    transform: `translateY(calc(var(--jd-cell) * ${rolling ? -total : 0}))`,
+    transform: `translateY(calc(var(--jd-cell) * ${rolling ? -steps : 0}))`,
     transition:
       rolling && !landed
-        ? `transform ${DUR_S}s ${ROLL_EASE} ${START_S}s`
+        ? `transform ${DUR_S}s ${rollEase(steps)} ${START_S}s`
         : 'none',
   };
 
@@ -204,8 +214,8 @@ export function JoinDate({ value, delay = 150, className }: JoinDateProps) {
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-    // Every wheel rolls the same distance at the same pace, so they all come
-    // to rest together.
+    // Same length for every wheel, whatever its distance, so they all come to
+    // rest together.
     const settleMs = Math.round((START_S + DUR_S) * 1000) + SETTLE_PAD_MS;
 
     const play = () => {
@@ -334,15 +344,6 @@ export function JoinDate({ value, delay = 150, className }: JoinDateProps) {
 
   const yearIndex = 1 + parts.month.length;
 
-  // Every wheel travels the same number of rows. The longest climb decides
-  // it - usually the year - and the shorter ones hold their first character
-  // until their own run begins.
-  const monthPositions = parts.month
-    .toLowerCase()
-    .split('')
-    .map((letter) => Math.min(26, Math.max(1, letter.charCodeAt(0) - 96)));
-  const totalSteps = Math.max(parts.day, parts.year, ...monthPositions);
-
   return (
     <span
       ref={elRef}
@@ -351,9 +352,8 @@ export function JoinDate({ value, delay = 150, className }: JoinDateProps) {
       }${swept ? ' fx-join-swept' : ''}`.trim()}
     >
       <Wheel
-        items={numberStack(parts.day, totalSteps)}
+        items={numberStack(parts.day)}
         index={0}
-        total={totalSteps}
         rolling={rolling}
         landed={landed}
       />
@@ -369,9 +369,8 @@ export function JoinDate({ value, delay = 150, className }: JoinDateProps) {
       {parts.month.split('').map((letter, i) => (
         <Wheel
           key={`letter-${i}`}
-          items={letterStack(letter, totalSteps)}
+          items={letterStack(letter)}
           index={1 + i}
-          total={totalSteps}
           rolling={rolling}
           landed={landed}
           fit
@@ -389,9 +388,8 @@ export function JoinDate({ value, delay = 150, className }: JoinDateProps) {
       </span>
 
       <Wheel
-        items={numberStack(parts.year, totalSteps)}
+        items={numberStack(parts.year)}
         index={yearIndex}
-        total={totalSteps}
         rolling={rolling}
         landed={landed}
       />
