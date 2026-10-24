@@ -9,7 +9,8 @@ import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Con
 import Dashboard from '@/components/Dashboard';
 import { ethers } from 'ethers';
 
-type RegisterToken = 'JSAV' | 'USDT' | 'USDC';
+type RegisterToken = 'USDT' | 'USDC';
+type InvestToken = RegisterToken;
 type WithdrawToken = 'JSAV' | 'USDT' | 'USDC';
 type IndexedUsersResponse = {
   count: number;
@@ -17,7 +18,6 @@ type IndexedUsersResponse = {
 };
 
 const REGISTER_AMOUNT = {
-  JSAV: '50',
   STABLE: '52.5',
 } as const;
 
@@ -119,7 +119,7 @@ export default function WalletContent() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerTx, setRegisterTx] = useState<string | null>(null);
   const [registerError, setRegisterError] = useState<string | null>(null);
-  const [registerToken, setRegisterToken] = useState<RegisterToken>('JSAV');
+  const [registerToken, setRegisterToken] = useState<RegisterToken>('USDT');
   const [registerFeeText, setRegisterFeeText] = useState('-');
   const [registerFeeRaw, setRegisterFeeRaw] = useState<bigint>(BigInt(0));
   const [registerFeeLoading, setRegisterFeeLoading] = useState(false);
@@ -129,7 +129,7 @@ export default function WalletContent() {
   });
 
   const [showInvest, setShowInvest] = useState(false);
-  const [investToken, setInvestToken] = useState<RegisterToken>('JSAV');
+  const [investToken, setInvestToken] = useState<InvestToken>('USDT');
   const [investAmount, setInvestAmount] = useState('');
   const [investMinText, setInvestMinText] = useState('-');
   const [investMinRaw, setInvestMinRaw] = useState<bigint>(BigInt(0));
@@ -207,13 +207,6 @@ export default function WalletContent() {
         const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
 
-        if (registerToken === 'JSAV') {
-          setRegisterFeeRaw(BigInt(0));
-          setRegisterFeeText(`${REGISTER_AMOUNT.JSAV} JSAV`);
-          setRegisterFeeLoading(false);
-          return;
-        }
-
         const stable = registerToken === 'USDT' ? (usdt as string) : (usdc as string);
         if (!stable || stable === ethers.ZeroAddress) {
           setRegisterFeeText('Token address unavailable');
@@ -253,22 +246,12 @@ export default function WalletContent() {
       try {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [minDepositRaw, jsavDecimals, usdt, usdc] = await Promise.all([
-          contract.MIN_DEPOSIT.staticCall(),
-          contract.decimals.staticCall(),
+        const [usdt, usdc] = await Promise.all([
           contract.USDT.staticCall(),
           contract.USDC.staticCall(),
         ]);
 
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
-
-        if (investToken === 'JSAV') {
-          const d = Number(jsavDecimals);
-          setInvestDecimals(d);
-          setInvestMinRaw(minDepositRaw as bigint);
-          setInvestMinText(`${ethers.formatUnits(minDepositRaw as bigint, d)} JSAV`);
-          return;
-        }
 
         const stable = investToken === 'USDT' ? (usdt as string) : (usdc as string);
         if (!stable || stable === ethers.ZeroAddress) {
@@ -334,24 +317,20 @@ export default function WalletContent() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       let tx;
-      if (registerToken === 'JSAV') {
-        tx = await contract.register(addr);
-      } else {
-        const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
-        if (!stable || stable === ethers.ZeroAddress) {
-          throw new Error(`${registerToken} address is not configured on contract.`);
-        }
-
-        const owner = await signer.getAddress();
-        const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
-        if ((allowance as bigint) < registerFeeRaw) {
-          const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
-          await approveTx.wait();
-        }
-
-        tx = await contract.registerWithStable(stable, addr);
+      const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      if (!stable || stable === ethers.ZeroAddress) {
+        throw new Error(`${registerToken} address is not configured on contract.`);
       }
+
+      const owner = await signer.getAddress();
+      const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
+      const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
+      if ((allowance as bigint) < registerFeeRaw) {
+        const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
+        await approveTx.wait();
+      }
+
+      tx = await contract.registerWithStable(stable, addr);
       const receipt = await tx.wait();
       setRegisterTx(receipt.hash);
     } catch (e: any) {
@@ -376,32 +355,23 @@ export default function WalletContent() {
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const amountRaw = ethers.parseUnits(investAmount, investDecimals);
 
-      let tx;
-      if (investToken === 'JSAV') {
-        if (amountRaw < investMinRaw) {
-          throw new Error(`Minimum invest is ${investMinText}`);
-        }
-        tx = await contract.invest(amountRaw);
-      } else {
-        if (amountRaw < investMinRaw) {
-          throw new Error(`Minimum invest is ${investMinText}`);
-        }
-
-        const stable = investToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
-        if (!stable || stable === ethers.ZeroAddress) {
-          throw new Error(`${investToken} address is not configured on contract.`);
-        }
-
-        const owner = await signer.getAddress();
-        const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
-        if ((allowance as bigint) < amountRaw) {
-          const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, amountRaw);
-          await approveTx.wait();
-        }
-
-        tx = await contract.investWithStable(stable, amountRaw);
+      if (amountRaw < investMinRaw) {
+        throw new Error(`Minimum invest is ${investMinText}`);
       }
+      const stable = investToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      if (!stable || stable === ethers.ZeroAddress) {
+        throw new Error(`${investToken} address is not configured on contract.`);
+      }
+
+      const owner = await signer.getAddress();
+      const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
+      const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
+      if ((allowance as bigint) < amountRaw) {
+        const approveTx = await stableToken.approve(JSAVIOR_CONTRACT_ADDRESS, amountRaw);
+        await approveTx.wait();
+      }
+
+      const tx = await contract.investWithStable(stable, amountRaw);
 
       const receipt = await tx.wait();
       setInvestTx(receipt.hash);
@@ -559,7 +529,7 @@ export default function WalletContent() {
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     {!showRegister ? (
-                      <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('JSAV'); setRegisterTx(null); setRegisterError(null); }}>
+                      <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('USDT'); setRegisterTx(null); setRegisterError(null); }}>
                         Register
                       </button>
                     ) : (
@@ -567,7 +537,6 @@ export default function WalletContent() {
                         <div>
                           <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Token</label>
                           <select className="fx-input text-xs" value={registerToken} onChange={e => setRegisterToken(e.target.value as RegisterToken)} disabled={registerLoading}>
-                            <option value="JSAV">JSAV</option>
                             <option value="USDT">USDT</option>
                             <option value="USDC">USDC</option>
                           </select>

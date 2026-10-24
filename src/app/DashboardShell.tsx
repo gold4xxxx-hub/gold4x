@@ -17,7 +17,8 @@ async function getEthers() {
   return _ethers;
 }
 
-type RegisterToken = 'JSAV' | 'USDT' | 'USDC';
+type RegisterToken = 'USDT' | 'USDC';
+type InvestToken = RegisterToken;
 type WithdrawToken = 'JSAV' | 'USDT' | 'USDC';
 type IndexedUsersResponse = {
   count: number;
@@ -25,7 +26,6 @@ type IndexedUsersResponse = {
 };
 
 const REGISTER_AMOUNT = {
-  JSAV: '50',
   STABLE: '52.5',
 } as const;
 
@@ -127,7 +127,7 @@ export default function DashboardShell() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerTx, setRegisterTx] = useState<string | null>(null);
   const [registerError, setRegisterError] = useState<string | null>(null);
-  const [registerToken, setRegisterToken] = useState<RegisterToken>('JSAV');
+  const [registerToken, setRegisterToken] = useState<RegisterToken>('USDT');
   const [registerFeeText, setRegisterFeeText] = useState('-');
   const [registerFeeRaw, setRegisterFeeRaw] = useState<bigint>(BigInt(0));
   const [registerFeeLoading, setRegisterFeeLoading] = useState(false);
@@ -137,7 +137,7 @@ export default function DashboardShell() {
   });
 
   const [showInvest, setShowInvest] = useState(false);
-  const [investToken, setInvestToken] = useState<RegisterToken>('JSAV');
+  const [investToken, setInvestToken] = useState<InvestToken>('USDT');
   const [investAmount, setInvestAmount] = useState('');
   const [investMinText, setInvestMinText] = useState('-');
   const [investMinRaw, setInvestMinRaw] = useState<bigint>(BigInt(0));
@@ -206,13 +206,6 @@ export default function DashboardShell() {
         const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
 
-        if (registerToken === 'JSAV') {
-          setRegisterFeeRaw(BigInt(0));
-          setRegisterFeeText(`${REGISTER_AMOUNT.JSAV} JSAV`);
-          setRegisterFeeLoading(false);
-          return;
-        }
-
         const stable = registerToken === 'USDT' ? (usdt as string) : (usdc as string);
         if (!stable || stable === ZERO_ADDRESS) {
           setRegisterFeeText('Token address unavailable');
@@ -250,21 +243,11 @@ export default function DashboardShell() {
         const ethers = await getEthers();
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [minDepositRaw, jsavDecimals, usdt, usdc] = await Promise.all([
-          contract.MIN_DEPOSIT.staticCall(),
-          contract.decimals.staticCall(),
+        const [usdt, usdc] = await Promise.all([
           contract.USDT.staticCall(),
           contract.USDC.staticCall(),
         ]);
         setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
-
-        if (investToken === 'JSAV') {
-          const d = Number(jsavDecimals);
-          setInvestDecimals(d);
-          setInvestMinRaw(minDepositRaw as bigint);
-          setInvestMinText(`${ethers.formatUnits(minDepositRaw as bigint, d)} JSAV`);
-          return;
-        }
 
         const stable = investToken === 'USDT' ? (usdt as string) : (usdc as string);
         if (!stable || stable === ZERO_ADDRESS) {
@@ -321,20 +304,16 @@ export default function DashboardShell() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       let tx;
-      if (registerToken === 'JSAV') {
-        tx = await contract.register(addr);
-      } else {
-        const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
-        if (!stable || stable === ZERO_ADDRESS) throw new Error(`${registerToken} address not configured.`);
-        const owner = await signer.getAddress();
-        const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
-        if ((allowance as bigint) < registerFeeRaw) {
-          const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
-          await appTx.wait();
-        }
-        tx = await contract.registerWithStable(stable, addr);
+      const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      if (!stable || stable === ZERO_ADDRESS) throw new Error(`${registerToken} address not configured.`);
+      const owner = await signer.getAddress();
+      const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
+      const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
+      if ((allowance as bigint) < registerFeeRaw) {
+        const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
+        await appTx.wait();
       }
+      tx = await contract.registerWithStable(stable, addr);
       const receipt = await tx.wait();
       setRegisterTx(receipt.hash);
     } catch (e: any) {
@@ -356,23 +335,17 @@ export default function DashboardShell() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const amountRaw = ethers.parseUnits(investAmount, investDecimals);
-      let tx;
-      if (investToken === 'JSAV') {
-        if (amountRaw < investMinRaw) throw new Error(`Minimum invest is ${investMinText}`);
-        tx = await contract.invest(amountRaw);
-      } else {
-        if (amountRaw < investMinRaw) throw new Error(`Minimum invest is ${investMinText}`);
-        const stable = investToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
-        if (!stable || stable === ZERO_ADDRESS) throw new Error(`${investToken} address not configured.`);
-        const owner = await signer.getAddress();
-        const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
-        if ((allowance as bigint) < amountRaw) {
-          const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, amountRaw);
-          await appTx.wait();
-        }
-        tx = await contract.investWithStable(stable, amountRaw);
+      if (amountRaw < investMinRaw) throw new Error(`Minimum invest is ${investMinText}`);
+      const stable = investToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      if (!stable || stable === ZERO_ADDRESS) throw new Error(`${investToken} address not configured.`);
+      const owner = await signer.getAddress();
+      const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
+      const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
+      if ((allowance as bigint) < amountRaw) {
+        const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, amountRaw);
+        await appTx.wait();
       }
+      const tx = await contract.investWithStable(stable, amountRaw);
       const receipt = await tx.wait();
       setInvestTx(receipt.hash);
       setInvestAmount('');
@@ -512,16 +485,17 @@ export default function DashboardShell() {
                 </div>
               </section>
               <div className="grid grid-cols-1 gap-3">
-                {!showRegister ? (
-                  <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('JSAV'); setRegisterTx(null); setRegisterError(null); }}>
+                {!showRegister && (
+                  <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('USDT'); setRegisterTx(null); setRegisterError(null); }}>
                     Register
                   </button>
-                ) : (
+                )}
+                {showRegister && (
                   <div className="space-y-2">
                     <div>
                       <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Token</label>
                       <select className="fx-input text-xs" value={registerToken} onChange={e => setRegisterToken(e.target.value as RegisterToken)} disabled={registerLoading}>
-                        <option value="JSAV">JSAV</option><option value="USDT">USDT</option><option value="USDC">USDC</option>
+                        <option value="USDT">USDT</option><option value="USDC">USDC</option>
                       </select>
                     </div>
                     <div className="fx-alert text-xs">Required amount: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{registerFeeLoading ? 'Loading…' : registerFeeText}</span></div>
@@ -532,6 +506,26 @@ export default function DashboardShell() {
                     <div className="flex gap-2">
                       <button className="fx-button--gold flex-1" onClick={handleRegister} disabled={registerLoading || registerFeeLoading || !referrer.trim()}>{registerLoading ? 'Confirming…' : `Confirm (${registerToken})`}</button>
                       <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowRegister(false); setReferrer(''); setRegisterError(null); setRegisterFeeText('-'); }} disabled={registerLoading}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+                {!showInvest ? (
+                  <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(true); setInvestToken('USDT'); setInvestTx(null); setInvestError(null); }}>
+                    Invest
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Invest token</label>
+                    <select className="fx-input text-xs" value={investToken} onChange={e => setInvestToken(e.target.value as InvestToken)} disabled={investLoading}>
+                      <option value="USDT">USDT</option><option value="USDC">USDC</option>
+                    </select>
+                    <div className="fx-alert text-xs">Minimum amount: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{investMetaLoading ? 'Loading…' : investMinText}</span></div>
+                    <input className="fx-input text-xs" type="number" min="0" step="any" placeholder={`Amount in ${investToken}`} value={investAmount} onChange={e => setInvestAmount(e.target.value)} disabled={investLoading} />
+                    {investError && <div className="fx-alert fx-alert--error text-xs">{investError}</div>}
+                    {investTx && <div className="fx-alert fx-alert--success text-xs">✓ Investment confirmed. <a href={`https://bscscan.com/tx/${investTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
+                    <div className="flex gap-2">
+                      <button className="fx-button--gold flex-1" onClick={handleInvest} disabled={investLoading || investMetaLoading || !investAmount.trim()}>{investLoading ? 'Confirming…' : `Invest (${investToken})`}</button>
+                      <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(false); setInvestError(null); }} disabled={investLoading}>Cancel</button>
                     </div>
                   </div>
                 )}
