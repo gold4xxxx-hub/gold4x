@@ -6,6 +6,7 @@ import { TopNav } from "@/components/TopNav";
 import { PortfolioAutoScroll } from "@/components/PortfolioAutoScroll";
 import { RevealInit } from "@/components/RevealInit";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { WalletAccessGate } from "@/components/WalletAccessGate";
 
 const displayFont = Playfair_Display({
   variable: "--font-display",
@@ -52,10 +53,12 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <Web3Providers>
-            <RevealInit />
-            <TopNav />
-            <PortfolioAutoScroll />
-            {children}
+            <WalletAccessGate>
+              <RevealInit />
+              <TopNav />
+              <PortfolioAutoScroll />
+              {children}
+            </WalletAccessGate>
           </Web3Providers>
         </ErrorBoundary>
         <svg aria-hidden="true" style={{position:'fixed',pointerEvents:'none',width:0,height:0,opacity:0}}>

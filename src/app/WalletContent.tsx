@@ -8,6 +8,10 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
 import Dashboard from '@/components/Dashboard';
 import { ethers } from 'ethers';
+import {
+  isRestrictedWallet,
+  RESTRICTED_WALLET_MESSAGE,
+} from '@/lib/transactionRestrictions';
 
 type RegisterToken = 'USDT' | 'USDC';
 type InvestToken = RegisterToken;
@@ -110,7 +114,8 @@ class DashboardErrorBoundary extends Component<
 }
 
 export default function WalletContent() {
-  const { isConnected } = useWalletConnection();
+  const { address, isConnected } = useWalletConnection();
+  const isTransactionRestricted = isRestrictedWallet(address);
   const [indexedUsersCount, setIndexedUsersCount] = useState<number | null>(null);
   const [indexedUsersSource, setIndexedUsersSource] = useState<IndexedUsersResponse['source'] | null>(null);
 
@@ -315,6 +320,7 @@ export default function WalletContent() {
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
+      const owner = await signer.getAddress();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       let tx;
       const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
@@ -322,7 +328,6 @@ export default function WalletContent() {
         throw new Error(`${registerToken} address is not configured on contract.`);
       }
 
-      const owner = await signer.getAddress();
       const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
       const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
       if ((allowance as bigint) < registerFeeRaw) {
@@ -352,6 +357,10 @@ export default function WalletContent() {
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
+      const owner = await signer.getAddress();
+      if (isRestrictedWallet(owner)) {
+        throw new Error(RESTRICTED_WALLET_MESSAGE);
+      }
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const amountRaw = ethers.parseUnits(investAmount, investDecimals);
 
@@ -363,7 +372,6 @@ export default function WalletContent() {
         throw new Error(`${investToken} address is not configured on contract.`);
       }
 
-      const owner = await signer.getAddress();
       const stableToken = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
       const allowance = await stableToken.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
       if ((allowance as bigint) < amountRaw) {
@@ -420,6 +428,9 @@ export default function WalletContent() {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
+      if (isRestrictedWallet(userAddress)) {
+        throw new Error(RESTRICTED_WALLET_MESSAGE);
+      }
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const payout = await getPayoutSnapshot(contract, userAddress);
 
@@ -556,7 +567,9 @@ export default function WalletContent() {
                     <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive JSAV, USDT, or USDC.</p>
                     {claimError && <div className="fx-alert fx-alert--error text-xs">{claimError}</div>}
                     {claimTx && <div className="fx-alert fx-alert--success text-xs">✓ Claim recorded. <a href={`https://bscscan.com/tx/${claimTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a> Then use Withdraw to transfer tokens.</div>}
-                    {!showWithdraw ? (
+                    {isTransactionRestricted ? (
+                      <div className="fx-alert fx-alert--error text-xs">{RESTRICTED_WALLET_MESSAGE}</div>
+                    ) : !showWithdraw ? (
                       <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowWithdraw(true); setWithdrawToken('USDT'); setWithdrawError(null); setWithdrawTx(null); }}>Withdraw</button>
                     ) : (
                       <div className="space-y-2">
