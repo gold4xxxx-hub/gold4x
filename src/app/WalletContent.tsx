@@ -583,25 +583,6 @@ export default function WalletContent() {
                         </div>
                       </div>
                     )}
-                    {!showInvest ? (
-                      <button className="fx-btn-sweep" onClick={() => { setShowInvest(true); setInvestToken('JSAV'); setInvestAmount(''); setInvestTx(null); setInvestError(null); }}>Invest</button>
-                    ) : (
-                      <div className="space-y-2">
-                        <select className="fx-input text-xs" value={investToken} onChange={e => setInvestToken(e.target.value as RegisterToken)} disabled={investLoading}>
-                          <option value="JSAV">JSAV</option>
-                          <option value="USDT">USDT</option>
-                          <option value="USDC">USDC</option>
-                        </select>
-                        <input className="fx-input text-xs" placeholder={`Amount in ${investToken}`} value={investAmount} onChange={e => setInvestAmount(e.target.value)} disabled={investLoading} />
-                        <div className="fx-alert text-xs">Minimum: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{investMetaLoading ? 'Loading…' : investMinText}</span></div>
-                        {investError && <div className="fx-alert fx-alert--error text-xs">{investError}</div>}
-                        {investTx && <div className="fx-alert fx-alert--success text-xs">✓ Invested! <a href={`https://bscscan.com/tx/${investTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
-                        <div className="flex gap-2">
-                          <button className="fx-btn-sweep fx-btn-sweep--emerald flex-1" onClick={handleInvest} disabled={investLoading || investMetaLoading}>{investLoading ? 'Confirming…' : `Confirm (${investToken})`}</button>
-                          <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(false); setInvestAmount(''); setInvestError(null); setInvestMinText('-'); }} disabled={investLoading}>Cancel</button>
-                        </div>
-                      </div>
-                    )}
                     <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={handleClaim} disabled={claimLoading}>{claimLoading ? 'Claiming...' : 'Claim All'}</button>
                     <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive JSAV, USDT, or USDC.</p>
                     {claimError && <div className="fx-alert fx-alert--error text-xs">{claimError}</div>}
