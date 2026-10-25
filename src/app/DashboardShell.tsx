@@ -4,6 +4,7 @@ import { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
 import { WalletInfo } from '@/components/WalletInfo';
 import { CountUp } from '@/components/CountUp';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
+import { useEthersSigner } from '@/hooks/useEthersSigner';
 import { JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI } from '@/config/web3Config';
 import Dashboard from '@/components/Dashboard';
 import {
@@ -57,20 +58,20 @@ function parseTxError(err: any, fallback: string): string {
 }
 
 async function getPayoutSnapshot(contract: any, userAddress: string) {
-  try {
-    const d = await contract.dashboardMegaView.staticCall(userAddress);
-    return {
-      registered: Boolean(d?.registered),
-      claimable: BigInt(d?.claimable ?? 0),
-      available: BigInt(d?.available ?? 0),
-      contractJSAV: BigInt(d?.contractJSAV ?? 0),
-      contractUSDT: BigInt(d?.contractUSDT ?? 0),
-      contractUSDC: BigInt(d?.contractUSDC ?? 0),
-    };
-  } catch (e) {
-    console.error('getPayoutSnapshot failed:', e);
-    return { registered: false, claimable: BigInt(0), available: BigInt(0), contractJSAV: BigInt(0), contractUSDT: BigInt(0), contractUSDC: BigInt(0) };
+  const d = await contract.dashboardMegaView.staticCall(userAddress, {
+    blockTag: 'latest',
+  });
+  if (!d) {
+    throw new Error('Unable to read the wallet payout status from the contract.');
   }
+  return {
+    registered: Boolean(d.registered),
+    claimable: BigInt(d.claimable),
+    available: BigInt(d.available),
+    contractJSAV: BigInt(d.contractJSAV),
+    contractUSDT: BigInt(d.contractUSDT),
+    contractUSDC: BigInt(d.contractUSDC),
+  };
 }
 
 class DashboardErrorBoundary extends Component<
@@ -123,6 +124,7 @@ class DashboardErrorBoundary extends Component<
 
 export default function DashboardShell() {
   const { address, isConnected } = useWalletConnection();
+  const { signer, chainId } = useEthersSigner();
   const isTransactionRestricted = isRestrictedWallet(address);
   const [indexedUsersCount, setIndexedUsersCount] = useState<number | null>(null);
   const [indexedUsersSource, setIndexedUsersSource] = useState<IndexedUsersResponse['source'] | null>(null);
@@ -363,14 +365,17 @@ export default function DashboardShell() {
   };
 
   const handleClaim = async () => {
-    if (!(window as any).ethereum) return setClaimError('Wallet not found.');
-    setClaimLoading(true);
     setClaimError(null);
     setClaimTx(null);
+    if (!signer) {
+      return setClaimError('Wallet signer unavailable. Reconnect your wallet and try again.');
+    }
+    if (chainId !== 56) {
+      return setClaimError('Switch your wallet to BSC Mainnet (chain ID 56) before claiming.');
+    }
+    setClaimLoading(true);
     try {
       const ethers = await getEthers();
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const payout = await getPayoutSnapshot(contract, userAddress);
@@ -386,14 +391,17 @@ export default function DashboardShell() {
   };
 
   const handleWithdraw = async () => {
-    if (!(window as any).ethereum) return setWithdrawError('Wallet not found.');
-    setWithdrawLoading(true);
     setWithdrawError(null);
     setWithdrawTx(null);
+    if (!signer) {
+      return setWithdrawError('Wallet signer unavailable. Reconnect your wallet and try again.');
+    }
+    if (chainId !== 56) {
+      return setWithdrawError('Switch your wallet to BSC Mainnet (chain ID 56) before withdrawing.');
+    }
+    setWithdrawLoading(true);
     try {
       const ethers = await getEthers();
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
       if (isRestrictedWallet(userAddress)) throw new Error(RESTRICTED_WALLET_MESSAGE);
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
