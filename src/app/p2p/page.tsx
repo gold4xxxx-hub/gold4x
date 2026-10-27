@@ -44,6 +44,7 @@ import {
   cancelExpiredFiatTrade,
   sendMessage,
   shareScreenshot,
+  TRADE_PAGE_SIZE,
   getTradeBankDetails,
   getWalletVerification,
   getWalletContactDetails,
@@ -1502,7 +1503,7 @@ const P2PPage: React.FC = () => {
                 <span>
                   {loadingOlderTrades
                     ? 'Loading…'
-                    : `Load ${Math.min(25, Math.max(0, tradesFrom - 1))} older trades`}
+                    : `Load ${Math.min(TRADE_PAGE_SIZE, Math.max(0, tradesFrom - 1))} older trades`}
                 </span>
               </button>
             </div>

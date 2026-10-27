@@ -41,8 +41,10 @@ declare global {
 const BSC_RPC = 'https://bsc-rpc.publicnode.com';
 const CHAIN_ID = 56;
 
-// How many ads/trades are fetched per poll. Older ids are reachable by page.
+// Ads stay in smaller pages to avoid rate-limiting the public RPC.
 const PAGE_SIZE = 25;
+// Show up to the 100 newest trades in the initial page.
+export const TRADE_PAGE_SIZE = 100;
 
 export type AdRow = {
   id: number;
@@ -378,9 +380,8 @@ export function useAds(adCounter: number, chainActive: boolean) {
 /**
  * Page through trades, newest first.
  *
- * Same caching approach as useAds. Without it, trades older than the newest
- * PAGE_SIZE ids were unreachable, which hid trades still holding escrow from
- * the owner who needed to cancel or release them.
+ * Same caching approach as useAds. Older ids remain reachable by paging so
+ * trades still holding escrow are not hidden from the owner.
  */
 export function useTrades(tradeCounter: number, chainActive: boolean) {
   const [trades, setTrades] = useState<TradeRow[]>([]);
@@ -419,11 +420,11 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
     }
     setLoading(true);
     try {
-      const newest = Math.min(PAGE_SIZE, tradeCounter);
+      const newest = Math.min(TRADE_PAGE_SIZE, tradeCounter);
       await readIds(Array.from({ length: newest }, (_, i) => tradeCounter - i));
 
       const visible: TradeRow[] = [];
-      const total = pages * PAGE_SIZE;
+      const total = pages * TRADE_PAGE_SIZE;
       for (let id = tradeCounter; id > Math.max(0, tradeCounter - total); id--) {
         const row = cache.current.get(id);
         // getTrade() yields zero values for unknown ids, and status 0 is
@@ -444,8 +445,8 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
 
   const loadOlder = useCallback(async () => {
     if (!chainActive || tradeCounter === 0) return;
-    const oldest = Math.max(1, tradeCounter - pages * PAGE_SIZE + 1);
-    const from = Math.max(1, oldest - PAGE_SIZE + 1);
+    const oldest = Math.max(1, tradeCounter - pages * TRADE_PAGE_SIZE + 1);
+    const from = Math.max(1, oldest - TRADE_PAGE_SIZE + 1);
     const ids = Array.from({ length: oldest - from + 1 }, (_, i) => oldest - i);
     setLoadingOlder(true);
     try {
@@ -456,7 +457,7 @@ export function useTrades(tradeCounter: number, chainActive: boolean) {
     }
   }, [tradeCounter, chainActive, pages, readIds]);
 
-  const loadedThrough = Math.max(0, tradeCounter - pages * PAGE_SIZE + 1);
+  const loadedThrough = Math.max(0, tradeCounter - pages * TRADE_PAGE_SIZE + 1);
 
   return {
     trades,
