@@ -22,9 +22,9 @@ async function getEthers() {
   return _ethers;
 }
 
-type RegisterToken = 'USDT' | 'USDC';
+type RegisterToken = 'USDT';
 type InvestToken = RegisterToken;
-type WithdrawToken = 'JSAV' | 'USDT' | 'USDC';
+type WithdrawToken = 'USDT';
 type IndexedUsersResponse = {
   count: number;
   source: 'contract' | 'bscscan';
@@ -68,9 +68,7 @@ async function getPayoutSnapshot(contract: any, userAddress: string) {
     registered: Boolean(d.registered),
     claimable: BigInt(d.claimable),
     available: BigInt(d.available),
-    contractJSAV: BigInt(d.contractJSAV),
     contractUSDT: BigInt(d.contractUSDT),
-    contractUSDC: BigInt(d.contractUSDC),
   };
 }
 
@@ -138,9 +136,8 @@ export default function DashboardShell() {
   const [registerFeeText, setRegisterFeeText] = useState('-');
   const [registerFeeRaw, setRegisterFeeRaw] = useState<bigint>(BigInt(0));
   const [registerFeeLoading, setRegisterFeeLoading] = useState(false);
-  const [stableAddresses, setStableAddresses] = useState<{ USDT: string; USDC: string }>({
+  const [stableAddresses, setStableAddresses] = useState<{ USDT: string }>({
     USDT: ZERO_ADDRESS,
-    USDC: ZERO_ADDRESS,
   });
 
   const [showInvest, setShowInvest] = useState(false);
@@ -210,10 +207,10 @@ export default function DashboardShell() {
         const ethers = await getEthers();
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
-        setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
+        const usdt = await contract.USDT.staticCall();
+        setStableAddresses({ USDT: usdt as string });
 
-        const stable = registerToken === 'USDT' ? (usdt as string) : (usdc as string);
+        const stable = usdt as string;
         if (!stable || stable === ZERO_ADDRESS) {
           setRegisterFeeText('Token address unavailable');
           setRegisterFeeLoading(false);
@@ -250,13 +247,10 @@ export default function DashboardShell() {
         const ethers = await getEthers();
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [usdt, usdc] = await Promise.all([
-          contract.USDT.staticCall(),
-          contract.USDC.staticCall(),
-        ]);
-        setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
+        const usdt = await contract.USDT.staticCall();
+        setStableAddresses({ USDT: usdt as string });
 
-        const stable = investToken === 'USDT' ? (usdt as string) : (usdc as string);
+        const stable = usdt as string;
         if (!stable || stable === ZERO_ADDRESS) {
           setInvestMinRaw(BigInt(0));
           setInvestMinText('Token address unavailable');
@@ -285,17 +279,17 @@ export default function DashboardShell() {
 
   useEffect(() => {
     if (!isConnected || !(window as any).ethereum) return;
-    if (stableAddresses.USDT !== ZERO_ADDRESS && stableAddresses.USDC !== ZERO_ADDRESS) return;
+    if (stableAddresses.USDT !== ZERO_ADDRESS) return;
     (async () => {
       try {
         const ethers = await getEthers();
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
-        const [usdt, usdc] = await Promise.all([contract.USDT.staticCall(), contract.USDC.staticCall()]);
-        setStableAddresses({ USDT: usdt as string, USDC: usdc as string });
+        const usdt = await contract.USDT.staticCall();
+        setStableAddresses({ USDT: usdt as string });
       } catch { /* silent */ }
     })();
-  }, [isConnected, stableAddresses.USDT, stableAddresses.USDC]);
+  }, [isConnected, stableAddresses.USDT]);
 
   const handleRegister = async () => {
     if (!(window as any).ethereum) return setRegisterError('Wallet not found.');
@@ -311,7 +305,7 @@ export default function DashboardShell() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const owner = await signer.getAddress();
-      const stable = registerToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      const stable = stableAddresses.USDT;
       if (!stable || stable === ZERO_ADDRESS) throw new Error(`${registerToken} address not configured.`);
       const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
       const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
@@ -344,7 +338,7 @@ export default function DashboardShell() {
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const amountRaw = ethers.parseUnits(investAmount, investDecimals);
       if (amountRaw < investMinRaw) throw new Error(`Minimum invest is ${investMinText}`);
-      const stable = investToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
+      const stable = stableAddresses.USDT;
       if (!stable || stable === ZERO_ADDRESS) throw new Error(`${investToken} address not configured.`);
       const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
       const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
@@ -406,21 +400,14 @@ export default function DashboardShell() {
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const payout = await getPayoutSnapshot(contract, userAddress);
       if (payout.claimable <= BigInt(0)) throw new Error('No claimable balance.');
-      let tx;
-      if (withdrawToken === 'JSAV') {
-        if (payout.contractJSAV <= BigInt(0)) throw new Error('JSAV liquidity unavailable.');
-        tx = await contract.withdraw(ZERO_ADDRESS);
-      } else {
-        if (withdrawToken === 'USDT' && payout.contractUSDT <= BigInt(0)) throw new Error('USDT liquidity unavailable.');
-        if (withdrawToken === 'USDC' && payout.contractUSDC <= BigInt(0)) throw new Error('USDC liquidity unavailable.');
-        let stable = withdrawToken === 'USDT' ? stableAddresses.USDT : stableAddresses.USDC;
-        if (!stable || stable === ZERO_ADDRESS) {
-          stable = withdrawToken === 'USDT' ? await contract.USDT.staticCall() : await contract.USDC.staticCall();
-          setStableAddresses((prev) => ({ ...prev, [withdrawToken]: stable as string }));
-        }
-        if (!stable || stable === ZERO_ADDRESS) throw new Error(`${withdrawToken} address not configured.`);
-        tx = await contract.withdraw(stable as string);
+      if (withdrawToken === 'USDT' && payout.contractUSDT <= BigInt(0)) throw new Error('USDT liquidity unavailable.');
+      let stable = stableAddresses.USDT;
+      if (!stable || stable === ZERO_ADDRESS) {
+        stable = await contract.USDT.staticCall();
+        setStableAddresses({ USDT: stable as string });
       }
+      if (!stable || stable === ZERO_ADDRESS) throw new Error(`${withdrawToken} address not configured.`);
+      const tx = await contract.withdraw(stable as string);
       const receipt = await tx.wait();
       setWithdrawTx(receipt.hash);
     } catch (e: any) {
@@ -509,7 +496,7 @@ export default function DashboardShell() {
                     <div>
                       <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Token</label>
                       <select className="fx-input text-xs" value={registerToken} onChange={e => setRegisterToken(e.target.value as RegisterToken)} disabled={registerLoading}>
-                        <option value="USDT">USDT</option><option value="USDC">USDC</option>
+                        <option value="USDT">USDT</option>
                       </select>
                     </div>
                     <div className="fx-alert text-xs">Required amount: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{registerFeeLoading ? 'Loading…' : registerFeeText}</span></div>
@@ -533,7 +520,7 @@ export default function DashboardShell() {
                   <div className="space-y-2">
                     <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Invest token</label>
                     <select className="fx-input text-xs" value={investToken} onChange={e => setInvestToken(e.target.value as InvestToken)} disabled={investLoading}>
-                      <option value="USDT">USDT</option><option value="USDC">USDC</option>
+                      <option value="USDT">USDT</option>
                     </select>
                     <div className="fx-alert text-xs">Minimum amount: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{investMetaLoading ? 'Loading…' : investMinText}</span></div>
                     <input className="fx-input text-xs" type="number" min="0" step="any" placeholder={`Amount in ${investToken}`} value={investAmount} onChange={e => setInvestAmount(e.target.value)} disabled={investLoading} />
@@ -546,7 +533,7 @@ export default function DashboardShell() {
                   </div>
                 )}
                 <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={handleClaim} disabled={claimLoading}>{claimLoading ? 'Claiming...' : 'Claim All'}</button>
-                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive JSAV, USDT, or USDC.</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive USDT.</p>
                 {claimError && <div className="fx-alert fx-alert--error text-xs">{claimError}</div>}
                 {claimTx && <div className="fx-alert fx-alert--success text-xs">✓ Claim recorded. <a href={`https://bscscan.com/tx/${claimTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a> Then use Withdraw to transfer tokens.</div>}
                 {!isTransactionRestricted && (!showWithdraw ? (
@@ -554,7 +541,7 @@ export default function DashboardShell() {
                 ) : (
                   <div className="space-y-2">
                     <select className="fx-input text-xs" value={withdrawToken} onChange={e => setWithdrawToken(e.target.value as WithdrawToken)} disabled={withdrawLoading}>
-                      <option value="JSAV">JSAV</option><option value="USDT">USDT</option><option value="USDC">USDC</option>
+                      <option value="USDT">USDT</option>
                     </select>
                     {withdrawError && <div className="fx-alert fx-alert--error text-xs">{withdrawError}</div>}
                     {withdrawTx && <div className="fx-alert fx-alert--success text-xs">✓ Withdrawn! <a href={`https://bscscan.com/tx/${withdrawTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
@@ -588,7 +575,7 @@ export default function DashboardShell() {
                 <li>Total users: {indexedUsersCount === null ? <span>loading</span> : <CountUp value={indexedUsersCount} format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })} />}.</li>
                 <li>Registration and investment flows are available in the Command panel.</li>
                 <li>Claim All accrues rewards; Withdraw sends the selected asset.</li>
-                <li>Stable token support: USDT and USDC.</li>
+                <li>Stable token support: USDT.</li>
                 <li>All transactions execute directly from your wallet.</li>
               </ul>
             </div>
