@@ -22,7 +22,7 @@ async function getEthers() {
   return _ethers;
 }
 
-type RegisterToken = 'JSAV' | 'USDT';
+type RegisterToken = 'USDT';
 type IndexedUsersResponse = {
   count: number;
   source: 'contract' | 'bscscan';
@@ -204,17 +204,6 @@ export default function DashboardShell() {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, provider);
 
-        if (registerToken === 'JSAV') {
-          const [regFeeRaw, jsavDecimals] = await Promise.all([
-            contract.REG_FEE.staticCall(),
-            contract.decimals.staticCall(),
-          ]);
-          const decimals = Number(jsavDecimals);
-          setRegisterFeeRaw(BigInt(regFeeRaw));
-          setRegisterFeeText(`${ethers.formatUnits(regFeeRaw, decimals)} JSAV`);
-          return;
-        }
-
         const usdt = await contract.USDT.staticCall();
         setStableAddresses({ USDT: usdt as string });
 
@@ -314,21 +303,16 @@ export default function DashboardShell() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
 
-      let tx;
-      if (registerToken === 'JSAV') {
-        tx = await contract.register(addr);
-      } else {
-        const owner = await signer.getAddress();
-        const stable = stableAddresses.USDT;
-        if (!stable || stable === ZERO_ADDRESS) throw new Error(`${registerToken} address not configured.`);
-        const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
-        const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
-        if ((allowance as bigint) < registerFeeRaw) {
-          const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
-          await appTx.wait();
-        }
-        tx = await contract.registerWithStable(stable, addr);
+      const owner = await signer.getAddress();
+      const stable = stableAddresses.USDT;
+      if (!stable || stable === ZERO_ADDRESS) throw new Error('USDT address not configured.');
+      const st = new ethers.Contract(stable, ERC20_ABI_MIN, signer);
+      const allowance = await st.allowance.staticCall(owner, JSAVIOR_CONTRACT_ADDRESS);
+      if ((allowance as bigint) < registerFeeRaw) {
+        const appTx = await st.approve(JSAVIOR_CONTRACT_ADDRESS, registerFeeRaw);
+        await appTx.wait();
       }
+      const tx = await contract.registerWithStable(stable, addr);
       const receipt = await tx.wait();
       setRegisterTx(receipt.hash);
     } catch (e: any) {
@@ -513,7 +497,6 @@ export default function DashboardShell() {
                     <div>
                       <label className="block text-[10px] uppercase tracking-[0.08em] mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>Token</label>
                       <select className="fx-input text-xs" value={registerToken} onChange={e => setRegisterToken(e.target.value as RegisterToken)} disabled={registerLoading}>
-                        <option value="JSAV">JSAV</option>
                         <option value="USDT">USDT</option>
                       </select>
                     </div>
