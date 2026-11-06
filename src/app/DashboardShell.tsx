@@ -23,6 +23,7 @@ async function getEthers() {
 }
 
 type RegisterToken = 'USDT';
+type WithdrawToken = 'JSAV' | 'USDT';
 type IndexedUsersResponse = {
   count: number;
   source: 'contract' | 'bscscan';
@@ -66,6 +67,7 @@ async function getPayoutSnapshot(contract: any, userAddress: string) {
     registered: Boolean(d.registered),
     claimable: BigInt(d.claimable),
     available: BigInt(d.available),
+    contractJSAV: BigInt(d.contractJSAV),
     contractUSDT: BigInt(d.contractUSDT),
   };
 }
@@ -153,6 +155,7 @@ export default function DashboardShell() {
   const [claimError, setClaimError] = useState<string | null>(null);
 
   const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawToken, setWithdrawToken] = useState<WithdrawToken>('USDT');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -400,15 +403,18 @@ export default function DashboardShell() {
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const payout = await getPayoutSnapshot(contract, userAddress);
       if (payout.claimable <= BigInt(0)) throw new Error('No claimable balance.');
-
-      if (payout.contractUSDT <= BigInt(0)) throw new Error('USDT liquidity unavailable.');
-      let stable = stableAddresses.USDT;
-      if (!stable || stable === ZERO_ADDRESS) {
-        stable = await contract.USDT.staticCall();
-        setStableAddresses({ USDT: stable as string });
+      if (withdrawToken === 'JSAV' && payout.contractJSAV <= BigInt(0)) throw new Error('JSAV liquidity unavailable.');
+      if (withdrawToken === 'USDT' && payout.contractUSDT <= BigInt(0)) throw new Error('USDT liquidity unavailable.');
+      let tokenAddress = JSAVIOR_CONTRACT_ADDRESS;
+      if (withdrawToken === 'USDT') {
+        tokenAddress = stableAddresses.USDT;
+        if (!tokenAddress || tokenAddress === ZERO_ADDRESS) {
+          tokenAddress = await contract.USDT.staticCall();
+          setStableAddresses({ USDT: tokenAddress as string });
+        }
       }
-      if (!stable || stable === ZERO_ADDRESS) throw new Error('USDT address not configured.');
-      const tx = await contract.withdraw(stable as string);
+      if (!tokenAddress || tokenAddress === ZERO_ADDRESS) throw new Error(`${withdrawToken} address not configured.`);
+      const tx = await contract.withdraw(tokenAddress);
       const receipt = await tx.wait();
       setWithdrawTx(receipt.hash);
     } catch (e: any) {
@@ -530,17 +536,21 @@ export default function DashboardShell() {
                   </div>
                 )}
                 <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={handleClaim} disabled={claimLoading}>{claimLoading ? 'Claiming...' : 'Claim All'}</button>
-                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive USDT.</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive JSAV or USDT.</p>
                 {claimError && <div className="fx-alert fx-alert--error text-xs">{claimError}</div>}
                 {claimTx && <div className="fx-alert fx-alert--success text-xs">✓ Claim recorded. <a href={`https://bscscan.com/tx/${claimTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a> Then use Withdraw to transfer tokens.</div>}
                 {!isTransactionRestricted && (!showWithdraw ? (
                   <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowWithdraw(true); setWithdrawError(null); setWithdrawTx(null); }}>Withdraw</button>
                 ) : (
                   <div className="space-y-2">
+                    <select className="fx-input text-xs" value={withdrawToken} onChange={e => setWithdrawToken(e.target.value as WithdrawToken)} disabled={withdrawLoading}>
+                      <option value="JSAV">JSAV</option>
+                      <option value="USDT">USDT</option>
+                    </select>
                     {withdrawError && <div className="fx-alert fx-alert--error text-xs">{withdrawError}</div>}
                     {withdrawTx && <div className="fx-alert fx-alert--success text-xs">✓ Withdrawn! <a href={`https://bscscan.com/tx/${withdrawTx}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a></div>}
                     <div className="flex gap-2">
-                      <button className="fx-btn-sweep fx-btn-sweep--emerald flex-1" onClick={handleWithdraw} disabled={withdrawLoading}>{withdrawLoading ? 'Confirming...' : 'Confirm (USDT)'}</button>
+                      <button className="fx-btn-sweep fx-btn-sweep--emerald flex-1" onClick={handleWithdraw} disabled={withdrawLoading}>{withdrawLoading ? 'Confirming...' : `Confirm (${withdrawToken})`}</button>
                       <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowWithdraw(false); setWithdrawError(null); }} disabled={withdrawLoading}>Cancel</button>
                     </div>
                   </div>
