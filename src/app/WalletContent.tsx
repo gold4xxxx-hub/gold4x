@@ -444,24 +444,23 @@ export default function WalletContent() {
         throw new Error('No claimed balance is available to withdraw right now. Use Claim All first if rewards have accrued.');
       }
 
-      if (withdrawToken === 'JSAV' && payout.contractJSAV <= BigInt(0)) {
-        throw new Error('Contract JSAV liquidity is currently unavailable.');
+      if (withdrawToken === 'JSAV' && payout.contractJSAV < payout.claimable) {
+        throw new Error('Contract JSAV liquidity is insufficient for the claimed balance.');
       }
       if (withdrawToken === 'USDT' && payout.contractUSDT <= BigInt(0)) {
         throw new Error('Contract USDT liquidity is currently unavailable.');
       }
 
-      let tokenAddress = JSAVIOR_CONTRACT_ADDRESS;
+      let tokenAddress = ethers.ZeroAddress;
       if (withdrawToken === 'USDT') {
         tokenAddress = stableAddresses.USDT;
         if (!tokenAddress || tokenAddress === ethers.ZeroAddress) {
           tokenAddress = await contract.USDT.staticCall();
           setStableAddresses({ USDT: tokenAddress as string });
         }
-      }
-
-      if (!tokenAddress || tokenAddress === ethers.ZeroAddress) {
-        throw new Error(`${withdrawToken} address is not configured on contract.`);
+        if (!tokenAddress || tokenAddress === ethers.ZeroAddress) {
+          throw new Error('USDT address is not configured on contract.');
+        }
       }
 
       await contract.withdraw.staticCall(tokenAddress);

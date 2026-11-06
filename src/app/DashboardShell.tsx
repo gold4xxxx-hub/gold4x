@@ -407,17 +407,17 @@ export default function DashboardShell() {
       const contract = new ethers.Contract(JSAVIOR_CONTRACT_ADDRESS, JSAVIOR_CONTRACT_ABI, signer);
       const payout = await getPayoutSnapshot(contract, userAddress);
       if (payout.claimable <= BigInt(0)) throw new Error('No claimable balance.');
-      if (withdrawToken === 'JSAV' && payout.contractJSAV <= BigInt(0)) throw new Error('JSAV liquidity unavailable.');
+      if (withdrawToken === 'JSAV' && payout.contractJSAV < payout.claimable) throw new Error('Contract JSAV liquidity is insufficient for the claimed balance.');
       if (withdrawToken === 'USDT' && payout.contractUSDT <= BigInt(0)) throw new Error('USDT liquidity unavailable.');
-      let tokenAddress = JSAVIOR_CONTRACT_ADDRESS;
+      let tokenAddress = ZERO_ADDRESS;
       if (withdrawToken === 'USDT') {
         tokenAddress = stableAddresses.USDT;
         if (!tokenAddress || tokenAddress === ZERO_ADDRESS) {
           tokenAddress = await contract.USDT.staticCall();
           setStableAddresses({ USDT: tokenAddress as string });
         }
+        if (!tokenAddress || tokenAddress === ZERO_ADDRESS) throw new Error('USDT address not configured.');
       }
-      if (!tokenAddress || tokenAddress === ZERO_ADDRESS) throw new Error(`${withdrawToken} address not configured.`);
       await contract.withdraw.staticCall(tokenAddress);
       const tx = await contract.withdraw(tokenAddress);
       const receipt = await tx.wait();
