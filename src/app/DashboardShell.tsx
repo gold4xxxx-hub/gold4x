@@ -45,7 +45,11 @@ function parseTxError(err: any, fallback: string): string {
   const msg =
     err?.shortMessage ||
     err?.reason ||
+    err?.info?.error?.message ||
     err?.error?.message ||
+    err?.cause?.shortMessage ||
+    err?.cause?.reason ||
+    err?.cause?.message ||
     err?.message ||
     fallback;
 
@@ -155,7 +159,7 @@ export default function DashboardShell() {
   const [claimError, setClaimError] = useState<string | null>(null);
 
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const [withdrawToken, setWithdrawToken] = useState<WithdrawToken>('USDT');
+  const [withdrawToken, setWithdrawToken] = useState<WithdrawToken>('JSAV');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -414,6 +418,7 @@ export default function DashboardShell() {
         }
       }
       if (!tokenAddress || tokenAddress === ZERO_ADDRESS) throw new Error(`${withdrawToken} address not configured.`);
+      await contract.withdraw.staticCall(tokenAddress);
       const tx = await contract.withdraw(tokenAddress);
       const receipt = await tx.wait();
       setWithdrawTx(receipt.hash);
