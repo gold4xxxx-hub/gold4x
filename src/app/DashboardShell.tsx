@@ -444,7 +444,7 @@ export default function DashboardShell() {
               <h1 className="fx-hero-title" data-text="JSAVIOR">JSAVIOR</h1>
               <p className="fx-lead max-w-xl text-base" style={{ marginTop: '20px' }}>
                 Precision-grade DeFi operations on Binance Smart Chain. Track rewards,
-                invest, claim, and withdraw — all from one refined command hub.
+                claim, and withdraw — all from one refined command hub.
               </p>
               <div className="flex flex-wrap gap-6 text-sm">
                 <div className="flex items-center gap-2">
@@ -498,11 +498,6 @@ export default function DashboardShell() {
                 </div>
               </section>
               <div className="grid grid-cols-1 gap-3">
-                {!showRegister && (
-                  <button className="fx-button--gold" onClick={() => { setShowRegister(true); setRegisterToken('USDT'); setRegisterTx(null); setRegisterError(null); }}>
-                    Register
-                  </button>
-                )}
                 {showRegister && (
                   <div className="space-y-2">
                     <div>
@@ -524,11 +519,7 @@ export default function DashboardShell() {
                 )}
                 {isTransactionRestricted ? (
                   <div className="fx-alert fx-alert--error text-xs">{RESTRICTED_WALLET_MESSAGE}</div>
-                ) : !showInvest ? (
-                  <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(true); setInvestTx(null); setInvestError(null); }}>
-                    Invest
-                  </button>
-                ) : (
+                ) : showInvest ? (
                   <div className="space-y-2">
                     <div className="fx-alert text-xs">Minimum amount: <span style={{ color: 'var(--fx-ink-muted)', fontWeight: 400 }}>{investMetaLoading ? 'Loading…' : investMinText}</span></div>
                     <input className="fx-input text-xs" type="number" min="0" step="any" placeholder="Amount in USDT" value={investAmount} onChange={e => setInvestAmount(e.target.value)} disabled={investLoading} />
@@ -539,7 +530,7 @@ export default function DashboardShell() {
                       <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={() => { setShowInvest(false); setInvestError(null); }} disabled={investLoading}>Cancel</button>
                     </div>
                   </div>
-                )}
+                ) : null}
                 <button className="fx-btn-sweep fx-btn-sweep--ghost" onClick={handleClaim} disabled={claimLoading}>{claimLoading ? 'Claiming...' : 'Claim All'}</button>
                 <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fx-ink-subtle)' }}>Claim All updates your internal claimable balance. Use Withdraw to receive JSAV or USDT.</p>
                 {claimError && <div className="fx-alert fx-alert--error text-xs">{claimError}</div>}
@@ -582,7 +573,6 @@ export default function DashboardShell() {
               <ul>
                 <li>Contract: <span className="protocol-address">{JSAVIOR_CONTRACT_ADDRESS}</span></li>
                 <li>Total users: {indexedUsersCount === null ? <span>loading</span> : <CountUp value={indexedUsersCount} format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })} />}.</li>
-                <li>Registration and investment flows are available in the Command panel.</li>
                 <li>Claim All accrues rewards; Withdraw sends the selected asset.</li>
                 <li>Stable token support: USDT.</li>
                 <li>All transactions execute directly from your wallet.</li>
